@@ -235,7 +235,7 @@ export function CreateTokenForm() {
               View Token Page
             </Button>
             <Button
-              onClick={() => router.push('/profile')}
+              onClick={() => router.push('/golive')}
               variant="ghost"
               className="w-full text-gray-400 hover:text-white"
             >

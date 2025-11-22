@@ -207,7 +207,7 @@ export const authOptions: NextAuthOptions = {
         return url;
       }
       // Default redirect to home after sign in
-      return `${baseUrl}/profile`;
+      return `${baseUrl}/golive`;
     },
   },
   pages: {

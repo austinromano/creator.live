@@ -224,7 +224,7 @@ export default function BroadcastPage() {
                 View Token Page
               </Button>
               <Button
-                onClick={() => router.push('/profile')}
+                onClick={() => router.push('/golive')}
                 variant="outline"
                 className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 justify-start"
               >

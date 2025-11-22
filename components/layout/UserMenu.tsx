@@ -61,6 +61,13 @@ export function UserMenu() {
           </DropdownMenuItem>
         </Link>
 
+        <Link href="/golive">
+          <DropdownMenuItem className="cursor-pointer text-gray-300 hover:text-white hover:bg-gray-800">
+            <Radio className="mr-2 h-4 w-4" />
+            <span>Go Live</span>
+          </DropdownMenuItem>
+        </Link>
+
         <Link href="/create">
           <DropdownMenuItem className="cursor-pointer text-gray-300 hover:text-white hover:bg-gray-800">
             <Wallet className="mr-2 h-4 w-4" />
