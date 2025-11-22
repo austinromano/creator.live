@@ -1,6 +1,7 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,16 +11,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useWallet } from '@/hooks/useWallet';
 import { useTokenStore } from '@/stores/tokenStore';
 import { PLATFORM_CONFIG, SOCIAL_PLATFORMS } from '@/lib/constants';
-import { 
-  Upload, 
-  Wallet, 
-  AlertCircle, 
+import {
+  Upload,
+  Wallet,
+  AlertCircle,
   CheckCircle,
   Loader2,
   Twitter,
   Globe,
   MessageCircle,
-  Sparkles
+  Sparkles,
+  Radio
 } from 'lucide-react';
 
 interface TokenFormData {
@@ -34,9 +36,11 @@ interface TokenFormData {
 
 export function CreateTokenForm() {
   const router = useRouter();
+  const { data: session } = useSession();
   const { isConnected, balance, connect } = useWallet();
-  const { addToken, getTokenBySymbol } = useTokenStore();
+  const { addToken, getTokenBySymbol, getTokenByCreator } = useTokenStore();
   const [isCreating, setIsCreating] = useState(false);
+  const [existingToken, setExistingToken] = useState<any>(null);
   const [formData, setFormData] = useState<TokenFormData>({
     name: '',
     symbol: '',
@@ -46,6 +50,19 @@ export function CreateTokenForm() {
   const [errors, setErrors] = useState<Partial<TokenFormData>>({});
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
+
+  const user = session?.user as any;
+  const userId = user?.id;
+
+  // Check if user already has a token
+  useEffect(() => {
+    if (userId) {
+      const userToken = getTokenByCreator(userId);
+      if (userToken) {
+        setExistingToken(userToken);
+      }
+    }
+  }, [userId, getTokenByCreator]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<TokenFormData> = {};
@@ -115,7 +132,18 @@ export function CreateTokenForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!userId) {
+      alert('Please sign in to create a token');
+      return;
+    }
+
+    if (existingToken) {
+      alert('You already have a token! You can only create one token per account.');
+      router.push(`/broadcast/${existingToken.symbol}`);
+      return;
+    }
+
     if (!isConnected) {
       connect();
       return;
@@ -131,11 +159,11 @@ export function CreateTokenForm() {
     }
 
     setIsCreating(true);
-    
+
     try {
       // Simulate token creation process
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Create the new token
       const newToken = addToken({
         name: formData.name,
@@ -143,15 +171,16 @@ export function CreateTokenForm() {
         description: formData.description,
         avatar: imagePreview || `https://api.dicebear.com/7.x/avataaars/svg?seed=${formData.symbol}`,
         isLive: false,
+        creatorId: userId,
         twitter: formData.twitter,
         website: formData.website,
         telegram: formData.telegram,
       });
 
       console.log('Token created successfully:', newToken);
-      
-      // Redirect to the new token page
-      router.push(`/token/${newToken.symbol}`);
+
+      // Redirect to the broadcast page
+      router.push(`/broadcast/${newToken.symbol}`);
     } catch (error) {
       console.error('Failed to create token:', error);
       alert('Failed to create token. Please try again.');
@@ -160,7 +189,63 @@ export function CreateTokenForm() {
     }
   };
 
-  const canCreate = isConnected && balance >= PLATFORM_CONFIG.creationFee;
+  const canCreate = isConnected && balance >= PLATFORM_CONFIG.creationFee && !existingToken;
+
+  // If user already has a token, show message and redirect option
+  if (existingToken) {
+    return (
+      <Card className="bg-gray-900 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5 text-yellow-500" />
+            <span>You Already Have a Token!</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-yellow-900/20 border border-yellow-600/50 rounded-lg p-6">
+            <div className="flex items-start space-x-4">
+              <Avatar className="h-16 w-16 border-2 border-yellow-500">
+                <AvatarImage src={existingToken.avatar} />
+                <AvatarFallback>{existingToken.symbol}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-2">{existingToken.name}</h3>
+                <p className="text-gray-400 mb-1">Symbol: <span className="font-mono text-white">{existingToken.symbol}</span></p>
+                <p className="text-gray-400 text-sm mb-4">{existingToken.description}</p>
+                <div className="text-sm text-yellow-400">
+                  ⚠️ Each account can only create ONE token to ensure quality and commitment.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Button
+              onClick={() => router.push(`/broadcast/${existingToken.symbol}`)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white py-6"
+            >
+              <Radio className="h-5 w-5 mr-2" />
+              Go to Broadcast Dashboard
+            </Button>
+            <Button
+              onClick={() => router.push(`/token/${existingToken.symbol}`)}
+              variant="outline"
+              className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
+            >
+              View Token Page
+            </Button>
+            <Button
+              onClick={() => router.push('/profile')}
+              variant="ghost"
+              className="w-full text-gray-400 hover:text-white"
+            >
+              Back to Profile
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-gray-900 border-gray-700">
@@ -172,8 +257,11 @@ export function CreateTokenForm() {
         <p className="text-gray-400">
           Deploy your creator token for just {PLATFORM_CONFIG.creationFee} SOL
         </p>
+        <div className="mt-2 text-sm text-yellow-400 bg-yellow-900/20 border border-yellow-600/50 rounded p-2">
+          ⚠️ You can only create ONE token per account
+        </div>
       </CardHeader>
-      
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Token Image */}

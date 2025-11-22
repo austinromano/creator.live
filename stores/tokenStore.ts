@@ -10,6 +10,7 @@ interface CreateTokenInput {
   avatar: string;
   description: string;
   isLive: boolean;
+  creatorId: string;
   twitter?: string;
   website?: string;
   telegram?: string;
@@ -19,6 +20,7 @@ interface TokenState {
   tokens: Creator[];
   addToken: (tokenData: CreateTokenInput) => Creator;
   getTokenBySymbol: (symbol: string) => Creator | undefined;
+  getTokenByCreator: (creatorId: string) => Creator | undefined;
   updateToken: (symbol: string, updates: Partial<Creator>) => void;
 }
 
@@ -56,11 +58,12 @@ export const useTokenStore = create<TokenState>()(
         const id = generateTokenId();
         const created = new Date().toISOString();
         const initialPrice = 0.00001; // Starting price in SOL
-        
+
         const newToken: Creator = {
           ...tokenData,
           id,
           created,
+          creatorAddress: tokenData.creatorId,
           price: initialPrice,
           marketCap: initialPrice * 1000000, // 1M token supply initially
           priceChange24h: 0,
@@ -85,6 +88,30 @@ export const useTokenStore = create<TokenState>()(
             isCreator: true,
             avatar: tokenData.avatar,
           }],
+          // Set default values for required fields
+          bondingCurveType: 'linear',
+          category: 'entertainment',
+          verificationLevel: 'none',
+          trustScore: 50,
+          isVerified: false,
+          revenueSharing: {
+            enabled: false,
+            holderPercentage: 0,
+            totalDistributed: 0,
+          },
+          staking: {
+            enabled: false,
+            totalStaked: 0,
+            apy: 0,
+          },
+          tradingLimits: {
+            maxBuyPerTx: 1000,
+            maxSellPerTx: 1000,
+            cooldownPeriod: 0,
+          },
+          followers: 0,
+          following: 0,
+          totalLikes: 0,
         };
 
         set((state) => ({
@@ -96,6 +123,10 @@ export const useTokenStore = create<TokenState>()(
 
       getTokenBySymbol: (symbol: string) => {
         return get().tokens.find(token => token.symbol.toLowerCase() === symbol.toLowerCase());
+      },
+
+      getTokenByCreator: (creatorId: string) => {
+        return get().tokens.find(token => token.creatorAddress === creatorId);
       },
 
       updateToken: (symbol: string, updates: Partial<Creator>) => {
