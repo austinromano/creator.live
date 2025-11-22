@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Creator } from '@/lib/types';
-import { 
-  Play, 
-  Pause, 
-  Volume2, 
-  VolumeX, 
-  Maximize, 
+import { WebRTCStreamer } from '@/lib/webrtc-stream';
+import {
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize,
   Settings,
   Radio,
   Eye,
@@ -25,28 +26,72 @@ interface StreamPlayerProps {
 }
 
 export function StreamPlayer({ creator, isLive, viewers, className = '' }: StreamPlayerProps) {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const webrtcStreamerRef = React.useRef<WebRTCStreamer | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'buffering' | 'disconnected'>('connected');
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'buffering' | 'disconnected'>('disconnected');
   const [streamQuality, setStreamQuality] = useState('1080p');
+  const [hasWebRTCStream, setHasWebRTCStream] = useState(false);
 
-  // Simulate connection status changes
+  // Demo stream URL - replace with actual stream URL from your backend
+  const streamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
+  // Connect to WebRTC stream when live
   useEffect(() => {
     if (!isLive) {
       setConnectionStatus('disconnected');
+      setHasWebRTCStream(false);
+      if (webrtcStreamerRef.current) {
+        webrtcStreamerRef.current.close();
+        webrtcStreamerRef.current = null;
+      }
       return;
     }
 
-    const interval = setInterval(() => {
-      if (Math.random() < 0.1) {
-        setConnectionStatus('buffering');
-        setTimeout(() => setConnectionStatus('connected'), 1000);
-      }
-    }, 10000);
+    // Try to connect to WebRTC stream
+    console.log('Attempting to connect to WebRTC stream for:', creator.symbol);
+    setConnectionStatus('buffering');
 
-    return () => clearInterval(interval);
-  }, [isLive]);
+    webrtcStreamerRef.current = new WebRTCStreamer(creator.symbol);
+    webrtcStreamerRef.current.startViewing((stream) => {
+      console.log('Received WebRTC stream:', stream);
+      console.log('Video element:', videoRef.current);
+      console.log('Stream tracks:', stream.getTracks());
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        console.log('Stream assigned to video element');
+        videoRef.current.play()
+          .then(() => {
+            console.log('Video playback started successfully');
+            setHasWebRTCStream(true);
+            setConnectionStatus('connected');
+          })
+          .catch(err => {
+            console.error('Error playing video:', err);
+            // Try to play muted if autoplay is blocked
+            videoRef.current!.muted = true;
+            return videoRef.current!.play();
+          })
+          .then(() => {
+            console.log('Video playing (muted)');
+            setHasWebRTCStream(true);
+            setConnectionStatus('connected');
+          })
+          .catch(err => console.error('Failed to play video even when muted:', err));
+      } else {
+        console.error('Video element not found!');
+      }
+    });
+
+    return () => {
+      if (webrtcStreamerRef.current) {
+        webrtcStreamerRef.current.close();
+        webrtcStreamerRef.current = null;
+      }
+    };
+  }, [isLive, creator.symbol]);
 
   // Format viewer count for display
   const formatViewers = (count: number) => {
@@ -56,16 +101,40 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
   };
 
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
   };
 
   const handleMute = () => {
-    setIsMuted(!isMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
   };
 
-  const handleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-    // In a real app, this would use the Fullscreen API
+  const handleFullscreen = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      if (!isFullscreen) {
+        if (videoRef.current.requestFullscreen) {
+          await videoRef.current.requestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+      setIsFullscreen(!isFullscreen);
+    } catch (error) {
+      console.error('Fullscreen error:', error);
+    }
   };
 
   const qualityOptions = ['1080p', '720p', '480p', '360p'];
@@ -111,34 +180,24 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
 
           {/* Stream Content */}
           {isLive ? (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/50 to-blue-900/50">
-              {/* Placeholder for actual stream */}
-              <div className="text-center space-y-4">
-                <div className="w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center animate-pulse">
-                  <Radio className="h-12 w-12 text-white" />
+            <div className="relative w-full h-full">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover bg-black"
+                autoPlay
+                muted={isMuted}
+                playsInline
+                controls={false}
+              />
+              {!hasWebRTCStream && (
+                <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+                  <div className="text-center space-y-4">
+                    <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+                    <p className="text-white text-lg">Connecting to live stream...</p>
+                    <p className="text-gray-400 text-sm">Waiting for broadcaster</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-white mb-2">{creator.name} is LIVE!</h3>
-                  <p className="text-gray-300">{creator.description}</p>
-                </div>
-                <div className="flex items-center justify-center space-x-4 text-white/80">
-                  <span className="flex items-center space-x-1">
-                    <Eye className="h-4 w-4" />
-                    <span>{formatViewers(viewers)} watching</span>
-                  </span>
-                  <span>•</span>
-                  <span>{streamQuality}</span>
-                  <span>•</span>
-                  <span className={`flex items-center space-x-1 ${
-                    connectionStatus === 'connected' ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    <div className={`w-2 h-2 rounded-full ${
-                      connectionStatus === 'connected' ? 'bg-green-400' : 'bg-red-400'
-                    } animate-pulse`} />
-                    <span>{connectionStatus}</span>
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-900">

@@ -31,15 +31,17 @@ import {
   Square,
 } from 'lucide-react';
 import { LiveStreamBroadcast } from '@/components/streaming/LiveStreamBroadcast';
+import { WebRTCStreamer } from '@/lib/webrtc-stream';
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { getTokenByCreator, updateToken } = useTokenStore();
+  const { getTokenByCreator, getTokenBySymbol, updateToken } = useTokenStore();
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
+  const webrtcStreamerRef = React.useRef<WebRTCStreamer | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [streamReady, setStreamReady] = useState(false);
@@ -49,7 +51,12 @@ export default function ProfilePage() {
   const username = user?.name || 'User';
 
   // Check if user has a token
-  const userToken = userId ? getTokenByCreator(userId) : null;
+  let userToken = userId ? getTokenByCreator(userId) : null;
+
+  // For testing: If no user token found, use GOTH token
+  if (!userToken) {
+    userToken = getTokenBySymbol('GOTH');
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -146,6 +153,13 @@ export default function ProfilePage() {
       await startCamera();
       setIsLive(true);
       updateToken(userToken.symbol, { isLive: true });
+
+      // Start WebRTC broadcast
+      if (streamRef.current) {
+        webrtcStreamerRef.current = new WebRTCStreamer(userToken.symbol);
+        await webrtcStreamerRef.current.startBroadcast(streamRef.current);
+        console.log('WebRTC broadcast started for:', userToken.symbol);
+      }
     }
   };
 
@@ -155,6 +169,12 @@ export default function ProfilePage() {
       setIsLive(false);
       updateToken(userToken.symbol, { isLive: false });
       setSessionTime(0);
+
+      // Stop WebRTC broadcast
+      if (webrtcStreamerRef.current) {
+        webrtcStreamerRef.current.close();
+        webrtcStreamerRef.current = null;
+      }
     }
   };
 
@@ -318,6 +338,11 @@ export default function ProfilePage() {
                   <Badge className={isLive ? "bg-red-600" : "bg-gray-600"}>
                     {isLive ? "LIVE" : "OFFLINE"}
                   </Badge>
+                  {isLive && (
+                    <div className="text-xs text-green-400 mt-1">
+                      Broadcasting as: {userToken.symbol}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

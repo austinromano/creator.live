@@ -162,6 +162,43 @@ export const mockCreators: Creator[] = [
     website: 'https://techwizard.dev',
     twitter: 'https://twitter.com/techwizardlive',
     priceHistory: generatePriceHistory(0.089)
+  },
+  {
+    id: '7',
+    name: 'Goth Queen',
+    symbol: 'GOTH',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Goth&backgroundColor=1a1a1a,2d2d2d,3a3a3a',
+    description: 'Dark aesthetic vibes and crypto alpha! Join the dark side 🖤',
+    marketCap: 1500000,
+    price: 0.15,
+    priceChange24h: 18.3,
+    created: '2024-11-15T18:00:00Z',
+    holders: 1834,
+    transactions: 6421,
+    volume24h: 145000,
+    bondingCurve: 82.4,
+    liquidity: 58000,
+    isLive: true,
+    viewers: 2547,
+    twitter: 'https://twitter.com/gothqueen',
+    website: 'https://gothqueen.com',
+    telegram: 'https://t.me/gothqueenofficial',
+    priceHistory: generatePriceHistory(0.15),
+    topHolders: [
+      { address: '7GothQueenMainWallet1234567890ABCDEF', balance: 150000, percentage: 15.0, value: 22500 },
+      { address: '8DarkKnight9876543210FEDCBA0987654321', balance: 120000, percentage: 12.0, value: 18000 },
+      { address: '9ShadowHolder1122334455667788990011', balance: 95000, percentage: 9.5, value: 14250 }
+    ],
+    recentTrades: [
+      { id: '1', type: 'buy', amount: 2.5, tokens: 16667, price: 0.15, slippage: 0.4, user: '7Goth...CDEF', timestamp: new Date(Date.now() - 3000) },
+      { id: '2', type: 'buy', amount: 1.8, tokens: 12000, price: 0.15, slippage: 0.3, user: '8Dark...4321', timestamp: new Date(Date.now() - 12000) },
+      { id: '3', type: 'sell', amount: 0.9, tokens: 6000, price: 0.15, slippage: 0.2, user: '9Shad...0011', timestamp: new Date(Date.now() - 25000) }
+    ],
+    messages: [
+      { id: '1', user: 'DarkVibes', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=dark', message: 'This stream is 🔥', timestamp: new Date(Date.now() - 1500) },
+      { id: '2', user: 'CryptoGothic', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=crypto', message: 'Just bought 100k GOTH! 🖤', tip: 0.5, timestamp: new Date(Date.now() - 6000) },
+      { id: '3', user: 'Goth Queen', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Goth', message: 'Welcome to the dark side everyone! 🦇', timestamp: new Date(Date.now() - 10000), isCreator: true }
+    ]
   }
 ];
 
