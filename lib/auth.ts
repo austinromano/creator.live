@@ -5,15 +5,12 @@ import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
 import bs58 from 'bs58';
 import bcrypt from 'bcryptjs';
+import { prisma } from './prisma';
 
 // Set up SHA512 for ed25519
 ed.hashes.sha512 = (message: Uint8Array) => {
   return sha512(message);
 };
-
-// In-memory user storage (in production, use a database)
-const users = new Map<string, any>();
-const usersByEmail = new Map<string, any>();
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -54,21 +51,26 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Check if user exists or create new one
-          let user = users.get(credentials.publicKey);
+          // Check if user exists in database or create new one
+          let user = await prisma.user.findUnique({
+            where: { walletAddress: credentials.publicKey },
+          });
 
           if (!user) {
-            user = {
-              id: credentials.publicKey,
-              name: credentials.username || `phantom_${credentials.publicKey.slice(0, 6)}`,
-              walletAddress: credentials.publicKey,
-              provider: 'phantom',
-              createdAt: new Date().toISOString(),
-            };
-            users.set(credentials.publicKey, user);
+            user = await prisma.user.create({
+              data: {
+                username: credentials.username || `phantom_${credentials.publicKey.slice(0, 6)}`,
+                walletAddress: credentials.publicKey,
+              },
+            });
           }
 
-          return user;
+          return {
+            id: user.id,
+            name: user.username,
+            walletAddress: user.walletAddress,
+            provider: 'phantom',
+          };
         } catch (error) {
           console.error('Phantom auth error:', error);
           return null;
@@ -98,35 +100,40 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Check if user already exists
-          if (usersByEmail.has(credentials.email.toLowerCase())) {
+          const existingUser = await prisma.user.findUnique({
+            where: { email: credentials.email.toLowerCase() },
+          });
+
+          if (existingUser) {
             throw new Error('User with this email already exists');
           }
 
           // Hash password
           const hashedPassword = await bcrypt.hash(credentials.password, 10);
 
-          // Create new user
-          const userId = `email_${credentials.email}`;
-          const newUser = {
-            id: userId,
-            email: credentials.email.toLowerCase(),
-            name: credentials.username,
-            password: hashedPassword,
-            provider: 'email',
-            createdAt: new Date().toISOString(),
-          };
-
-          users.set(userId, newUser);
-          usersByEmail.set(credentials.email.toLowerCase(), newUser);
+          // Create new user in database
+          const newUser = await prisma.user.create({
+            data: {
+              username: credentials.username,
+              email: credentials.email.toLowerCase(),
+              password: hashedPassword,
+            },
+          });
 
           // Return user without password
-          const { password, ...userWithoutPassword } = newUser;
-          return userWithoutPassword;
+          return {
+            id: newUser.id,
+            name: newUser.username,
+            email: newUser.email,
+            provider: 'email',
+          };
         } else {
           // Login flow
-          const user = usersByEmail.get(credentials.email.toLowerCase());
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email.toLowerCase() },
+          });
 
-          if (!user) {
+          if (!user || !user.password) {
             throw new Error('No user found with this email');
           }
 
@@ -137,36 +144,37 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Return user without password
-          const { password, ...userWithoutPassword } = user;
-          return userWithoutPassword;
+          return {
+            id: user.id,
+            name: user.username,
+            email: user.email,
+            provider: 'email',
+          };
         }
       },
     }),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (account?.provider === 'google') {
-        const userId = `google_${user.email}`;
-
-        let existingUser = users.get(userId);
+      if (account?.provider === 'google' && user.email) {
+        // Check if user exists in database
+        let existingUser = await prisma.user.findUnique({
+          where: { email: user.email.toLowerCase() },
+        });
 
         if (!existingUser) {
-          existingUser = {
-            id: userId,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            provider: 'google',
-            createdAt: new Date().toISOString(),
-          };
-          users.set(userId, existingUser);
-          if (user.email) {
-            usersByEmail.set(user.email.toLowerCase(), existingUser);
-          }
+          // Create new user in database
+          existingUser = await prisma.user.create({
+            data: {
+              username: user.name || user.email.split('@')[0],
+              email: user.email.toLowerCase(),
+              avatar: user.image,
+            },
+          });
         }
 
-        // Update user object with our custom ID
-        user.id = userId;
+        // Update user object with database ID
+        user.id = existingUser.id;
       }
 
       if (account?.provider === 'phantom') {

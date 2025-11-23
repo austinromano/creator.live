@@ -9,11 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { TokenGrid } from '@/components/tokens/TokenGrid';
 import { useTokens } from '@/hooks/useTokens';
 import { FILTER_OPTIONS } from '@/lib/constants';
-import { 
-  Crown, 
-  TrendingUp, 
-  Eye, 
-  Users, 
+import {
+  Crown,
+  TrendingUp,
+  Eye,
+  Users,
   DollarSign,
   Sparkles,
   RefreshCw
@@ -23,7 +23,7 @@ export function Homepage() {
   const searchParams = useSearchParams();
   const initialFilter = searchParams.get('filter') || 'all';
   const { tokens, loading, filter, setFilter, refreshTokens, kingOfHill } = useTokens();
-  
+
   useEffect(() => {
     if (initialFilter !== filter) {
       setFilter(initialFilter);

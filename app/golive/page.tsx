@@ -45,6 +45,8 @@ export default function ProfilePage() {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [streamReady, setStreamReady] = useState(false);
+  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [streamTitle, setStreamTitle] = useState('');
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -81,16 +83,25 @@ export default function ProfilePage() {
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // Assign stream to video element when both are available
+  // Assign stream to video element when it becomes available
   useEffect(() => {
-    if (streamReady && streamRef.current && videoRef.current && isLive) {
-      console.log('Assigning stream to video element');
-      console.log('videoRef.current:', videoRef.current);
-      console.log('streamRef.current:', streamRef.current);
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(err => console.error('Error playing video:', err));
-    }
-  }, [isLive, streamReady]);
+    // Use a small delay to ensure the video element is fully mounted
+    const timer = setTimeout(() => {
+      if (isLive && streamRef.current && videoRef.current) {
+        // Only assign if not already assigned to prevent flickering
+        if (videoRef.current.srcObject !== streamRef.current) {
+          console.log('Assigning stream to video element');
+          videoRef.current.srcObject = streamRef.current;
+          videoRef.current.play().catch(err => console.error('Error playing video:', err));
+        }
+      } else if (!isLive && videoRef.current) {
+        // Clear video when not live
+        videoRef.current.srcObject = null;
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [isLive]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -122,17 +133,70 @@ export default function ProfilePage() {
 
   const startCamera = async () => {
     try {
-      console.log('Starting camera...');
+      console.log('Starting camera with constraints:', { video: true, audio: true });
+
+      // Check if mediaDevices is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser');
+      }
+
+      // Request both video and audio
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: cameraEnabled,
-        audio: microphoneEnabled
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: true
       });
-      console.log('Stream obtained:', stream);
+
+      console.log('✅ Stream obtained successfully');
+      console.log('Stream ID:', stream.id);
+      console.log('Video tracks:', stream.getVideoTracks().map(t => ({
+        id: t.id,
+        label: t.label,
+        enabled: t.enabled,
+        readyState: t.readyState,
+        muted: t.muted
+      })));
+      console.log('Audio tracks:', stream.getAudioTracks().map(t => ({
+        id: t.id,
+        label: t.label,
+        enabled: t.enabled,
+        readyState: t.readyState,
+        muted: t.muted
+      })));
+
       streamRef.current = stream;
       setStreamReady(true);
+
+      // If video element already exists, assign stream immediately
+      if (videoRef.current) {
+        console.log('Video element exists, assigning stream immediately');
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(err => {
+          console.error('Error playing video:', err);
+          throw err;
+        });
+        console.log('✅ Video playing');
+      } else {
+        console.log('Video element does not exist yet, will be assigned via callback ref');
+      }
     } catch (error) {
-      console.error('Error accessing camera:', error);
-      alert('Unable to access camera/microphone. Error: ' + error);
+      console.error('❌ Error accessing camera:', error);
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') {
+          alert('Camera/microphone access was denied. Please allow access and try again.');
+        } else if (error.name === 'NotFoundError') {
+          alert('No camera or microphone found. Please connect a camera/microphone and try again.');
+        } else if (error.name === 'NotReadableError') {
+          alert('Camera/microphone is already in use by another application.');
+        } else {
+          alert('Unable to access camera/microphone: ' + error.message);
+        }
+      } else {
+        alert('Unable to access camera/microphone: ' + error);
+      }
+      throw error;
     }
   };
 
@@ -150,31 +214,114 @@ export default function ProfilePage() {
 
   const handleGoLive = async () => {
     if (userToken) {
-      await startCamera();
-      setIsLive(true);
-      updateToken(userToken.symbol, { isLive: true });
+      try {
+        console.log('=== STARTING GO LIVE PROCESS ===');
 
-      // Start WebRTC broadcast
-      if (streamRef.current) {
-        webrtcStreamerRef.current = new WebRTCStreamer(userToken.symbol);
-        await webrtcStreamerRef.current.startBroadcast(streamRef.current);
-        console.log('WebRTC broadcast started for:', userToken.symbol);
+        // Call API to create stream record in database
+        console.log('Creating stream record in database...');
+        const response = await fetch('/api/stream/start', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: streamTitle || `${username}'s Live Stream`,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('Failed to create stream:', error);
+          alert(error.error || 'Failed to start stream');
+          return;
+        }
+
+        const data = await response.json();
+        console.log('Stream created:', data);
+        setCurrentStreamId(data.stream.id);
+
+        // Start camera BEFORE setting isLive
+        console.log('Starting camera...');
+        await startCamera();
+
+        console.log('Camera started, stream ref:', streamRef.current);
+        console.log('Setting isLive to true...');
+        setIsLive(true);
+        updateToken(userToken.symbol, { isLive: true });
+
+        // Start WebRTC broadcast
+        if (streamRef.current) {
+          console.log('Starting WebRTC broadcast...');
+          webrtcStreamerRef.current = new WebRTCStreamer(userToken.symbol);
+          await webrtcStreamerRef.current.startBroadcast(streamRef.current);
+          console.log('WebRTC broadcast started for:', userToken.symbol);
+        } else {
+          console.error('ERROR: streamRef.current is null after startCamera!');
+        }
+
+        console.log('=== GO LIVE COMPLETE ===');
+      } catch (error) {
+        console.error('Error starting stream:', error);
+        alert('Failed to start stream: ' + (error as Error).message);
       }
     }
   };
 
-  const handleEndStream = () => {
-    if (userToken) {
+  const handleEndStream = async () => {
+    console.log('=== STOPPING STREAM ===');
+    console.log('currentStreamId:', currentStreamId);
+    console.log('userToken:', userToken?.symbol);
+
+    try {
+      // Stop camera and UI regardless of stream ID
       stopCamera();
       setIsLive(false);
-      updateToken(userToken.symbol, { isLive: false });
+      updateToken(userToken?.symbol || '', { isLive: false });
       setSessionTime(0);
+      setStreamTitle('');
 
       // Stop WebRTC broadcast
       if (webrtcStreamerRef.current) {
+        console.log('Closing WebRTC broadcast');
         webrtcStreamerRef.current.close();
         webrtcStreamerRef.current = null;
       }
+
+      // Try to end stream in database if we have an ID
+      if (currentStreamId) {
+        console.log('Ending stream in database:', currentStreamId);
+        const response = await fetch('/api/stream/end', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            streamId: currentStreamId,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to end stream in database');
+        } else {
+          console.log('✅ Stream ended in database');
+        }
+        setCurrentStreamId(null);
+      } else {
+        console.log('⚠️ No currentStreamId, cleaning up active streams for user');
+        // If no stream ID, try to clean up any active streams
+        if (userId) {
+          await fetch('/api/stream/cleanup', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+        }
+      }
+
+      console.log('=== STREAM STOPPED ===');
+    } catch (error) {
+      console.error('Error ending stream:', error);
     }
   };
 
@@ -267,15 +414,14 @@ export default function ProfilePage() {
           <div className="lg:col-span-2 bg-[#0e0e10]">
             {/* Video Preview */}
             <div className="relative bg-black aspect-video overflow-hidden">
-                {isLive ? (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
+                />
+                {!isLive && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <div className="text-6xl font-bold text-gray-600 mb-4">OFFLINE</div>

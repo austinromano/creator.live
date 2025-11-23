@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Users table - stores user accounts (wallet-based or email-based)
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String?  @unique
+  password      String?  // For email/password auth
+  walletAddress String?  @unique @map("wallet_address")
+  avatar        String?  @default("https://api.dicebear.com/7.x/avataaars/svg")
+  bio           String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  streams       Stream[]
+  sentTips      Tip[]      @relation("SentTips")
+  receivedTips  Tip[]      @relation("ReceivedTips")
+  followers     Follower[] @relation("Following")
+  following     Follower[] @relation("Followers")
+
+  @@map("users")
+}
+
+// Streams table - tracks live stream sessions
+model Stream {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  streamKey  String    @unique @map("stream_key")
+  title      String?
+  isLive     Boolean   @default(false) @map("is_live")
+  startedAt  DateTime? @map("started_at")
+  endedAt    DateTime? @map("ended_at")
+  viewerCount Int      @default(0) @map("viewer_count")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tips Tip[]
+
+  @@map("streams")
+}
+
+// Tips table - records all tip transactions on Solana
+model Tip {
+  id          String   @id @default(cuid())
+  streamId    String?  @map("stream_id")
+  fromWallet  String   @map("from_wallet")
+  toWallet    String   @map("to_wallet")
+  amountSol   Float    @map("amount_sol")
+  txSignature String   @unique @map("tx_signature")
+  message     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  stream       Stream? @relation(fields: [streamId], references: [id], onDelete: SetNull)
+  sender       User    @relation("SentTips", fields: [fromWallet], references: [walletAddress])
+  recipient    User    @relation("ReceivedTips", fields: [toWallet], references: [walletAddress])
+
+  @@map("tips")
+}
+
+// Followers table - tracks user follows
+model Follower {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  follower  User @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("followers")
+}
