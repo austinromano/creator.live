@@ -52,22 +52,6 @@ export function Header() {
 
           {/* Right Side - Actions */}
           <div className="flex items-center space-x-2">
-            {/* Deposit Button */}
-            <Button
-              size="sm"
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"
-            >
-              Deposit
-            </Button>
-
-            {/* Withdraw Button */}
-            <Button
-              size="sm"
-              className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-lg"
-            >
-              Withdraw
-            </Button>
-
             {/* Star Icon */}
             <Button
               variant="ghost"

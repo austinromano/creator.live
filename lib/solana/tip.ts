@@ -6,8 +6,11 @@ import {
   LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 
-// Platform wallet address - REPLACE THIS with your actual devnet wallet address
-export const PLATFORM_WALLET = 'AGNTj3MU4BK1Aj2XqXRTdGFy4noUmt5wLVvAyzMnHPc4';
+// Company wallet address (receives 20% of tips)
+export const COMPANY_WALLET = 'AGNTj3MU4BK1Aj2XqXRTdGFy4noUmt5wLVvAyzMnHPc4';
+
+// Performer wallet address (receives 80% of tips)
+export const PERFORMER_WALLET = 'mkuNXJEa1xLped556LhNH6H9XwTqRyYeDB2SryQFUFQ';
 
 // Devnet RPC endpoint
 export const DEVNET_RPC = 'https://api.devnet.solana.com';
@@ -16,7 +19,8 @@ export const DEVNET_RPC = 'https://api.devnet.solana.com';
 export const TIP_AMOUNT_SOL = 0.01;
 
 /**
- * Send a tip from the connected wallet to the platform wallet on devnet
+ * Send a split tip on devnet
+ * 20% goes to company wallet, 80% goes to performer wallet
  * @param connection Solana connection instance
  * @param senderPublicKey Public key of the sender (viewer's wallet)
  * @param signTransaction Function to sign the transaction from wallet adapter
@@ -30,37 +34,52 @@ export async function sendTip(
   sendTransaction: (transaction: Transaction, connection: Connection) => Promise<string>
 ): Promise<string> {
   try {
-    // Validate platform wallet address
-    if (PLATFORM_WALLET === 'REPLACE_WITH_YOUR_DEVNET_WALLET_ADDRESS') {
-      throw new Error('Platform wallet address not configured. Please set PLATFORM_WALLET in lib/solana/tip.ts');
-    }
-
-    // Create platform wallet public key
-    const platformPublicKey = new PublicKey(PLATFORM_WALLET);
+    // Create wallet public keys
+    const companyPublicKey = new PublicKey(COMPANY_WALLET);
+    const performerPublicKey = new PublicKey(PERFORMER_WALLET);
 
     // Convert SOL to lamports (1 SOL = 1,000,000,000 lamports)
-    const lamports = TIP_AMOUNT_SOL * LAMPORTS_PER_SOL;
+    const totalLamports = TIP_AMOUNT_SOL * LAMPORTS_PER_SOL;
+
+    // Calculate split: 20% to company, 80% to performer
+    const companyShare = Math.floor(totalLamports * 0.20);
+    const performerShare = totalLamports - companyShare;
+
+    console.log(`Splitting tip of ${TIP_AMOUNT_SOL} SOL (${totalLamports} lamports):`);
+    console.log(`  Company (20%): ${companyShare} lamports (${companyShare / LAMPORTS_PER_SOL} SOL)`);
+    console.log(`  Performer (80%): ${performerShare} lamports (${performerShare / LAMPORTS_PER_SOL} SOL)`);
 
     // Get recent blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create transfer instruction
-    const transferInstruction = SystemProgram.transfer({
-      fromPubkey: senderPublicKey,
-      toPubkey: platformPublicKey,
-      lamports,
-    });
-
-    // Create transaction
+    // Create transaction with two transfer instructions
     const transaction = new Transaction({
       recentBlockhash: blockhash,
       feePayer: senderPublicKey,
-    }).add(transferInstruction);
+    });
+
+    // Add company transfer (20%)
+    transaction.add(
+      SystemProgram.transfer({
+        fromPubkey: senderPublicKey,
+        toPubkey: companyPublicKey,
+        lamports: companyShare,
+      })
+    );
+
+    // Add performer transfer (80%)
+    transaction.add(
+      SystemProgram.transfer({
+        fromPubkey: senderPublicKey,
+        toPubkey: performerPublicKey,
+        lamports: performerShare,
+      })
+    );
 
     // Send transaction using wallet adapter
     const signature = await sendTransaction(transaction, connection);
 
-    console.log('Tip transaction sent:', signature);
+    console.log('Split tip transaction sent:', signature);
     console.log('View on Solana Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 
     // Wait for confirmation
@@ -74,10 +93,10 @@ export async function sendTip(
       throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
     }
 
-    console.log('Tip transaction confirmed!');
+    console.log('Split tip transaction confirmed!');
     return signature;
   } catch (error) {
-    console.error('Error sending tip:', error);
+    console.error('Error sending split tip:', error);
     throw error;
   }
 }

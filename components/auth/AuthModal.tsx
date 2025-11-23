@@ -12,7 +12,7 @@ import { Loader2, Mail } from 'lucide-react';
 
 export function AuthModal() {
   const { showAuthModal, setShowAuthModal } = useAuthStore();
-  const { connect, publicKey, connected, signMessage } = useWallet();
+  const { connect, select, publicKey, connected, signMessage, wallets } = useWallet();
 
   // Form states
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
@@ -66,7 +66,25 @@ export function AuthModal() {
       setError('');
 
       if (!connected || !publicKey) {
-        await connect();
+        // Find and select Phantom wallet
+        const phantomWallet = wallets.find(
+          wallet => wallet.adapter.name === 'Phantom'
+        );
+
+        if (!phantomWallet) {
+          throw new Error('Phantom wallet not found. Please install Phantom browser extension.');
+        }
+
+        try {
+          select(phantomWallet.adapter.name);
+          // Wait for wallet selection to complete
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await connect();
+        } catch (connectError: any) {
+          console.error('Connection error:', connectError);
+          throw new Error('Failed to connect to Phantom. Please make sure Phantom is unlocked and try again.');
+        }
+
         setPhantomStep('username');
         setLoading(false);
         return;

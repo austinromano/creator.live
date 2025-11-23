@@ -125,65 +125,68 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
         </div>
       </div>
 
-      {/* Main Layout - Contained Width */}
-      <div className="max-w-7xl mx-auto">
-        {/* Video Player - Full Width */}
-        <div className="aspect-video bg-black">
-          <StreamPlayer
-            creator={creator}
-            isLive={isLive}
-            viewers={viewers || creator.viewers || 0}
-            className="w-full h-full"
-          />
-        </div>
-
-        {/* Stream Info Below Video */}
-        <div className="bg-[#18181b] p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src={creator.avatar} alt={creator.name} />
-                <AvatarFallback className="bg-purple-600">
-                  {creator.name.split(' ').map(n => n[0]).join('')}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h2 className="text-white font-bold text-lg">{creator.name}</h2>
-                <p className="text-gray-400 text-sm">${creator.symbol}</p>
-              </div>
-            </div>
-            <TipButton
-              creator={creator}
-              onTip={sendTip}
-            />
-          </div>
-          <p className="text-gray-300 text-base mb-3">{creator.description}</p>
-
-          {/* Quick Stats */}
-          <div className="flex items-center space-x-4 text-sm text-gray-400">
-            <span className="flex items-center">
-              <Star className="h-4 w-4 mr-1 text-yellow-400" />
-              {formatNumber(likes)} likes
-            </span>
-            <span>•</span>
-            <span>Market Cap: ${formatNumber(creator.marketCap)}</span>
-          </div>
-        </div>
-
-        {/* Live Chat Below Stream Info */}
-        <div className="bg-[#18181b] border-t border-gray-800">
+      {/* Main Layout - Twitch Style */}
+      <div className="flex">
+        {/* Left Side - Live Chat */}
+        <div className="w-[340px] bg-[#18181b] border-r border-gray-800 flex flex-col h-[calc(100vh-120px)]">
           {/* Chat Header */}
-          <div className="px-4 py-2 bg-[#18181b]">
+          <div className="px-4 py-2 bg-[#18181b] border-b border-gray-800">
             <h3 className="text-gray-400 font-medium text-xs uppercase tracking-wide">Live Chat</h3>
           </div>
 
           {/* Chat Messages */}
-          <div className="h-96">
+          <div className="flex-1">
             <LiveChat
               messages={messages || []}
               onSendMessage={addMessage}
               creatorSymbol={creator.symbol}
             />
+          </div>
+        </div>
+
+        {/* Right Side - Video & Stream Info */}
+        <div className="flex-1">
+          {/* Video Player */}
+          <div className="aspect-video bg-black">
+            <StreamPlayer
+              creator={creator}
+              isLive={isLive}
+              viewers={viewers || creator.viewers || 0}
+              className="w-full h-full"
+            />
+          </div>
+
+          {/* Stream Info Below Video */}
+          <div className="bg-[#18181b] p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={creator.avatar} alt={creator.name} />
+                  <AvatarFallback className="bg-purple-600">
+                    {creator.name.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h2 className="text-white font-bold text-lg">{creator.name}</h2>
+                  <p className="text-gray-400 text-sm">${creator.symbol}</p>
+                </div>
+              </div>
+              <TipButton
+                creator={creator}
+                onTip={sendTip}
+              />
+            </div>
+            <p className="text-gray-300 text-base mb-3">{creator.description}</p>
+
+            {/* Quick Stats */}
+            <div className="flex items-center space-x-4 text-sm text-gray-400">
+              <span className="flex items-center">
+                <Star className="h-4 w-4 mr-1 text-yellow-400" />
+                {formatNumber(likes)} likes
+              </span>
+              <span>•</span>
+              <span>Market Cap: ${formatNumber(creator.marketCap)}</span>
+            </div>
           </div>
         </div>
       </div>
