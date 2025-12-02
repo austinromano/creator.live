@@ -29,11 +29,21 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const webrtcStreamerRef = React.useRef<WebRTCStreamer | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true); // Start muted for iOS autoplay compatibility
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'buffering' | 'disconnected'>('disconnected');
   const [streamQuality, setStreamQuality] = useState('1080p');
   const [hasWebRTCStream, setHasWebRTCStream] = useState(false);
+  const [needsUserInteraction, setNeedsUserInteraction] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+
+  // Detect iOS
+  useEffect(() => {
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(iOS);
+    console.log('iOS detected:', iOS);
+  }, []);
 
   // Demo stream URL - replace with actual stream URL from your backend
   const streamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
@@ -75,26 +85,54 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
         console.log('Video element:', videoRef.current);
         console.log('Stream tracks:', stream.getTracks());
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          const video = videoRef.current;
+
+          // iOS-specific: ensure video element is ready
+          video.srcObject = stream;
+          video.muted = true; // Must be muted for iOS autoplay
+          video.setAttribute('playsinline', 'true');
+          video.setAttribute('webkit-playsinline', 'true');
+
           console.log('Stream assigned to video element');
-          videoRef.current.play()
-            .then(() => {
+
+          // iOS needs a slight delay before play
+          const playVideo = async () => {
+            try {
+              await video.play();
               console.log('Video playback started successfully');
               setHasWebRTCStream(true);
               setConnectionStatus('connected');
-            })
-            .catch(err => {
+              setIsMuted(true);
+              setNeedsUserInteraction(false);
+            } catch (err: any) {
               console.error('Error playing video:', err);
-              // Try to play muted if autoplay is blocked
-              videoRef.current!.muted = true;
-              return videoRef.current!.play();
-            })
-            .then(() => {
-              console.log('Video playing (muted)');
-              setHasWebRTCStream(true);
-              setConnectionStatus('connected');
-            })
-            .catch(err => console.error('Failed to play video even when muted:', err));
+              if (err.name === 'NotAllowedError') {
+                // iOS blocks autoplay - need user interaction
+                console.log('Autoplay blocked, needs user interaction');
+                setNeedsUserInteraction(true);
+                setHasWebRTCStream(true);
+                setConnectionStatus('connected');
+              } else {
+                // Other error - retry muted
+                video.muted = true;
+                setIsMuted(true);
+                try {
+                  await video.play();
+                  console.log('Video playing (muted)');
+                  setHasWebRTCStream(true);
+                  setConnectionStatus('connected');
+                } catch (err2) {
+                  console.error('Failed to play video even when muted:', err2);
+                  setNeedsUserInteraction(true);
+                  setHasWebRTCStream(true);
+                  setConnectionStatus('connected');
+                }
+              }
+            }
+          };
+
+          // Small delay for iOS
+          setTimeout(playVideo, 100);
         } else {
           console.error('Video element not found!');
         }
@@ -217,8 +255,35 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
                 autoPlay
                 muted={isMuted}
                 playsInline
+                webkit-playsinline="true"
+                x-webkit-airplay="allow"
                 controls={false}
+                style={{ objectFit: 'cover' }}
               />
+              {/* Tap to play overlay for iOS */}
+              {needsUserInteraction && hasWebRTCStream && (
+                <div
+                  className="absolute inset-0 w-full h-full flex items-center justify-center bg-black/70 cursor-pointer z-30"
+                  onClick={() => {
+                    if (videoRef.current) {
+                      videoRef.current.play()
+                        .then(() => {
+                          setNeedsUserInteraction(false);
+                          setIsPlaying(true);
+                        })
+                        .catch(err => console.error('Still cannot play:', err));
+                    }
+                  }}
+                >
+                  <div className="text-center space-y-4">
+                    <div className="w-20 h-20 mx-auto bg-white/20 rounded-full flex items-center justify-center">
+                      <Play className="h-10 w-10 text-white ml-1" />
+                    </div>
+                    <p className="text-white text-lg font-semibold">Tap to Play</p>
+                    <p className="text-gray-300 text-sm">Stream is ready</p>
+                  </div>
+                </div>
+              )}
               {!hasWebRTCStream && (
                 <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
                   <div className="text-center space-y-4">

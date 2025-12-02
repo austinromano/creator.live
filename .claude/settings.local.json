@@ -5,7 +5,9 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(npm run dev:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(curl:*)",
+      "Bash(npx vercel ls)"
     ],
     "deny": [],
     "ask": []
