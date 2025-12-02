@@ -69,6 +69,8 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
     let retryTimeout: NodeJS.Timeout | null = null;
     let connected = false;
 
+    let hasStartedPlaying = false; // Guard against duplicate stream callbacks
+
     const connectToStream = () => {
       if (connected) return; // Stop if already connected
 
@@ -78,6 +80,13 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
 
       webrtcStreamerRef.current = new WebRTCStreamer(creator.symbol);
       webrtcStreamerRef.current.startViewing((stream) => {
+        // Prevent duplicate play() calls from multiple ontrack events
+        if (hasStartedPlaying) {
+          console.log('Already started playing, ignoring duplicate stream callback');
+          return;
+        }
+        hasStartedPlaying = true;
+
         connected = true; // Mark as connected
         if (retryTimeout) clearTimeout(retryTimeout); // Clear retry timer
 
@@ -119,17 +128,8 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
               setConnectionStatus('connected');
               setIsMuted(true);
               setNeedsUserInteraction(false);
-
-              // Try to unmute after a short delay (some browsers allow this)
-              setTimeout(() => {
-                if (video && !video.paused) {
-                  video.muted = false;
-                  // If unmuting causes issues, browser will re-mute or pause
-                  // We just try it optimistically
-                  setIsMuted(false);
-                  console.log('Attempted to unmute after playback started');
-                }
-              }, 500);
+              // Don't try to auto-unmute - let user click the unmute button
+              // This avoids the "element was paused" error
               return;
             } catch (err2) {
               console.error('Failed to play video even when muted:', err2);

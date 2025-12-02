@@ -139,10 +139,17 @@ export default function ProfilePage() {
     return () => clearTimeout(timer);
   }, [isLive]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - inline the cleanup to avoid hoisting issues
   useEffect(() => {
     return () => {
-      stopCamera();
+      console.log('Stopping camera...');
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     };
   }, []);
 

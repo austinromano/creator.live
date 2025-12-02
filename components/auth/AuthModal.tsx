@@ -76,12 +76,21 @@ export function AuthModal() {
         }
 
         try {
+          // Select triggers connection automatically in wallet adapter
           select(phantomWallet.adapter.name);
-          // Wait for wallet selection to complete
-          await new Promise(resolve => setTimeout(resolve, 200));
-          await connect();
+          // Wait longer for wallet popup and connection
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Only call connect if not already connected
+          if (!phantomWallet.adapter.connected) {
+            await connect();
+          }
         } catch (connectError: any) {
           console.error('Connection error:', connectError);
+          // WalletNotSelectedError is expected on first click, just retry
+          if (connectError.name === 'WalletNotSelectedError') {
+            throw new Error('Please click the Phantom button again to connect.');
+          }
           throw new Error('Failed to connect to Phantom. Please make sure Phantom is unlocked and try again.');
         }
 

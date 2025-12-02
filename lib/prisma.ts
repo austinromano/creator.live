@@ -8,8 +8,15 @@ const globalForPrisma = globalThis as unknown as {
   pool: Pool | undefined;
 };
 
-// Create PostgreSQL connection pool
-const pool = globalForPrisma.pool ?? new Pool({ connectionString: process.env.DATABASE_URL });
+// Create PostgreSQL connection pool with settings for Supabase pooler
+const pool = globalForPrisma.pool ?? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 2, // Very limited connections for serverless
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 30000, // Longer timeout for cold starts
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
+});
 
 // Create Prisma adapter
 const adapter = new PrismaPg(pool);
