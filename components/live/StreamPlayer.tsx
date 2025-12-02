@@ -29,7 +29,7 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const webrtcStreamerRef = React.useRef<WebRTCStreamer | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(true); // Start muted for iOS autoplay compatibility
+  const [isMuted, setIsMuted] = useState(false); // Start unmuted by default
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'buffering' | 'disconnected'>('disconnected');
   const [streamQuality, setStreamQuality] = useState('1080p');
@@ -87,51 +87,60 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
         if (videoRef.current) {
           const video = videoRef.current;
 
-          // iOS-specific: ensure video element is ready
+          // Set up video element
           video.srcObject = stream;
-          video.muted = true; // Must be muted for iOS autoplay
           video.setAttribute('playsinline', 'true');
           video.setAttribute('webkit-playsinline', 'true');
 
           console.log('Stream assigned to video element');
 
-          // iOS needs a slight delay before play
+          // Try to play with audio first
           const playVideo = async () => {
+            // First try: play with audio (unmuted)
+            video.muted = false;
             try {
               await video.play();
-              console.log('Video playback started successfully');
+              console.log('Video playback started with audio');
+              setHasWebRTCStream(true);
+              setConnectionStatus('connected');
+              setIsMuted(false);
+              setNeedsUserInteraction(false);
+              return; // Success with audio!
+            } catch (err: any) {
+              console.log('Autoplay with audio blocked, trying muted...', err.name);
+            }
+
+            // Second try: play muted (for browsers that block unmuted autoplay)
+            video.muted = true;
+            try {
+              await video.play();
+              console.log('Video playing (muted due to autoplay policy)');
               setHasWebRTCStream(true);
               setConnectionStatus('connected');
               setIsMuted(true);
               setNeedsUserInteraction(false);
-            } catch (err: any) {
-              console.error('Error playing video:', err);
-              if (err.name === 'NotAllowedError') {
-                // iOS blocks autoplay - need user interaction
-                console.log('Autoplay blocked, needs user interaction');
-                setNeedsUserInteraction(true);
-                setHasWebRTCStream(true);
-                setConnectionStatus('connected');
-              } else {
-                // Other error - retry muted
-                video.muted = true;
-                setIsMuted(true);
-                try {
-                  await video.play();
-                  console.log('Video playing (muted)');
-                  setHasWebRTCStream(true);
-                  setConnectionStatus('connected');
-                } catch (err2) {
-                  console.error('Failed to play video even when muted:', err2);
-                  setNeedsUserInteraction(true);
-                  setHasWebRTCStream(true);
-                  setConnectionStatus('connected');
+
+              // Try to unmute after a short delay (some browsers allow this)
+              setTimeout(() => {
+                if (video && !video.paused) {
+                  video.muted = false;
+                  // If unmuting causes issues, browser will re-mute or pause
+                  // We just try it optimistically
+                  setIsMuted(false);
+                  console.log('Attempted to unmute after playback started');
                 }
-              }
+              }, 500);
+              return;
+            } catch (err2) {
+              console.error('Failed to play video even when muted:', err2);
+              // Need user interaction
+              setNeedsUserInteraction(true);
+              setHasWebRTCStream(true);
+              setConnectionStatus('connected');
             }
           };
 
-          // Small delay for iOS
+          // Small delay for stability
           setTimeout(playVideo, 100);
         } else {
           console.error('Video element not found!');
