@@ -7,7 +7,7 @@ const wss = new WebSocket.Server({ port: PORT });
 const streams = new Map();
 let viewerIdCounter = 0;
 
-console.log(`Signaling server running on port ${PORT}`);
+console.log(`Signaling server v2.0 running on port ${PORT} - multi-viewer support`);
 
 wss.on('connection', (ws) => {
   let currentStreamId = null;
