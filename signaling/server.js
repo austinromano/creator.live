@@ -3,16 +3,14 @@ const WebSocket = require('ws');
 const PORT = process.env.PORT || process.env.SIGNALING_PORT || 8080;
 const wss = new WebSocket.Server({ port: PORT });
 
-// Store active streams: streamId -> { broadcaster: ws, viewers: Map<viewerId, ws> }
+// Store active streams: streamId -> { broadcaster: ws, viewers: Set<ws> }
 const streams = new Map();
-let viewerIdCounter = 0;
 
-console.log(`Signaling server v2.0 running on port ${PORT} - multi-viewer support`);
+console.log(`Signaling server running on port ${PORT}`);
 
 wss.on('connection', (ws) => {
   let currentStreamId = null;
   let role = null; // 'broadcaster' or 'viewer'
-  let myViewerId = null; // Stable viewer ID for this connection
 
   ws.on('message', (message) => {
     try {
@@ -25,14 +23,14 @@ wss.on('connection', (ws) => {
           role = 'broadcaster';
 
           if (!streams.has(currentStreamId)) {
-            streams.set(currentStreamId, { broadcaster: null, viewers: new Map() });
+            streams.set(currentStreamId, { broadcaster: null, viewers: new Set() });
           }
           streams.get(currentStreamId).broadcaster = ws;
           console.log(`[${currentStreamId}] Broadcaster joined`);
 
           // Notify existing viewers that broadcaster is available
           const stream = streams.get(currentStreamId);
-          stream.viewers.forEach((viewer) => {
+          stream.viewers.forEach(viewer => {
             viewer.send(JSON.stringify({ type: 'broadcaster-available' }));
           });
           break;
@@ -40,13 +38,12 @@ wss.on('connection', (ws) => {
         case 'join-as-viewer':
           currentStreamId = data.streamId;
           role = 'viewer';
-          myViewerId = `viewer-${++viewerIdCounter}`; // Assign stable unique ID
 
           if (!streams.has(currentStreamId)) {
-            streams.set(currentStreamId, { broadcaster: null, viewers: new Map() });
+            streams.set(currentStreamId, { broadcaster: null, viewers: new Set() });
           }
-          streams.get(currentStreamId).viewers.set(myViewerId, ws);
-          console.log(`[${currentStreamId}] Viewer ${myViewerId} joined (${streams.get(currentStreamId).viewers.size} total)`);
+          streams.get(currentStreamId).viewers.add(ws);
+          console.log(`[${currentStreamId}] Viewer joined (${streams.get(currentStreamId).viewers.size} total)`);
 
           // If broadcaster exists, notify viewer
           if (streams.get(currentStreamId).broadcaster) {
@@ -56,14 +53,14 @@ wss.on('connection', (ws) => {
 
         case 'request-stream':
           // Viewer requesting stream from broadcaster
-          if (currentStreamId && streams.has(currentStreamId) && myViewerId) {
+          if (currentStreamId && streams.has(currentStreamId)) {
             const broadcaster = streams.get(currentStreamId).broadcaster;
             if (broadcaster && broadcaster.readyState === WebSocket.OPEN) {
               broadcaster.send(JSON.stringify({
                 type: 'viewer-request',
-                viewerId: myViewerId
+                viewerId: getViewerId(ws, currentStreamId)
               }));
-              console.log(`[${currentStreamId}] Stream request from ${myViewerId} forwarded to broadcaster`);
+              console.log(`[${currentStreamId}] Stream request forwarded to broadcaster`);
             }
           }
           break;
@@ -76,20 +73,19 @@ wss.on('connection', (ws) => {
             const streamData = streams.get(currentStreamId);
 
             if (role === 'broadcaster') {
-              // Send to specific viewer by ID
+              // Send to specific viewer or broadcast to all viewers
               const targetViewer = data.targetViewerId
-                ? streamData.viewers.get(data.targetViewerId)
+                ? findViewerById(streamData.viewers, data.targetViewerId)
                 : null;
 
-              if (targetViewer && targetViewer.readyState === WebSocket.OPEN) {
+              if (targetViewer) {
                 targetViewer.send(JSON.stringify({
                   type: data.type,
                   data: data.data
                 }));
-                console.log(`[${currentStreamId}] ${data.type} sent to ${data.targetViewerId}`);
-              } else if (!data.targetViewerId) {
-                // Broadcast to all viewers if no target specified
-                streamData.viewers.forEach((viewer, viewerId) => {
+              } else {
+                // Broadcast to all viewers
+                streamData.viewers.forEach(viewer => {
                   if (viewer.readyState === WebSocket.OPEN) {
                     viewer.send(JSON.stringify({
                       type: data.type,
@@ -97,19 +93,17 @@ wss.on('connection', (ws) => {
                     }));
                   }
                 });
-                console.log(`[${currentStreamId}] ${data.type} broadcast to all viewers`);
-              } else {
-                console.log(`[${currentStreamId}] Target viewer ${data.targetViewerId} not found`);
               }
-            } else if (role === 'viewer' && myViewerId) {
-              // Send to broadcaster with this viewer's ID
+              console.log(`[${currentStreamId}] ${data.type} sent to viewer(s)`);
+            } else if (role === 'viewer') {
+              // Send to broadcaster
               if (streamData.broadcaster && streamData.broadcaster.readyState === WebSocket.OPEN) {
                 streamData.broadcaster.send(JSON.stringify({
                   type: data.type,
                   data: data.data,
-                  viewerId: myViewerId
+                  viewerId: getViewerId(ws, currentStreamId)
                 }));
-                console.log(`[${currentStreamId}] ${data.type} from ${myViewerId} sent to broadcaster`);
+                console.log(`[${currentStreamId}] ${data.type} sent to broadcaster`);
               }
             }
           }
@@ -128,14 +122,14 @@ wss.on('connection', (ws) => {
         streamData.broadcaster = null;
         console.log(`[${currentStreamId}] Broadcaster left`);
         // Notify viewers
-        streamData.viewers.forEach((viewer) => {
+        streamData.viewers.forEach(viewer => {
           if (viewer.readyState === WebSocket.OPEN) {
             viewer.send(JSON.stringify({ type: 'broadcaster-left' }));
           }
         });
-      } else if (role === 'viewer' && myViewerId) {
-        streamData.viewers.delete(myViewerId);
-        console.log(`[${currentStreamId}] Viewer ${myViewerId} left (${streamData.viewers.size} remaining)`);
+      } else if (role === 'viewer') {
+        streamData.viewers.delete(ws);
+        console.log(`[${currentStreamId}] Viewer left (${streamData.viewers.size} remaining)`);
       }
 
       // Clean up empty streams
@@ -150,6 +144,23 @@ wss.on('connection', (ws) => {
     console.error('WebSocket error:', error);
   });
 });
+
+// Helper to generate viewer ID
+function getViewerId(ws, streamId) {
+  // Use a simple approach - find index in viewers set
+  if (streams.has(streamId)) {
+    const viewers = Array.from(streams.get(streamId).viewers);
+    const index = viewers.indexOf(ws);
+    return index >= 0 ? `viewer-${index}` : `viewer-${Date.now()}`;
+  }
+  return `viewer-${Date.now()}`;
+}
+
+function findViewerById(viewers, viewerId) {
+  const index = parseInt(viewerId.replace('viewer-', ''));
+  const viewerArray = Array.from(viewers);
+  return viewerArray[index] || null;
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
