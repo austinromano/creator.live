@@ -10,6 +10,8 @@ export class WebRTCStreamer {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
+  private viewerPendingCandidates: RTCIceCandidateInit[] = [];
 
   // Signaling server URL - use environment variable or default to localhost
   private signalingUrl: string;
@@ -223,11 +225,14 @@ export class WebRTCStreamer {
     const pc = this.createPeerConnectionForViewer(finalViewerId);
     this.viewerConnections.set(finalViewerId, pc);
 
-    // Add all tracks
+    // Add all tracks - clone them for each viewer to avoid interference
     this.localStream.getTracks().forEach(track => {
       console.log(`[${this.streamId}] Adding track for viewer ${finalViewerId}:`, track.kind, track.readyState);
+      // Use the original track - WebRTC supports adding same track to multiple peer connections
       pc.addTrack(track, this.localStream!);
     });
+
+    console.log(`[${this.streamId}] Total viewer connections: ${this.viewerConnections.size}`);
 
     try {
       const offer = await pc.createOffer();
@@ -325,6 +330,9 @@ export class WebRTCStreamer {
       await this.peerConnection!.setRemoteDescription(offer);
       console.log(`[${this.streamId}] Remote description set`);
 
+      // Process any pending ICE candidates now that remote description is set
+      await this.processPendingCandidates();
+
       const answer = await this.peerConnection!.createAnswer();
       await this.peerConnection!.setLocalDescription(answer);
 
@@ -351,6 +359,8 @@ export class WebRTCStreamer {
       try {
         await pc.setRemoteDescription(answer);
         console.log(`[${this.streamId}] Remote description set for viewer ${viewerId}`);
+        // Process any pending ICE candidates for this viewer
+        await this.processPendingCandidates(viewerId);
       } catch (error) {
         console.error(`[${this.streamId}] Error handling answer from viewer ${viewerId}:`, error);
       }
@@ -366,6 +376,8 @@ export class WebRTCStreamer {
     try {
       await this.peerConnection.setRemoteDescription(answer);
       console.log(`[${this.streamId}] Remote description set from answer`);
+      // Process any pending ICE candidates
+      await this.processPendingCandidates();
     } catch (error) {
       console.error(`[${this.streamId}] Error handling answer:`, error);
     }
@@ -378,9 +390,24 @@ export class WebRTCStreamer {
     if (this.role === 'broadcaster' && viewerId) {
       const pc = this.viewerConnections.get(viewerId);
       if (!pc) {
-        console.error(`[${this.streamId}] No peer connection for viewer ${viewerId}`);
+        console.log(`[${this.streamId}] No peer connection yet for viewer ${viewerId}, queueing ICE candidate`);
+        if (!this.pendingIceCandidates.has(viewerId)) {
+          this.pendingIceCandidates.set(viewerId, []);
+        }
+        this.pendingIceCandidates.get(viewerId)!.push(candidate);
         return;
       }
+
+      // Check if remote description is set
+      if (!pc.remoteDescription) {
+        console.log(`[${this.streamId}] Remote description not set for viewer ${viewerId}, queueing ICE candidate`);
+        if (!this.pendingIceCandidates.has(viewerId)) {
+          this.pendingIceCandidates.set(viewerId, []);
+        }
+        this.pendingIceCandidates.get(viewerId)!.push(candidate);
+        return;
+      }
+
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
         console.log(`[${this.streamId}] ICE candidate added for viewer ${viewerId}`);
@@ -392,7 +419,15 @@ export class WebRTCStreamer {
 
     // For viewer: use the single peer connection
     if (!this.peerConnection) {
-      console.error(`[${this.streamId}] No peer connection for ICE candidate`);
+      console.log(`[${this.streamId}] No peer connection yet, queueing ICE candidate`);
+      this.viewerPendingCandidates.push(candidate);
+      return;
+    }
+
+    // Check if remote description is set
+    if (!this.peerConnection.remoteDescription) {
+      console.log(`[${this.streamId}] Remote description not set yet, queueing ICE candidate`);
+      this.viewerPendingCandidates.push(candidate);
       return;
     }
 
@@ -401,6 +436,38 @@ export class WebRTCStreamer {
       console.log(`[${this.streamId}] ICE candidate added`);
     } catch (error) {
       console.error(`[${this.streamId}] Error adding ICE candidate:`, error);
+    }
+  }
+
+  private async processPendingCandidates(viewerId?: string) {
+    if (this.role === 'broadcaster' && viewerId) {
+      const candidates = this.pendingIceCandidates.get(viewerId);
+      if (candidates && candidates.length > 0) {
+        const pc = this.viewerConnections.get(viewerId);
+        if (pc && pc.remoteDescription) {
+          console.log(`[${this.streamId}] Processing ${candidates.length} pending ICE candidates for viewer ${viewerId}`);
+          for (const candidate of candidates) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+              console.error(`[${this.streamId}] Error adding queued ICE candidate:`, error);
+            }
+          }
+          this.pendingIceCandidates.delete(viewerId);
+        }
+      }
+    } else if (this.peerConnection && this.peerConnection.remoteDescription) {
+      if (this.viewerPendingCandidates.length > 0) {
+        console.log(`[${this.streamId}] Processing ${this.viewerPendingCandidates.length} pending ICE candidates`);
+        for (const candidate of this.viewerPendingCandidates) {
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (error) {
+            console.error(`[${this.streamId}] Error adding queued ICE candidate:`, error);
+          }
+        }
+        this.viewerPendingCandidates = [];
+      }
     }
   }
 
