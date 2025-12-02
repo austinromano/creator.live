@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Creator } from '@/lib/types';
-import { WebRTCStreamer } from '@/lib/webrtc-stream';
+import { LiveKitStreamer } from '@/lib/livekit-stream';
 import {
   Play,
   Pause,
@@ -27,13 +27,13 @@ interface StreamPlayerProps {
 
 export function StreamPlayer({ creator, isLive, viewers, className = '' }: StreamPlayerProps) {
   const videoRef = React.useRef<HTMLVideoElement>(null);
-  const webrtcStreamerRef = React.useRef<WebRTCStreamer | null>(null);
+  const streamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false); // Start unmuted by default
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'buffering' | 'disconnected'>('disconnected');
   const [streamQuality, setStreamQuality] = useState('1080p');
-  const [hasWebRTCStream, setHasWebRTCStream] = useState(false);
+  const [hasStream, setHasStream] = useState(false);
   const [needsUserInteraction, setNeedsUserInteraction] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
@@ -45,128 +45,56 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
     console.log('iOS detected:', iOS);
   }, []);
 
-  // Demo stream URL - replace with actual stream URL from your backend
-  const streamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-
-  // Connect to WebRTC stream when live
+  // Connect to LiveKit stream when live
   useEffect(() => {
     if (!isLive) {
       setConnectionStatus('disconnected');
-      setHasWebRTCStream(false);
-      if (webrtcStreamerRef.current) {
-        webrtcStreamerRef.current.close();
-        webrtcStreamerRef.current = null;
+      setHasStream(false);
+      if (streamerRef.current) {
+        streamerRef.current.close();
+        streamerRef.current = null;
       }
       return;
     }
 
-    // Try to connect to WebRTC stream
-    console.log('Attempting to connect to WebRTC stream for:', creator.symbol);
+    // Try to connect to LiveKit stream
+    console.log('Attempting to connect to LiveKit stream for:', creator.symbol);
     setConnectionStatus('buffering');
 
-    let retryCount = 0;
-    const maxRetries = 10;
-    let retryTimeout: NodeJS.Timeout | null = null;
-    let connected = false;
-
-    let hasStartedPlaying = false; // Guard against duplicate stream callbacks
-
-    const connectToStream = () => {
-      if (connected) return; // Stop if already connected
-
-      if (webrtcStreamerRef.current) {
-        webrtcStreamerRef.current.close();
+    const connectToStream = async () => {
+      if (streamerRef.current) {
+        streamerRef.current.close();
       }
 
-      webrtcStreamerRef.current = new WebRTCStreamer(creator.symbol);
-      webrtcStreamerRef.current.startViewing((stream) => {
-        // Prevent duplicate play() calls from multiple ontrack events
-        if (hasStartedPlaying) {
-          console.log('Already started playing, ignoring duplicate stream callback');
-          return;
-        }
-        hasStartedPlaying = true;
+      streamerRef.current = new LiveKitStreamer(creator.symbol);
 
-        connected = true; // Mark as connected
-        if (retryTimeout) clearTimeout(retryTimeout); // Clear retry timer
-
-        console.log('Received WebRTC stream:', stream);
-        console.log('Video element:', videoRef.current);
-        console.log('Stream tracks:', stream.getTracks());
+      try {
         if (videoRef.current) {
-          const video = videoRef.current;
-
-          // Set up video element
-          video.srcObject = stream;
-          video.setAttribute('playsinline', 'true');
-          video.setAttribute('webkit-playsinline', 'true');
-
-          console.log('Stream assigned to video element');
-
-          // Try to play with audio first
-          const playVideo = async () => {
-            // First try: play with audio (unmuted)
-            video.muted = false;
-            try {
-              await video.play();
-              console.log('Video playback started with audio');
-              setHasWebRTCStream(true);
-              setConnectionStatus('connected');
-              setIsMuted(false);
-              setNeedsUserInteraction(false);
-              return; // Success with audio!
-            } catch (err: any) {
-              console.log('Autoplay with audio blocked, trying muted...', err.name);
-            }
-
-            // Second try: play muted (for browsers that block unmuted autoplay)
-            video.muted = true;
-            try {
-              await video.play();
-              console.log('Video playing (muted due to autoplay policy)');
-              setHasWebRTCStream(true);
+          // Use the new method that uses LiveKit's native track.attach()
+          await streamerRef.current.startViewingWithElement(
+            videoRef.current,
+            () => {
+              // Called when video starts playing
+              console.log('LiveKit stream connected and playing');
+              setHasStream(true);
               setConnectionStatus('connected');
               setIsMuted(true);
               setNeedsUserInteraction(false);
-              // Don't try to auto-unmute - let user click the unmute button
-              // This avoids the "element was paused" error
-              return;
-            } catch (err2) {
-              console.error('Failed to play video even when muted:', err2);
-              // Need user interaction
-              setNeedsUserInteraction(true);
-              setHasWebRTCStream(true);
-              setConnectionStatus('connected');
             }
-          };
-
-          // Small delay for stability
-          setTimeout(playVideo, 100);
-        } else {
-          console.error('Video element not found!');
+          );
         }
-      });
-
-      // Retry connection if not connected after 3 seconds
-      retryTimeout = setTimeout(() => {
-        if (!connected && retryCount < maxRetries) {
-          retryCount++;
-          console.log(`Retrying WebRTC connection (${retryCount}/${maxRetries})...`);
-          connectToStream();
-        }
-      }, 3000);
+      } catch (error) {
+        console.error('Failed to connect to LiveKit:', error);
+        setConnectionStatus('disconnected');
+      }
     };
 
     connectToStream();
 
     return () => {
-      connected = true; // Prevent further retries on cleanup
-      if (retryTimeout) {
-        clearTimeout(retryTimeout);
-      }
-      if (webrtcStreamerRef.current) {
-        webrtcStreamerRef.current.close();
-        webrtcStreamerRef.current = null;
+      if (streamerRef.current) {
+        streamerRef.current.close();
+        streamerRef.current = null;
       }
     };
   }, [isLive, creator.symbol]);
@@ -270,7 +198,7 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
                 style={{ objectFit: 'cover' }}
               />
               {/* Tap to play overlay for iOS */}
-              {needsUserInteraction && hasWebRTCStream && (
+              {needsUserInteraction && hasStream && (
                 <div
                   className="absolute inset-0 w-full h-full flex items-center justify-center bg-black/70 cursor-pointer z-30"
                   onClick={() => {
@@ -293,7 +221,7 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
                   </div>
                 </div>
               )}
-              {!hasWebRTCStream && (
+              {!hasStream && (
                 <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
                   <div className="text-center space-y-4">
                     <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto" />

@@ -32,7 +32,7 @@ import {
   Square,
 } from 'lucide-react';
 import { LiveStreamBroadcast } from '@/components/streaming/LiveStreamBroadcast';
-import { WebRTCStreamer } from '@/lib/webrtc-stream';
+import { LiveKitStreamer } from '@/lib/livekit-stream';
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
@@ -42,7 +42,7 @@ export default function ProfilePage() {
   const [sessionTime, setSessionTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
-  const webrtcStreamerRef = React.useRef<WebRTCStreamer | null>(null);
+  const livekitStreamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [streamReady, setStreamReady] = useState(false);
@@ -300,12 +300,12 @@ export default function ProfilePage() {
         setIsLive(true);
         updateToken(userToken.symbol, { isLive: true });
 
-        // Start WebRTC broadcast
+        // Start LiveKit broadcast
         if (streamRef.current) {
-          console.log('Starting WebRTC broadcast...');
-          webrtcStreamerRef.current = new WebRTCStreamer(userToken.symbol);
-          await webrtcStreamerRef.current.startBroadcast(streamRef.current);
-          console.log('WebRTC broadcast started for:', userToken.symbol);
+          console.log('Starting LiveKit broadcast...');
+          livekitStreamerRef.current = new LiveKitStreamer(userToken.symbol);
+          await livekitStreamerRef.current.startBroadcast(streamRef.current);
+          console.log('LiveKit broadcast started for:', userToken.symbol);
         } else {
           console.error('ERROR: streamRef.current is null after startCamera!');
         }
@@ -331,11 +331,11 @@ export default function ProfilePage() {
       setSessionTime(0);
       setStreamTitle('');
 
-      // Stop WebRTC broadcast
-      if (webrtcStreamerRef.current) {
-        console.log('Closing WebRTC broadcast');
-        webrtcStreamerRef.current.close();
-        webrtcStreamerRef.current = null;
+      // Stop LiveKit broadcast
+      if (livekitStreamerRef.current) {
+        console.log('Closing LiveKit broadcast');
+        livekitStreamerRef.current.close();
+        livekitStreamerRef.current = null;
       }
 
       // Try to end stream in database if we have an ID
