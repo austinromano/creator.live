@@ -7,6 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Creator } from '@/lib/types';
 import {
   Wallet,
   Trophy,
@@ -36,7 +37,7 @@ import { WebRTCStreamer } from '@/lib/webrtc-stream';
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { getTokenByCreator, getTokenBySymbol, updateToken } = useTokenStore();
+  const { getTokenByCreator, getTokenBySymbol, updateToken, fetchTokens, initialized } = useTokenStore();
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -47,18 +48,53 @@ export default function ProfilePage() {
   const [streamReady, setStreamReady] = useState(false);
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [streamTitle, setStreamTitle] = useState('');
+  const [userToken, setUserToken] = useState<Creator | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(true);
 
   const user = session?.user as any;
   const userId = user?.id;
   const username = user?.name || 'User';
 
-  // Check if user has a token
-  let userToken = userId ? getTokenByCreator(userId) : null;
+  // Fetch tokens from database on mount and find user's token
+  useEffect(() => {
+    const loadUserToken = async () => {
+      if (!userId) {
+        setTokenLoading(false);
+        return;
+      }
 
-  // For testing: If no user token found, use GOTH token
-  if (!userToken) {
-    userToken = getTokenBySymbol('GOTH');
-  }
+      // Fetch tokens from database if not already initialized
+      if (!initialized) {
+        await fetchTokens();
+      }
+
+      // Look for user's token
+      const token = getTokenByCreator(userId);
+      if (token) {
+        console.log('Found user token:', token.symbol);
+        setUserToken(token);
+      } else {
+        // Fallback to GOTH for testing only if no user token exists
+        const gothToken = getTokenBySymbol('GOTH');
+        console.log('No user token found, using GOTH for testing');
+        setUserToken(gothToken || null);
+      }
+      setTokenLoading(false);
+    };
+
+    loadUserToken();
+  }, [userId, initialized, fetchTokens, getTokenByCreator, getTokenBySymbol]);
+
+  // Update userToken when tokens change (in case fetchTokens completes)
+  useEffect(() => {
+    if (initialized && userId) {
+      const token = getTokenByCreator(userId);
+      if (token) {
+        console.log('Updated user token from store:', token.symbol);
+        setUserToken(token);
+      }
+    }
+  }, [initialized, userId, getTokenByCreator]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -110,11 +146,12 @@ export default function ProfilePage() {
     };
   }, []);
 
-  if (status === 'loading') {
+  if (status === 'loading' || tokenLoading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto" />
+          <p className="text-gray-400 mt-4">Loading your creator profile...</p>
         </div>
       </div>
     );

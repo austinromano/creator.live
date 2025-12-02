@@ -18,28 +18,31 @@ const getFilteredTokens = (tokens: Creator[], filter: string): Creator[] => {
   }
 };
 
-const getKingOfHill = (tokens: Creator[]): Creator => {
+const getKingOfHill = (tokens: Creator[]): Creator | undefined => {
+  if (tokens.length === 0) return undefined;
   return [...tokens].sort((a, b) => b.marketCap - a.marketCap)[0];
 };
 
 export const useTokens = () => {
-  const { tokens: allTokens } = useTokenStore();
-  const [loading, setLoading] = useState(false);
+  const { tokens: allTokens, loading: storeLoading, initialized, fetchTokens } = useTokenStore();
   const [filter, setFilter] = useState('all');
+
+  // Fetch tokens from database on mount
+  useEffect(() => {
+    if (!initialized) {
+      fetchTokens();
+    }
+  }, [initialized, fetchTokens]);
 
   const tokens = getFilteredTokens(allTokens, filter);
 
   const refreshTokens = () => {
-    setLoading(true);
-    // Simulate API refresh
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    fetchTokens();
   };
 
   return {
     tokens,
-    loading,
+    loading: storeLoading,
     filter,
     setFilter,
     refreshTokens,

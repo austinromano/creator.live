@@ -161,11 +161,8 @@ export function CreateTokenForm() {
     setIsCreating(true);
 
     try {
-      // Simulate token creation process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Create the new token
-      const newToken = addToken({
+      // Create the new token in database
+      const newToken = await addToken({
         name: formData.name,
         symbol: formData.symbol.toUpperCase(),
         description: formData.description,
