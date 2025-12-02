@@ -73,25 +73,25 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
   return (
     <div className="min-h-screen bg-[#0e0e10]">
       {/* Top Stats Bar */}
-      <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
+      <div className="bg-[#18181b] border-b border-gray-800 px-2 sm:px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4 text-xs">
-            <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-2 sm:space-x-4 text-xs overflow-x-auto">
+            <div className="flex items-center space-x-1 whitespace-nowrap">
               <Users className="h-3 w-3 text-purple-400" />
               <span className="text-white font-medium">{formatNumber(creator.holders)}</span>
-              <span className="text-gray-400">Holders</span>
+              <span className="text-gray-400 hidden sm:inline">Holders</span>
             </div>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 whitespace-nowrap">
               <Eye className="h-3 w-3 text-yellow-400" />
               <span className="text-white font-medium">{formatNumber(viewers || creator.viewers || 0)}</span>
-              <span className="text-gray-400">Watching</span>
+              <span className="text-gray-400 hidden sm:inline">Watching</span>
             </div>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 whitespace-nowrap">
               <DollarSign className="h-3 w-3 text-green-400" />
               <span className="text-white font-medium">${creator.price.toFixed(6)}</span>
-              <span className="text-gray-400">Price</span>
+              <span className="text-gray-400 hidden sm:inline">Price</span>
             </div>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 whitespace-nowrap">
               {isPositive ? (
                 <TrendingUp className="h-3 w-3 text-green-400" />
               ) : (
@@ -100,10 +100,10 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
               <span className={`font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
                 {isPositive ? '+' : ''}{creator.priceChange24h.toFixed(1)}%
               </span>
-              <span className="text-gray-400">24h</span>
+              <span className="text-gray-400 hidden sm:inline">24h</span>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
             <Button
               size="sm"
               variant="ghost"
@@ -125,27 +125,10 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
         </div>
       </div>
 
-      {/* Main Layout - Twitch Style */}
-      <div className="flex">
-        {/* Left Side - Live Chat */}
-        <div className="w-[340px] bg-[#18181b] border-r border-gray-800 flex flex-col h-[calc(100vh-120px)]">
-          {/* Chat Header */}
-          <div className="px-4 py-2 bg-[#18181b] border-b border-gray-800">
-            <h3 className="text-gray-400 font-medium text-xs uppercase tracking-wide">Live Chat</h3>
-          </div>
-
-          {/* Chat Messages */}
-          <div className="flex-1">
-            <LiveChat
-              messages={messages || []}
-              onSendMessage={addMessage}
-              creatorSymbol={creator.symbol}
-            />
-          </div>
-        </div>
-
-        {/* Right Side - Video & Stream Info */}
-        <div className="flex-1">
+      {/* Main Layout - Responsive: stacked on mobile, side-by-side on desktop */}
+      <div className="flex flex-col lg:flex-row">
+        {/* Video & Stream Info - Shows first on mobile */}
+        <div className="flex-1 order-1 lg:order-2">
           {/* Video Player */}
           <div className="aspect-video bg-black">
             <StreamPlayer
@@ -187,6 +170,23 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
               <span>•</span>
               <span>Market Cap: ${formatNumber(creator.marketCap)}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Live Chat - Shows below video on mobile, left side on desktop */}
+        <div className="w-full lg:w-[340px] bg-[#18181b] lg:border-r border-t lg:border-t-0 border-gray-800 flex flex-col h-[400px] lg:h-[calc(100vh-120px)] order-2 lg:order-1">
+          {/* Chat Header */}
+          <div className="px-4 py-2 bg-[#18181b] border-b border-gray-800">
+            <h3 className="text-gray-400 font-medium text-xs uppercase tracking-wide">Live Chat</h3>
+          </div>
+
+          {/* Chat Messages */}
+          <div className="flex-1">
+            <LiveChat
+              messages={messages || []}
+              onSendMessage={addMessage}
+              creatorSymbol={creator.symbol}
+            />
           </div>
         </div>
       </div>
