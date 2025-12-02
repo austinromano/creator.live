@@ -71,7 +71,7 @@ export class TrustScorer {
     }
 
     // Check revenue sharing (indicates long-term thinking)
-    if (token.revenueSharing.enabled) {
+    if (token.revenueSharing?.enabled) {
       signals.push({
         type: 'positive',
         category: 'contract',
@@ -82,7 +82,7 @@ export class TrustScorer {
     }
 
     // Check trading limits (anti-bot protection)
-    if (token.tradingLimits.maxBuyPerTx < 100 && token.tradingLimits.cooldownPeriod > 0) {
+    if (token.tradingLimits && token.tradingLimits.maxBuyPerTx < 100 && token.tradingLimits.cooldownPeriod > 0) {
       signals.push({
         type: 'positive',
         category: 'contract',
@@ -134,7 +134,7 @@ export class TrustScorer {
     }
 
     // Check follower count
-    if (token.followers > 1000) {
+    if ((token.followers ?? 0) > 1000) {
       signals.push({
         type: 'positive',
         category: 'social',
@@ -145,7 +145,7 @@ export class TrustScorer {
     }
 
     // Check engagement
-    if (token.totalLikes > 500) {
+    if ((token.totalLikes ?? 0) > 500) {
       signals.push({
         type: 'positive',
         category: 'social',

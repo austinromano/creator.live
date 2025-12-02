@@ -146,10 +146,10 @@ export class TokenRecommendationEngine {
       similarity += mcapRatio * 0.15;
 
       // Features similarity
-      if (token.revenueSharing.enabled === likedToken.revenueSharing.enabled) {
+      if (token.revenueSharing?.enabled === likedToken.revenueSharing?.enabled) {
         similarity += 0.1;
       }
-      if (token.staking.enabled === likedToken.staking.enabled) {
+      if (token.staking?.enabled === likedToken.staking?.enabled) {
         similarity += 0.05;
       }
 
@@ -208,7 +208,7 @@ export class TokenRecommendationEngine {
 
     userHistory.forEach((interaction) => {
       const token = allTokens.find((t) => t.id === interaction.tokenId);
-      if (token) {
+      if (token && token.category) {
         const current = categoryPreferences.get(token.category) || 0;
         categoryPreferences.set(token.category, current + 1);
       }
@@ -310,17 +310,17 @@ export class TokenRecommendationEngine {
       }
 
       if (filters.minTrustScore !== undefined) {
-        results = results.filter((token) => token.trustScore >= filters.minTrustScore!);
+        results = results.filter((token) => (token.trustScore ?? 0) >= filters.minTrustScore!);
       }
 
       if (filters.hasRevenueSharing !== undefined) {
         results = results.filter(
-          (token) => token.revenueSharing.enabled === filters.hasRevenueSharing
+          (token) => token.revenueSharing?.enabled === filters.hasRevenueSharing
         );
       }
 
       if (filters.hasStaking !== undefined) {
-        results = results.filter((token) => token.staking.enabled === filters.hasStaking);
+        results = results.filter((token) => token.staking?.enabled === filters.hasStaking);
       }
 
       if (filters.hasGovernance !== undefined) {

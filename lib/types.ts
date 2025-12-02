@@ -27,39 +27,39 @@ export interface Creator {
   topHolders?: TokenHolder[];
   recentTrades?: Trade[];
 
-  // Enhanced features
-  bondingCurveType: BondingCurveType;
-  category: TokenCategory;
-  verificationLevel: VerificationLevel;
-  trustScore: number; // 0-100
-  isVerified: boolean;
-  creatorAddress: string;
+  // Enhanced features (optional for mock data compatibility)
+  bondingCurveType?: BondingCurveType;
+  category?: TokenCategory;
+  verificationLevel?: VerificationLevel;
+  trustScore?: number; // 0-100
+  isVerified?: boolean;
+  creatorAddress?: string;
 
   // Revenue sharing
-  revenueSharing: {
+  revenueSharing?: {
     enabled: boolean;
     holderPercentage: number;
     totalDistributed: number;
   };
 
   // Staking
-  staking: {
+  staking?: {
     enabled: boolean;
     totalStaked: number;
     apy: number;
   };
 
   // Anti-bot measures
-  tradingLimits: {
+  tradingLimits?: {
     maxBuyPerTx: number;
     maxSellPerTx: number;
     cooldownPeriod: number; // seconds
   };
 
   // Social features
-  followers: number;
-  following: number;
-  totalLikes: number;
+  followers?: number;
+  following?: number;
+  totalLikes?: number;
 
   // Streaming
   streamConfig?: StreamConfig;

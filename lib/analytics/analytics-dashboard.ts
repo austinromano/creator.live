@@ -357,8 +357,8 @@ export class AnalyticsDashboard {
     }
 
     // Holder growth insight
-    if (summary.growth.holderGrowthRate > 10) {
-      insights.push(`📈 Rapidly growing community: ${summary.growth.holderGrowthRate.toFixed(1)}% holder increase`);
+    if (summary.growth.holderGrowth > 10) {
+      insights.push(`📈 Rapidly growing community: ${summary.growth.holderGrowth.toFixed(1)}% holder increase`);
     }
 
     // Engagement insight
@@ -409,12 +409,12 @@ export class AnalyticsDashboard {
     }
 
     // Revenue sharing recommendation
-    if (!token.revenueSharing.enabled) {
+    if (!token.revenueSharing?.enabled) {
       recommendations.push('💰 Enable revenue sharing to incentivize long-term holding');
     }
 
     // Staking recommendation
-    if (!token.staking.enabled) {
+    if (!token.staking?.enabled) {
       recommendations.push('🔒 Add staking to reward loyal holders');
     }
 
