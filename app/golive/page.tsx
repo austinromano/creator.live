@@ -50,6 +50,7 @@ export default function ProfilePage() {
   const [streamTitle, setStreamTitle] = useState('');
   const [userToken, setUserToken] = useState<Creator | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
+  const thumbnailIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -149,6 +150,11 @@ export default function ProfilePage() {
       }
       if (videoRef.current) {
         videoRef.current.srcObject = null;
+      }
+      // Clear thumbnail interval
+      if (thumbnailIntervalRef.current) {
+        clearInterval(thumbnailIntervalRef.current);
+        thumbnailIntervalRef.current = null;
       }
     };
   }, []);
@@ -306,6 +312,9 @@ export default function ProfilePage() {
           livekitStreamerRef.current = new LiveKitStreamer(userToken.symbol);
           await livekitStreamerRef.current.startBroadcast(streamRef.current);
           console.log('LiveKit broadcast started for:', userToken.symbol);
+
+          // Start capturing thumbnails
+          startThumbnailCapture();
         } else {
           console.error('ERROR: streamRef.current is null after startCamera!');
         }
@@ -337,6 +346,9 @@ export default function ProfilePage() {
         livekitStreamerRef.current.close();
         livekitStreamerRef.current = null;
       }
+
+      // Stop thumbnail capture and delete thumbnail
+      await stopThumbnailCapture();
 
       // Try to end stream in database if we have an ID
       if (currentStreamId) {
@@ -401,6 +413,74 @@ export default function ProfilePage() {
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Capture and upload thumbnail from video element
+  const captureThumbnail = async () => {
+    if (!videoRef.current || !userToken) return;
+
+    try {
+      const video = videoRef.current;
+      // Make sure video has dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      // Create canvas and capture frame
+      const canvas = document.createElement('canvas');
+      canvas.width = 320; // Thumbnail size
+      canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to base64
+      const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+
+      // Upload to API
+      await fetch('/api/stream/thumbnail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: userToken.symbol,
+          thumbnail
+        })
+      });
+
+      console.log('Thumbnail uploaded for:', userToken.symbol);
+    } catch (error) {
+      console.error('Failed to capture thumbnail:', error);
+    }
+  };
+
+  // Start thumbnail capture interval when live
+  const startThumbnailCapture = () => {
+    // Capture immediately
+    setTimeout(captureThumbnail, 1000); // Small delay to ensure video is playing
+
+    // Then capture every 10 seconds
+    thumbnailIntervalRef.current = setInterval(captureThumbnail, 10000);
+  };
+
+  // Stop thumbnail capture and delete thumbnail
+  const stopThumbnailCapture = async () => {
+    if (thumbnailIntervalRef.current) {
+      clearInterval(thumbnailIntervalRef.current);
+      thumbnailIntervalRef.current = null;
+    }
+
+    // Delete thumbnail when stream ends
+    if (userToken) {
+      try {
+        await fetch('/api/stream/thumbnail', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: userToken.symbol })
+        });
+      } catch (error) {
+        console.error('Failed to delete thumbnail:', error);
+      }
+    }
   };
 
   // If user has a token, show the Twitch-style stream manager
