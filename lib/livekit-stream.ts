@@ -295,6 +295,7 @@ export class LiveKitStreamer {
     // Clean up viewer stream
     this.viewerStream.getTracks().forEach(track => track.stop());
     this.viewerStream = new MediaStream();
-    this.hasNotifiedCallback = false;
+    this.onVideoElement = undefined;
+    this.onConnectedCallback = undefined;
   }
 }
