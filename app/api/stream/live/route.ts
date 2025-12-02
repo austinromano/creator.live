@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      streams: liveStreams.map(stream => ({
+      streams: liveStreams.map((stream: typeof liveStreams[number]) => ({
         id: stream.id,
         title: stream.title,
         streamKey: stream.streamKey,
