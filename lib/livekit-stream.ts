@@ -106,13 +106,17 @@ export class LiveKitStreamer {
     console.log(`[${this.streamId}] Broadcast started`);
   }
 
+  private onNeedsInteractionCallback?: () => void;
+
   async startViewingWithElement(
     videoElement: HTMLVideoElement,
-    onConnected: () => void
+    onConnected: () => void,
+    onNeedsInteraction?: () => void
   ): Promise<void> {
     console.log(`[${this.streamId}] Starting LiveKit viewing with element...`);
     this.onVideoElement = videoElement;
     this.onConnectedCallback = onConnected;
+    this.onNeedsInteractionCallback = onNeedsInteraction;
 
     const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
     if (!livekitUrl) {
@@ -137,16 +141,26 @@ export class LiveKitStreamer {
         track.attach(this.onVideoElement);
         console.log(`[${this.streamId}] Attached video track to element`);
 
-        // Start playback
-        this.onVideoElement.muted = true; // Start muted for autoplay
+        // iOS Safari requires these attributes
+        this.onVideoElement.setAttribute('playsinline', 'true');
+        this.onVideoElement.setAttribute('webkit-playsinline', 'true');
+
+        // Start playback - must be muted for autoplay on iOS
+        this.onVideoElement.muted = true;
         this.onVideoElement.play()
           .then(() => {
-            console.log(`[${this.streamId}] Video playback started`);
+            console.log(`[${this.streamId}] Video playback started (muted)`);
             if (this.onConnectedCallback) {
               this.onConnectedCallback();
             }
           })
-          .catch(err => console.error('Failed to play:', err));
+          .catch(err => {
+            console.error('Failed to autoplay even muted:', err);
+            // Even muted autoplay failed - need user interaction (iOS Safari)
+            if (this.onNeedsInteractionCallback) {
+              this.onNeedsInteractionCallback();
+            }
+          });
       } else if (track.kind === 'audio' && this.onVideoElement) {
         // Attach audio track too
         track.attach(this.onVideoElement);

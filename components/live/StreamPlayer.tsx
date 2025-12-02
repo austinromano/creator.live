@@ -80,6 +80,13 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
               setConnectionStatus('connected');
               setIsMuted(true);
               setNeedsUserInteraction(false);
+            },
+            () => {
+              // Called when autoplay fails and needs user interaction (iOS Safari)
+              console.log('Autoplay blocked, needs user interaction');
+              setHasStream(true);
+              setConnectionStatus('connected');
+              setNeedsUserInteraction(true);
             }
           );
         }
@@ -203,10 +210,14 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
                   className="absolute inset-0 w-full h-full flex items-center justify-center bg-black/70 cursor-pointer z-30"
                   onClick={() => {
                     if (videoRef.current) {
+                      // Must start muted on iOS, user can unmute after
+                      videoRef.current.muted = true;
                       videoRef.current.play()
                         .then(() => {
+                          console.log('Video playing after user tap');
                           setNeedsUserInteraction(false);
                           setIsPlaying(true);
+                          setIsMuted(true);
                         })
                         .catch(err => console.error('Still cannot play:', err));
                     }
