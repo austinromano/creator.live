@@ -17,20 +17,18 @@ export async function POST(req: NextRequest) {
 
     const { title } = await req.json();
 
-    // Check if user already has an active stream
-    const existingStream = await prisma.stream.findFirst({
+    // Auto-cleanup any stale streams for this user before starting a new one
+    // This handles cases where the browser was closed without properly ending the stream
+    await prisma.stream.updateMany({
       where: {
         userId: (session.user as any).id,
         isLive: true,
       },
+      data: {
+        isLive: false,
+        endedAt: new Date(),
+      },
     });
-
-    if (existingStream) {
-      return NextResponse.json(
-        { error: 'You already have an active stream' },
-        { status: 400 }
-      );
-    }
 
     // Generate a unique stream key
     const streamKey = nanoid(32);
