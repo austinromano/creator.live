@@ -213,6 +213,7 @@ export function AuthModal() {
       );
 
       // Authenticate with NextAuth - no username yet, will be set in onboarding
+      console.log('Calling signIn with phantom...');
       const result = await signIn('phantom', {
         publicKey: pubKey,
         signature,
@@ -221,9 +222,14 @@ export function AuthModal() {
         redirect: false,
       });
 
+      console.log('signIn result:', result);
+
       if (result?.error) {
+        console.error('signIn error:', result.error, 'status:', result.status);
         throw new Error(result.error);
       }
+
+      console.log('signIn successful, redirecting to /golive');
 
       // Clear pending auth flag on success
       localStorage.removeItem('pendingPhantomAuth');
