@@ -6,11 +6,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { CardContent } from '@/components/ui/card';
 import { useWallet } from '@/hooks/useWallet';
+import { useSession } from 'next-auth/react';
 import { ChatMessage } from '@/lib/types';
-import { 
-  Send, 
-  Heart, 
-  DollarSign, 
+import { LiveKitStreamer, LiveKitChatMessage } from '@/lib/livekit-stream';
+import {
+  Send,
+  Heart,
+  DollarSign,
   Crown,
   MessageCircle,
   Smile,
@@ -22,23 +24,106 @@ interface LiveChatProps {
   onSendMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
   creatorSymbol: string;
   className?: string;
+  streamer?: LiveKitStreamer | null;
+  onReceiveMessage?: (message: ChatMessage) => void;
 }
 
-export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '' }: LiveChatProps) {
-  const { isConnected, formatAddress } = useWallet();
+export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '', streamer, onReceiveMessage }: LiveChatProps) {
+  const { isConnected, formatAddress, address } = useWallet();
+  const { data: session } = useSession();
   const [messageText, setMessageText] = useState('');
   const [showEmojis, setShowEmojis] = useState(false);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const avatarSeed = useRef(`${address || 'anon'}-${Date.now()}`);
 
   const emojis = ['😀', '😂', '❤️', '🚀', '🔥', '💎', '👏', '🌙', '⭐', '💯', '🎉', '🎊'];
 
-  const handleSendMessage = () => {
+  // Fetch user data from database
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!session?.user) return;
+
+      try {
+        const response = await fetch('/api/user/me');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user?.avatar) {
+            setUserAvatar(data.user.avatar);
+          }
+          if (data.user?.username) {
+            setUserName(data.user.username);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, [session]);
+
+  // Setup LiveKit chat listener when streamer is ready
+  useEffect(() => {
+    if (!streamer || !onReceiveMessage) return;
+
+    streamer.onChatMessage((lkMessage: LiveKitChatMessage) => {
+      // Convert LiveKit message to ChatMessage
+      const chatMessage: ChatMessage = {
+        id: lkMessage.id,
+        user: lkMessage.user,
+        message: lkMessage.message,
+        avatar: lkMessage.avatar,
+        tip: lkMessage.tip,
+        timestamp: new Date(lkMessage.timestamp),
+        isCreator: lkMessage.isCreator,
+      };
+      onReceiveMessage(chatMessage);
+    });
+  }, [streamer, onReceiveMessage]);
+
+  const handleSendMessage = async () => {
     if (!messageText.trim()) return;
 
-    onSendMessage({
-      user: isConnected ? formatAddress() : 'Anonymous',
+    // Use database username/avatar if available, otherwise fallback to wallet address/generated avatar
+    const user = userName || (isConnected ? formatAddress() : 'Anonymous');
+    const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed.current}`;
+    const messageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // For LiveKit data channel, we need to avoid sending large base64 avatars
+    // Use a generated avatar URL for the wire message if the avatar is a data URL
+    const wireAvatar = avatar.startsWith('data:')
+      ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${user}`
+      : avatar;
+
+    // Create the message object
+    const chatMessage: LiveKitChatMessage = {
+      id: messageId,
+      user,
       message: messageText,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`,
+      avatar: wireAvatar, // Use wire-safe avatar for LiveKit
+      timestamp: Date.now(),
+    };
+
+    // Send via LiveKit if connected
+    if (streamer) {
+      console.log('LiveChat: Sending message via LiveKit streamer:', chatMessage);
+      try {
+        await streamer.sendChatMessage(chatMessage);
+        console.log('LiveChat: Message sent successfully');
+      } catch (error) {
+        console.error('Failed to send chat message via LiveKit:', error);
+      }
+    } else {
+      console.log('LiveChat: No streamer available, message not sent via LiveKit');
+    }
+
+    // Also add locally for immediate feedback (use original avatar for local display)
+    onSendMessage({
+      user,
+      message: messageText,
+      avatar, // Use original avatar (may be base64) for local display
     });
 
     setMessageText('');

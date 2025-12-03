@@ -12,7 +12,27 @@ import {
   RemoteVideoTrack,
   VideoPresets,
   createLocalTracks,
+  DataPacket_Kind,
 } from 'livekit-client';
+
+export interface LiveKitChatMessage {
+  id: string;
+  user: string;
+  message: string;
+  avatar?: string;
+  tip?: number;
+  timestamp: number;
+  isCreator?: boolean;
+}
+
+export interface LiveKitActivityEvent {
+  id: string;
+  type: 'like' | 'follow' | 'tip' | 'join';
+  user: string;
+  avatar?: string;
+  amount?: number;
+  timestamp: number;
+}
 
 export class LiveKitStreamer {
   private room: Room | null = null;
@@ -22,9 +42,99 @@ export class LiveKitStreamer {
   private onConnectedCallback?: () => void;
   private localStream?: MediaStream;
   private viewerStream: MediaStream = new MediaStream(); // Persistent stream for viewer
+  private onChatMessageCallback?: (message: LiveKitChatMessage) => void;
+  private onActivityEventCallback?: (event: LiveKitActivityEvent) => void;
 
   constructor(streamId: string) {
     this.streamId = streamId;
+  }
+
+  // Get the room instance for external use (e.g., chat)
+  getRoom(): Room | null {
+    return this.room;
+  }
+
+  // Set callback for receiving chat messages
+  onChatMessage(callback: (message: LiveKitChatMessage) => void): void {
+    console.log(`[${this.streamId}] onChatMessage callback registered`);
+    this.onChatMessageCallback = callback;
+  }
+
+  // Set callback for receiving activity events (likes, follows, etc.)
+  onActivityEvent(callback: (event: LiveKitActivityEvent) => void): void {
+    console.log(`[${this.streamId}] onActivityEvent callback registered`);
+    this.onActivityEventCallback = callback;
+  }
+
+  // Send an activity event via data channel
+  async sendActivityEvent(event: LiveKitActivityEvent): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot send activity event: not connected to room');
+      return;
+    }
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(JSON.stringify({
+      type: 'activity',
+      payload: event,
+    }));
+
+    await this.room.localParticipant.publishData(data, { reliable: true });
+    console.log(`[${this.streamId}] Sent activity event:`, event.type, event.user);
+  }
+
+  // Send a chat message via data channel
+  async sendChatMessage(message: LiveKitChatMessage): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot send chat message: not connected to room');
+      return;
+    }
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(JSON.stringify({
+      type: 'chat',
+      payload: message,
+    }));
+
+    await this.room.localParticipant.publishData(data, { reliable: true });
+    console.log(`[${this.streamId}] Sent chat message:`, message.message);
+  }
+
+  // Setup data channel listener
+  private setupDataListener(): void {
+    if (!this.room) return;
+
+    console.log(`[${this.streamId}] Setting up data channel listener`);
+
+    this.room.on(RoomEvent.DataReceived, (payload, participant) => {
+      console.log(`[${this.streamId}] DataReceived event from participant:`, participant?.identity);
+      try {
+        const decoder = new TextDecoder();
+        const jsonString = decoder.decode(payload);
+        console.log(`[${this.streamId}] Received data:`, jsonString);
+        const data = JSON.parse(jsonString);
+
+        if (data.type === 'chat') {
+          console.log(`[${this.streamId}] Chat message received:`, data.payload);
+          if (this.onChatMessageCallback) {
+            console.log(`[${this.streamId}] Calling onChatMessageCallback`);
+            this.onChatMessageCallback(data.payload as LiveKitChatMessage);
+          } else {
+            console.log(`[${this.streamId}] WARNING: No onChatMessageCallback registered!`);
+          }
+        } else if (data.type === 'activity') {
+          console.log(`[${this.streamId}] Activity event received:`, data.payload);
+          if (this.onActivityEventCallback) {
+            console.log(`[${this.streamId}] Calling onActivityEventCallback`);
+            this.onActivityEventCallback(data.payload as LiveKitActivityEvent);
+          } else {
+            console.log(`[${this.streamId}] WARNING: No onActivityEventCallback registered!`);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to parse data message:', error);
+      }
+    });
   }
 
   async getToken(identity: string, isPublisher: boolean): Promise<string> {
@@ -81,6 +191,10 @@ export class LiveKitStreamer {
 
     await this.room.connect(livekitUrl, token);
     console.log(`[${this.streamId}] Connected to LiveKit room`);
+    console.log(`[${this.streamId}] Current onChatMessageCallback:`, this.onChatMessageCallback ? 'SET' : 'NOT SET');
+
+    // Setup data channel for chat
+    this.setupDataListener();
 
     // Publish the local tracks
     const videoTrack = stream.getVideoTracks()[0];
@@ -188,6 +302,9 @@ export class LiveKitStreamer {
     await this.room.connect(livekitUrl, token);
     console.log(`[${this.streamId}] Connected to LiveKit room as viewer`);
 
+    // Setup data channel for chat
+    this.setupDataListener();
+
     // Check for existing participants and their tracks
     this.room.remoteParticipants.forEach((participant) => {
       participant.trackPublications.forEach((publication) => {
@@ -255,6 +372,9 @@ export class LiveKitStreamer {
 
     await this.room.connect(livekitUrl, token);
     console.log(`[${this.streamId}] Connected to LiveKit room as viewer`);
+
+    // Setup data channel for chat
+    this.setupDataListener();
 
     // Check for existing participants and their tracks
     this.room.remoteParticipants.forEach((participant) => {

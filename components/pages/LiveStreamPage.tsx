@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StreamPlayer } from '@/components/live/StreamPlayer';
 import { LiveChat } from '@/components/live/LiveChat';
 import { TipButton } from '@/components/live/TipButton';
-import { Creator } from '@/lib/types';
+import { Creator, ChatMessage } from '@/lib/types';
 import { useLiveStream } from '@/hooks/useLiveStream';
+import { LiveKitStreamer, LiveKitActivityEvent } from '@/lib/livekit-stream';
+import { useSession } from 'next-auth/react';
 import {
   Eye,
   Users,
@@ -19,7 +21,9 @@ import {
   Heart,
   Share2,
   MoreVertical,
-  Star
+  Star,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
 
 interface LiveStreamPageProps {
@@ -28,12 +32,53 @@ interface LiveStreamPageProps {
 
 export function LiveStreamPage({ creator }: LiveStreamPageProps) {
   const { messages, viewers, isLive, setIsLive, addMessage, sendTip } = useLiveStream(creator.symbol);
+  const { data: session } = useSession();
   const [likes, setLikes] = useState(1247);
   const [hasLiked, setHasLiked] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [streamer, setStreamer] = useState<LiveKitStreamer | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+
+  // Fetch user data for activity events
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!session?.user) return;
+      try {
+        const response = await fetch('/api/user/me');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user?.username) setUserName(data.user.username);
+          if (data.user?.avatar) setUserAvatar(data.user.avatar);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+    fetchUserData();
+  }, [session]);
 
   useEffect(() => {
     setIsLive(creator.isLive);
   }, [creator.isLive, setIsLive]);
+
+  // Handle incoming chat messages from other viewers via LiveKit
+  const handleReceiveMessage = useCallback((message: ChatMessage) => {
+    // Check if we already have this message (by id) to avoid duplicates
+    addMessage({
+      user: message.user,
+      message: message.message,
+      avatar: message.avatar,
+      tip: message.tip,
+      isCreator: message.isCreator,
+    });
+  }, [addMessage]);
+
+  // Called when StreamPlayer connects to LiveKit room
+  const handleStreamerReady = useCallback((s: LiveKitStreamer) => {
+    console.log('LiveKit streamer ready for chat');
+    setStreamer(s);
+  }, []);
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -41,13 +86,70 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
     return num.toLocaleString();
   };
 
-  const handleLike = () => {
+  const handleLike = async () => {
     if (!hasLiked) {
       setLikes(prev => prev + 1);
       setHasLiked(true);
+
+      // Use actual user name and avatar
+      const displayName = userName || session?.user?.name || 'You';
+      const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+
       addMessage({
-        user: 'You',
+        user: displayName,
         message: '❤️ Liked the stream!',
+        avatar,
+      });
+
+      // Send activity event to broadcaster
+      if (streamer) {
+        const wireAvatar = userAvatar?.startsWith('data:')
+          ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+          : avatar;
+
+        await streamer.sendActivityEvent({
+          id: `like-${Date.now()}`,
+          type: 'like',
+          user: displayName,
+          avatar: wireAvatar,
+          timestamp: Date.now(),
+        });
+      }
+    }
+  };
+
+  const handleFollow = async () => {
+    if (isFollowing) {
+      // Unfollow silently - no notification
+      setIsFollowing(false);
+      return;
+    }
+
+    // Follow - notify chat and broadcaster
+    setIsFollowing(true);
+
+    // Use actual user name and avatar
+    const displayName = userName || session?.user?.name || 'Someone';
+    const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+
+    addMessage({
+      user: displayName,
+      message: '🎉 Started following!',
+      avatar,
+    });
+
+    // Send activity event to broadcaster
+    if (streamer) {
+      const wireAvatar = userAvatar?.startsWith('data:')
+        ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+        : avatar;
+
+      await streamer.sendActivityEvent({
+        id: `follow-${Date.now()}`,
+        type: 'follow',
+        user: displayName,
+        avatar: wireAvatar,
+        timestamp: Date.now(),
       });
     }
   };
@@ -72,75 +174,23 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
 
   return (
     <div className="min-h-screen bg-[#0e0e10]">
-      {/* Top Stats Bar */}
-      <div className="bg-[#18181b] border-b border-gray-800 px-2 sm:px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2 sm:space-x-4 text-xs overflow-x-auto">
-            <div className="flex items-center space-x-1 whitespace-nowrap">
-              <Users className="h-3 w-3 text-purple-400" />
-              <span className="text-white font-medium">{formatNumber(creator.holders)}</span>
-              <span className="text-gray-400 hidden sm:inline">Holders</span>
-            </div>
-            <div className="flex items-center space-x-1 whitespace-nowrap">
-              <Eye className="h-3 w-3 text-yellow-400" />
-              <span className="text-white font-medium">{formatNumber(viewers || creator.viewers || 0)}</span>
-              <span className="text-gray-400 hidden sm:inline">Watching</span>
-            </div>
-            <div className="flex items-center space-x-1 whitespace-nowrap">
-              <DollarSign className="h-3 w-3 text-green-400" />
-              <span className="text-white font-medium">${creator.price.toFixed(6)}</span>
-              <span className="text-gray-400 hidden sm:inline">Price</span>
-            </div>
-            <div className="flex items-center space-x-1 whitespace-nowrap">
-              {isPositive ? (
-                <TrendingUp className="h-3 w-3 text-green-400" />
-              ) : (
-                <TrendingDown className="h-3 w-3 text-red-400" />
-              )}
-              <span className={`font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                {isPositive ? '+' : ''}{creator.priceChange24h.toFixed(1)}%
-              </span>
-              <span className="text-gray-400 hidden sm:inline">24h</span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleLike}
-              disabled={hasLiked}
-              className={`text-white hover:bg-white/10 h-7 px-2 ${hasLiked ? 'text-red-400' : ''}`}
-            >
-              <Heart className={`h-3 w-3 ${hasLiked ? 'fill-current' : ''}`} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleShare}
-              className="text-white hover:bg-white/10 h-7 px-2"
-            >
-              <Share2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* Main Layout - Responsive: stacked on mobile, side-by-side on desktop */}
-      <div className="flex flex-col lg:flex-row">
+      <div className="flex flex-col lg:flex-row lg:h-screen overflow-hidden">
         {/* Video & Stream Info - Shows first on mobile */}
-        <div className="flex-1 order-1 lg:order-2">
-          {/* Video Player */}
-          <div className="aspect-video bg-black">
+        <div className="flex-1 order-1 lg:order-2 flex flex-col lg:h-screen overflow-y-auto">
+          {/* Video Player - aspect ratio with max height to leave room for profile */}
+          <div className="bg-black w-full aspect-video flex-shrink-0 lg:max-h-[calc(100vh-180px)]">
             <StreamPlayer
               creator={creator}
               isLive={isLive}
               viewers={viewers || creator.viewers || 0}
               className="w-full h-full"
+              onStreamerReady={handleStreamerReady}
             />
           </div>
 
           {/* Stream Info Below Video */}
-          <div className="bg-[#18181b] p-4">
+          <div className="bg-[#18181b] p-4 flex-shrink-0 flex-1">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center space-x-3">
                 <Avatar className="h-12 w-12">
@@ -154,27 +204,60 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
                   <p className="text-gray-400 text-sm">${creator.symbol}</p>
                 </div>
               </div>
-              <TipButton
-                creator={creator}
-                onTip={sendTip}
-              />
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleLike}
+                  disabled={hasLiked}
+                  className={`w-[100px] ${hasLiked
+                    ? "bg-gray-600 text-white font-semibold"
+                    : "bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-semibold"}`}
+                >
+                  <Heart className={`h-4 w-4 mr-2 ${hasLiked ? 'fill-current' : ''}`} />
+                  {hasLiked ? 'Liked' : 'Like'}
+                </Button>
+                <Button
+                  onClick={handleFollow}
+                  className={`w-[120px] ${isFollowing
+                    ? "bg-gray-600 hover:bg-gray-700 text-white font-semibold"
+                    : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold"}`}
+                >
+                  {isFollowing ? (
+                    <>
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Following
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Follow
+                    </>
+                  )}
+                </Button>
+                <TipButton
+                  creator={creator}
+                  onTip={sendTip}
+                  userName={userName || session?.user?.name || undefined}
+                  userAvatar={userAvatar || undefined}
+                />
+              </div>
             </div>
-            <p className="text-gray-300 text-base mb-3">{creator.description}</p>
-
-            {/* Quick Stats */}
-            <div className="flex items-center space-x-4 text-sm text-gray-400">
-              <span className="flex items-center">
-                <Star className="h-4 w-4 mr-1 text-yellow-400" />
-                {formatNumber(likes)} likes
-              </span>
-              <span>•</span>
-              <span>Market Cap: ${formatNumber(creator.marketCap)}</span>
+            <div className="flex items-center">
+              <p className="text-gray-300 text-base">{creator.description}</p>
+              {/* Quick Stats */}
+              <div className="flex items-center space-x-4 text-sm text-gray-400 ml-4">
+                <span className="flex items-center">
+                  <Star className="h-4 w-4 mr-1 text-yellow-400" />
+                  {formatNumber(likes)} likes
+                </span>
+                <span>•</span>
+                <span>Market Cap: ${formatNumber(creator.marketCap)}</span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Live Chat - Shows below video on mobile, left side on desktop */}
-        <div className="w-full lg:w-[340px] bg-[#18181b] lg:border-r border-t lg:border-t-0 border-gray-800 flex flex-col h-[400px] lg:h-[calc(100vh-120px)] order-2 lg:order-1">
+        <div className="w-full lg:w-[340px] bg-[#18181b] lg:border-r border-t lg:border-t-0 border-gray-800 flex flex-col h-[400px] lg:h-screen order-2 lg:order-1">
           {/* Chat Header */}
           <div className="px-4 py-2 bg-[#18181b] border-b border-gray-800">
             <h3 className="text-gray-400 font-medium text-xs uppercase tracking-wide">Live Chat</h3>
@@ -186,6 +269,8 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
               messages={messages || []}
               onSendMessage={addMessage}
               creatorSymbol={creator.symbol}
+              streamer={streamer}
+              onReceiveMessage={handleReceiveMessage}
             />
           </div>
         </div>

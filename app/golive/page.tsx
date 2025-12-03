@@ -24,9 +24,12 @@ import {
   Mic,
   MicOff,
   Square,
+  Heart,
+  UserPlus,
 } from 'lucide-react';
 import { LiveStreamBroadcast } from '@/components/streaming/LiveStreamBroadcast';
-import { LiveKitStreamer } from '@/lib/livekit-stream';
+import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
+import { ChatMessage } from '@/lib/types';
 
 // User data from /api/user/me
 interface UserData {
@@ -59,6 +62,10 @@ export default function ProfilePage() {
   const [userLoading, setUserLoading] = useState(true);
   const thumbnailIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const currentRoomNameRef = React.useRef<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const chatContainerRef = React.useRef<HTMLDivElement>(null);
+  const [activityEvents, setActivityEvents] = useState<LiveKitActivityEvent[]>([]);
+  const activityContainerRef = React.useRef<HTMLDivElement>(null);
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -198,6 +205,20 @@ export default function ProfilePage() {
       }
     };
   }, []);
+
+  // Auto-scroll chat when new messages arrive
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // Auto-scroll activity feed when new events arrive
+  useEffect(() => {
+    if (activityContainerRef.current) {
+      activityContainerRef.current.scrollTop = activityContainerRef.current.scrollHeight;
+    }
+  }, [activityEvents]);
 
   if (status === 'loading' || tokenLoading || userLoading) {
     return (
@@ -359,6 +380,69 @@ export default function ProfilePage() {
       if (streamRef.current) {
         console.log('Starting LiveKit broadcast...');
         livekitStreamerRef.current = new LiveKitStreamer(roomName);
+
+        // Set up chat message listener BEFORE starting broadcast
+        console.log('Setting up chat message listener on LiveKit streamer');
+        livekitStreamerRef.current.onChatMessage(async (lkMessage: LiveKitChatMessage) => {
+          console.log('=== GOLIVE: Received chat message ===', lkMessage);
+
+          // Look up the user's actual avatar from database
+          let avatar = lkMessage.avatar;
+          try {
+            const response = await fetch(`/api/user/lookup?username=${encodeURIComponent(lkMessage.user)}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.user?.avatar) {
+                avatar = data.user.avatar;
+              }
+            }
+          } catch (error) {
+            console.error('Failed to look up user avatar:', error);
+          }
+
+          const chatMessage: ChatMessage = {
+            id: lkMessage.id,
+            user: lkMessage.user,
+            message: lkMessage.message,
+            avatar: avatar,
+            tip: lkMessage.tip,
+            timestamp: new Date(lkMessage.timestamp),
+            isCreator: lkMessage.isCreator,
+          };
+          console.log('Adding message to chatMessages state:', chatMessage);
+          setChatMessages(prev => {
+            console.log('Previous messages count:', prev.length);
+            return [...prev, chatMessage];
+          });
+        });
+
+        // Set up activity event listener for likes, follows, tips
+        console.log('Setting up activity event listener on LiveKit streamer');
+        livekitStreamerRef.current.onActivityEvent(async (event: LiveKitActivityEvent) => {
+          console.log('=== GOLIVE: Received activity event ===', event);
+
+          // Look up the user's actual avatar from database
+          let avatar = event.avatar;
+          try {
+            const response = await fetch(`/api/user/lookup?username=${encodeURIComponent(event.user)}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.user?.avatar) {
+                avatar = data.user.avatar;
+              }
+            }
+          } catch (error) {
+            console.error('Failed to look up user avatar:', error);
+          }
+
+          const activityEvent: LiveKitActivityEvent = {
+            ...event,
+            avatar,
+          };
+          console.log('Adding event to activityEvents state:', activityEvent);
+          setActivityEvents(prev => [...prev, activityEvent]);
+        });
+
         await livekitStreamerRef.current.startBroadcast(streamRef.current);
         console.log('LiveKit broadcast started for room:', roomName);
 
@@ -392,6 +476,8 @@ export default function ProfilePage() {
       setStreamTitle('');
       setCurrentRoomName(null);
       currentRoomNameRef.current = null;
+      setChatMessages([]); // Clear chat messages
+      setActivityEvents([]); // Clear activity events
 
       // Update token if user has one (optional)
       if (userToken) {
@@ -559,7 +645,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-[#0e0e10] text-white">
       {/* Top Stats Bar */}
       <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
-        <div className="flex items-center justify-between max-w-[1920px] mx-auto">
+        <div className="flex items-center justify-center max-w-[1920px] mx-auto">
           <div className="flex items-center space-x-8 text-sm">
             <div className="flex items-center space-x-2">
               <Clock className="h-5 w-5 text-blue-400" />
@@ -606,17 +692,63 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-          </div>
         </div>
       </div>
 
-        {/* Main 2-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 max-w-[1920px] mx-auto">
-          {/* Stream Preview - Left Column (60%) */}
-          <div className="lg:col-span-2 bg-[#0e0e10]">
+        {/* Main 3-Column Layout */}
+        <div className="flex max-w-[1920px] mx-auto">
+          {/* Activity Feed - Left Column (narrower) */}
+          <div className="hidden lg:flex bg-[#18181b] border-r border-gray-800 flex-col h-[calc(100vh-180px)] w-[280px] flex-shrink-0">
+            <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h2 className="text-sm font-semibold">Activity Feed</h2>
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              </div>
+            </div>
+
+            <div ref={activityContainerRef} className="p-4 flex-1 overflow-y-auto">
+              {activityEvents.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-2xl font-bold mb-2">It's quiet. Too quiet...</div>
+                  <p className="text-sm text-gray-400">
+                    We'll show your new follows, tips, and activity here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activityEvents.map((event) => (
+                    <div key={event.id} className="flex items-center gap-3 p-2 bg-[#0e0e10] rounded-lg">
+                      <Avatar className="h-8 w-8 flex-shrink-0">
+                        <AvatarImage src={event.avatar} />
+                        <AvatarFallback className="text-xs bg-gray-700">
+                          {event.user.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {event.type === 'like' && <Heart className="h-4 w-4 text-red-500 fill-red-500" />}
+                          {event.type === 'follow' && <UserPlus className="h-4 w-4 text-purple-500" />}
+                          {event.type === 'tip' && <DollarSign className="h-4 w-4 text-green-500" />}
+                          <span className="text-sm font-medium truncate">{event.user}</span>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          {event.type === 'like' && 'liked your stream'}
+                          {event.type === 'follow' && 'started following you'}
+                          {event.type === 'tip' && `tipped $${event.amount}`}
+                          {event.type === 'join' && 'joined the stream'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Stream Preview - Center Column (flexible width) */}
+          <div className="flex-1 bg-[#0e0e10] flex flex-col h-[calc(100vh-180px)]">
             {/* Video Preview */}
-            <div className="relative bg-black aspect-video overflow-hidden">
+            <div className="relative bg-black aspect-video overflow-hidden flex-shrink-0">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -641,7 +773,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Stream Info Below Video */}
-            <div className="p-4 bg-[#18181b]">
+            <div className="p-4 bg-[#18181b] flex-1 overflow-y-auto">
               {/* Stream Controls */}
               {isLive && (
                 <div className="mb-4 flex items-center gap-3">
@@ -703,9 +835,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Chat + Activity Feed - Right Column */}
-          <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-[calc(100vh-180px)]">
-            {/* My Chat */}
+          {/* My Chat - Right Column (narrower) */}
+          <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-[calc(100vh-180px)] w-full lg:w-[300px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">My Chat</h2>
@@ -713,12 +844,39 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="p-4 flex-1 overflow-y-auto">
-              <div className="text-sm text-gray-400 text-center py-8">
-                <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-600" />
-                <p>Welcome to the chat room!</p>
-                {!isLive && <p className="text-xs mt-2">Chat will be active when streaming</p>}
-              </div>
+            <div ref={chatContainerRef} className="p-4 flex-1 overflow-y-auto">
+              {chatMessages.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-8">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-600" />
+                  <p>Welcome to the chat room!</p>
+                  {!isLive && <p className="text-xs mt-2">Chat will be active when streaming</p>}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chatMessages.map((msg) => (
+                    <div key={msg.id} className="flex items-start gap-2 text-sm">
+                      <Avatar className="h-6 w-6 flex-shrink-0">
+                        <AvatarImage src={msg.avatar} />
+                        <AvatarFallback className="text-xs bg-gray-700">
+                          {msg.user.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <span className={`font-semibold ${msg.isCreator ? 'text-purple-400' : 'text-gray-400'}`}>
+                          {msg.user}
+                          {msg.isCreator && <span className="text-yellow-500 ml-1">★</span>}
+                        </span>
+                        {msg.tip && (
+                          <span className="text-xs bg-green-600 text-white px-1.5 py-0.5 rounded ml-2">
+                            ${msg.tip}
+                          </span>
+                        )}
+                        <p className="text-white break-words">{msg.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-800 p-3">
@@ -728,23 +886,6 @@ export default function ProfilePage() {
                 className="w-full bg-[#0e0e10] border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
                 disabled={!isLive}
               />
-            </div>
-
-            {/* Activity Feed */}
-            <div className="border-t border-gray-800 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-semibold">Activity Feed</h2>
-                <ChevronDown className="h-4 w-4 text-gray-400" />
-              </div>
-            </div>
-
-            <div className="p-4 flex-1 overflow-y-auto">
-              <div className="text-center py-12">
-                <div className="text-2xl font-bold mb-2">It's quiet. Too quiet...</div>
-                <p className="text-sm text-gray-400">
-                  We'll show your new follows, tips, and activity here.
-                </p>
-              </div>
             </div>
           </div>
         </div>

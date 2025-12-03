@@ -29,11 +29,13 @@ import {
 
 interface TipButtonProps {
   creator: Creator;
-  onTip: (amount: number, message: string) => Promise<void>;
+  onTip: (amount: number, message: string, userName?: string, userAvatar?: string) => Promise<void>;
   className?: string;
+  userName?: string;
+  userAvatar?: string;
 }
 
-export function TipButton({ creator, onTip, className = '' }: TipButtonProps) {
+export function TipButton({ creator, onTip, className = '', userName, userAvatar }: TipButtonProps) {
   const { isConnected, balance, connect } = useWallet();
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useSolanaWallet();
@@ -73,7 +75,9 @@ export function TipButton({ creator, onTip, className = '' }: TipButtonProps) {
       // Call the onTip callback to show in chat
       await onTip(
         TIP_AMOUNT_SOL,
-        message || `Tipped ${TIP_AMOUNT_SOL} SOL to ${creator.name}!`
+        message || `Tipped ${TIP_AMOUNT_SOL} SOL to ${creator.name}!`,
+        userName,
+        userAvatar
       );
 
       setMessage('');
@@ -94,10 +98,10 @@ export function TipButton({ creator, onTip, className = '' }: TipButtonProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button 
+        <Button
           className={`${className} bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-semibold`}
         >
-          <Heart className="h-4 w-4 mr-2" />
+          <span className="text-lg -mr-0.5">🪙</span>
           Tip Creator
         </Button>
       </DialogTrigger>

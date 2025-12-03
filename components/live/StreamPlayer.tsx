@@ -23,9 +23,10 @@ interface StreamPlayerProps {
   isLive: boolean;
   viewers: number;
   className?: string;
+  onStreamerReady?: (streamer: LiveKitStreamer) => void;
 }
 
-export function StreamPlayer({ creator, isLive, viewers, className = '' }: StreamPlayerProps) {
+export function StreamPlayer({ creator, isLive, viewers, className = '', onStreamerReady }: StreamPlayerProps) {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -80,6 +81,10 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
               setConnectionStatus('connected');
               setIsMuted(true);
               setNeedsUserInteraction(false);
+              // Notify parent that streamer is ready for chat
+              if (onStreamerReady && streamerRef.current) {
+                onStreamerReady(streamerRef.current);
+              }
             },
             () => {
               // Called when autoplay fails and needs user interaction (iOS Safari)
@@ -87,6 +92,10 @@ export function StreamPlayer({ creator, isLive, viewers, className = '' }: Strea
               setHasStream(true);
               setConnectionStatus('connected');
               setNeedsUserInteraction(true);
+              // Still notify parent that streamer is ready for chat
+              if (onStreamerReady && streamerRef.current) {
+                onStreamerReady(streamerRef.current);
+              }
             }
           );
         }

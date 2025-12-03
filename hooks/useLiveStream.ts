@@ -16,11 +16,12 @@ export const useLiveStream = (creatorSymbol: string) => {
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const sendTip = async (amount: number, message: string) => {
+  const sendTip = async (amount: number, message: string, userName?: string, userAvatar?: string) => {
     addMessage({
-      user: 'You',
+      user: userName || 'You',
       message,
       tip: amount,
+      avatar: userAvatar,
     });
   };
 

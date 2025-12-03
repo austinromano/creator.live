@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, User, Camera, Sparkles } from 'lucide-react';
+import { Loader2, User, Camera, Sparkles, Upload } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -17,7 +17,9 @@ export default function OnboardingPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -98,6 +100,59 @@ export default function OnboardingPage() {
     setImageUrl(`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
+      return;
+    }
+
+    // Validate file size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('File too large. Maximum size is 2MB.');
+      return;
+    }
+
+    setError(null);
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/user/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to upload image');
+        return;
+      }
+
+      setImageUrl(data.avatar);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError('Failed to upload image. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="min-h-screen bg-[#0e0e10] flex items-center justify-center">
@@ -132,16 +187,41 @@ export default function OnboardingPage() {
                   <User className="h-12 w-12" />
                 </AvatarFallback>
               </Avatar>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={generateRandomAvatar}
-                className="border-gray-700 text-gray-300 hover:text-white"
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Generate Avatar
-              </Button>
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={triggerFileUpload}
+                  disabled={isUploading}
+                  className="border-gray-700 text-gray-300 hover:text-white"
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-2" />
+                  )}
+                  Upload
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={generateRandomAvatar}
+                  disabled={isUploading}
+                  className="border-gray-700 text-gray-300 hover:text-white"
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Generate
+                </Button>
+              </div>
             </div>
 
             {/* Username Input */}
