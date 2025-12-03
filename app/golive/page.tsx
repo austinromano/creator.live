@@ -644,32 +644,32 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-[#0e0e10] text-white">
       {/* Top Stats Bar */}
-      <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
+      <div className="bg-[#18181b] border-b border-gray-800 px-2 lg:px-4 py-2 overflow-x-auto">
         <div className="flex items-center justify-center max-w-[1920px] mx-auto">
-          <div className="flex items-center space-x-8 text-sm">
-            <div className="flex items-center space-x-2">
-              <Clock className="h-5 w-5 text-blue-400" />
+          <div className="flex items-center space-x-3 lg:space-x-8 text-sm">
+            <div className="flex items-center space-x-1 lg:space-x-2">
+              <Clock className="h-3 w-3 lg:h-5 lg:w-5 text-blue-400" />
               <div>
-                <div className="text-xl font-bold">{formatTime(sessionTime)}</div>
-                <div className="text-xs text-gray-400">Session</div>
+                <div className="text-sm lg:text-xl font-bold">{formatTime(sessionTime)}</div>
+                <div className="text-[10px] lg:text-xs text-gray-400">Session</div>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Eye className="h-5 w-5 text-yellow-400" />
+            <div className="flex items-center space-x-1 lg:space-x-2">
+              <Eye className="h-3 w-3 lg:h-5 lg:w-5 text-yellow-400" />
               <div>
-                <div className="text-xl font-bold">{userToken?.viewers || 0}</div>
-                <div className="text-xs text-gray-400">Viewers</div>
+                <div className="text-sm lg:text-xl font-bold">{userToken?.viewers || 0}</div>
+                <div className="text-[10px] lg:text-xs text-gray-400">Viewers</div>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Users className="h-5 w-5 text-purple-400" />
+            <div className="flex items-center space-x-1 lg:space-x-2">
+              <Users className="h-3 w-3 lg:h-5 lg:w-5 text-purple-400" />
               <div>
-                <div className="text-xl font-bold">{userToken?.holders || 0}</div>
-                <div className="text-xs text-gray-400">Followers</div>
+                <div className="text-sm lg:text-xl font-bold">{userToken?.holders || 0}</div>
+                <div className="text-[10px] lg:text-xs text-gray-400">Followers</div>
               </div>
             </div>
             {userToken && (
-              <div className="flex items-center space-x-2">
+              <div className="hidden lg:flex items-center space-x-2">
                 <DollarSign className="h-5 w-5 text-green-400" />
                 <div>
                   <div className="text-xl font-bold">${userToken.marketCap.toLocaleString()}</div>
@@ -677,27 +677,27 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
-            <div className="flex items-center space-x-2">
-              <Wallet className="h-5 w-5 text-orange-400" />
+            <div className="flex items-center space-x-1 lg:space-x-2">
+              <Wallet className="h-3 w-3 lg:h-5 lg:w-5 text-orange-400" />
               <div>
-                <div className="text-xl font-bold">0.00 SOL</div>
-                <div className="text-xs text-gray-400">SOL Received</div>
+                <div className="text-sm lg:text-xl font-bold">0.00</div>
+                <div className="text-[10px] lg:text-xs text-gray-400">SOL</div>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Trophy className="h-5 w-5 text-yellow-500" />
+            <div className="flex items-center space-x-1 lg:space-x-2">
+              <Trophy className="h-3 w-3 lg:h-5 lg:w-5 text-yellow-500" />
               <div>
-                <div className="text-xl font-bold">-</div>
-                <div className="text-xs text-gray-400">Ranking</div>
+                <div className="text-sm lg:text-xl font-bold">-</div>
+                <div className="text-[10px] lg:text-xs text-gray-400">Rank</div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-        {/* Main 3-Column Layout */}
-        <div className="flex max-w-[1920px] mx-auto">
-          {/* Activity Feed - Left Column (narrower) */}
+        {/* Main Layout - Stacks on mobile, 3-column on desktop */}
+        <div className="flex flex-col lg:flex-row max-w-[1920px] mx-auto">
+          {/* Activity Feed - Hidden on mobile, Left Column on desktop */}
           <div className="hidden lg:flex bg-[#18181b] border-r border-gray-800 flex-col h-[calc(100vh-180px)] w-[280px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -745,8 +745,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Stream Preview - Center Column (flexible width) */}
-          <div className="flex-1 bg-[#0e0e10] flex flex-col h-[calc(100vh-180px)]">
+          {/* Stream Preview - Full width on mobile, Center Column on desktop */}
+          <div className="flex-1 bg-[#0e0e10] flex flex-col lg:h-[calc(100vh-180px)] order-first lg:order-none">
             {/* Video Preview */}
             <div className="relative bg-black aspect-video overflow-hidden flex-shrink-0">
                 <video
@@ -835,8 +835,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* My Chat - Right Column (narrower) */}
-          <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-[calc(100vh-180px)] w-full lg:w-[300px] flex-shrink-0">
+          {/* My Chat - Full width on mobile below video, Right Column on desktop */}
+          <div className="bg-[#18181b] border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col h-[400px] lg:h-[calc(100vh-180px)] w-full lg:w-[300px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">My Chat</h2>
