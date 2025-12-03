@@ -269,7 +269,7 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1">
+          <div className="flex-1 overflow-hidden">
             <LiveChat
               messages={messages || []}
               onSendMessage={addMessage}

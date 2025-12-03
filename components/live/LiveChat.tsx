@@ -192,8 +192,8 @@ export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '
           </div>
         ) : (
           <div className="space-y-1">
-            {[...messages].reverse().map((message) => (
-              <div key={message.id} className="py-1 hover:bg-[#0e0e10] px-2 -mx-2 flex gap-2">
+            {[...messages].reverse().map((message, index) => (
+              <div key={`${message.id}-${index}`} className="py-1 hover:bg-[#0e0e10] px-2 -mx-2 flex gap-2">
                 <Avatar className="h-8 w-8 flex-shrink-0 mt-0.5">
                   <AvatarImage src={message.avatar} />
                   <AvatarFallback className="text-xs bg-gray-700">

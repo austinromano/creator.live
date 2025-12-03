@@ -66,6 +66,7 @@ export default function ProfilePage() {
   const chatContainerRef = React.useRef<HTMLDivElement>(null);
   const [activityEvents, setActivityEvents] = useState<LiveKitActivityEvent[]>([]);
   const activityContainerRef = React.useRef<HTMLDivElement>(null);
+  const [chatInput, setChatInput] = useState('');
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -559,6 +560,46 @@ export default function ProfilePage() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Send chat message as broadcaster
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || !isLive || !livekitStreamerRef.current) return;
+
+    const messageText = chatInput.trim();
+    setChatInput('');
+
+    const avatar = userData?.avatar || user?.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+    const wireAvatar = avatar?.startsWith('data:')
+      ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
+      : avatar;
+
+    const chatMessage: ChatMessage = {
+      id: `creator-${Date.now()}`,
+      user: username,
+      message: messageText,
+      avatar: avatar,
+      isCreator: true,
+      timestamp: new Date(),
+    };
+
+    // Add to local chat immediately
+    setChatMessages(prev => [...prev, chatMessage]);
+
+    // Send via LiveKit to all viewers
+    try {
+      await livekitStreamerRef.current.sendChatMessage({
+        id: chatMessage.id,
+        user: username,
+        message: messageText,
+        avatar: wireAvatar,
+        isCreator: true,
+        timestamp: Date.now(),
+      });
+      console.log('Broadcaster message sent to viewers');
+    } catch (error) {
+      console.error('Failed to send broadcaster message:', error);
+    }
+  };
+
   // Capture and upload thumbnail from video element
   const captureThumbnail = async () => {
     const roomName = currentRoomNameRef.current;
@@ -697,8 +738,8 @@ export default function ProfilePage() {
 
         {/* Main Layout - Stacks on mobile, 3-column on desktop */}
         <div className="flex flex-col lg:flex-row max-w-[1920px] mx-auto">
-          {/* Activity Feed - Hidden on mobile, Left Column on desktop */}
-          <div className="hidden lg:flex bg-[#18181b] border-r border-gray-800 flex-col h-[calc(100vh-180px)] w-[280px] flex-shrink-0">
+          {/* Activity Feed - Below chat on mobile, Left Column on desktop */}
+          <div className="flex lg:flex bg-[#18181b] lg:border-r lg:border-t-0 border-gray-800 flex-col lg:h-[calc(100vh-180px)] w-full lg:w-[280px] flex-shrink-0 order-last lg:order-first">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">Activity Feed</h2>
@@ -706,17 +747,17 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div ref={activityContainerRef} className="p-4 flex-1 overflow-y-auto">
+            <div ref={activityContainerRef} className="p-4 lg:flex-1 overflow-y-auto">
               {activityEvents.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-2xl font-bold mb-2">It's quiet. Too quiet...</div>
+                <div className="text-center py-4 lg:py-12">
+                  <div className="text-lg lg:text-2xl font-bold mb-2">It's quiet. Too quiet...</div>
                   <p className="text-sm text-gray-400">
                     We'll show your new follows, tips, and activity here.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {activityEvents.map((event) => (
+                  {[...activityEvents].reverse().slice(0, 5).map((event) => (
                     <div key={event.id} className="flex items-center gap-3 p-2 bg-[#0e0e10] rounded-lg">
                       <Avatar className="h-8 w-8 flex-shrink-0">
                         <AvatarImage src={event.avatar} />
@@ -820,23 +861,13 @@ export default function ProfilePage() {
                   <Badge className={isLive ? "bg-red-600" : "bg-gray-600"}>
                     {isLive ? "LIVE" : "OFFLINE"}
                   </Badge>
-                  {isLive && currentRoomName && (
-                    <div className="text-xs text-green-400 mt-1">
-                      Broadcasting as: {currentRoomName}
-                    </div>
-                  )}
-                  {isLive && currentRoomName && (
-                    <div className="text-xs text-blue-400 mt-1">
-                      Viewers can watch at: <a href={`/live/${currentRoomName}`} target="_blank" className="underline hover:text-blue-300">/live/{currentRoomName}</a>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
           </div>
 
           {/* My Chat - Full width on mobile below video, Right Column on desktop */}
-          <div className="bg-[#18181b] border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col h-[400px] lg:h-[calc(100vh-180px)] w-full lg:w-[300px] flex-shrink-0">
+          <div className="bg-[#18181b] border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col lg:h-[calc(100vh-180px)] w-full lg:w-[300px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">My Chat</h2>
@@ -844,7 +875,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div ref={chatContainerRef} className="p-4 flex-1 overflow-y-auto">
+            <div ref={chatContainerRef} className="p-4 overflow-y-auto">
               {chatMessages.length === 0 ? (
                 <div className="text-sm text-gray-400 text-center py-8">
                   <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-600" />
@@ -853,8 +884,8 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {chatMessages.map((msg) => (
-                    <div key={msg.id} className="flex items-start gap-2 text-sm">
+                  {[...chatMessages].reverse().slice(0, 4).map((msg, index) => (
+                    <div key={`${msg.id}-${index}`} className="flex items-start gap-2 text-sm">
                       <Avatar className="h-6 w-6 flex-shrink-0">
                         <AvatarImage src={msg.avatar} />
                         <AvatarFallback className="text-xs bg-gray-700">
@@ -880,12 +911,23 @@ export default function ProfilePage() {
             </div>
 
             <div className="border-t border-gray-800 p-3">
-              <input
-                type="text"
-                placeholder="Send a message"
-                className="w-full bg-[#0e0e10] border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
-                disabled={!isLive}
-              />
+              <form onSubmit={(e) => { e.preventDefault(); handleSendChat(); }} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Send a message"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  className="flex-1 bg-[#0e0e10] border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                  disabled={!isLive}
+                />
+                <button
+                  type="submit"
+                  disabled={!isLive || !chatInput.trim()}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium"
+                >
+                  Chat
+                </button>
+              </form>
             </div>
           </div>
         </div>
