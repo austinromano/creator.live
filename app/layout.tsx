@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/Header";
@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   title: "creator.fun - Where creators launch tokens and fans get rich",
   description: "The ultimate platform for content creators to launch their own tokens with bonding curves, go live stream, and let fans trade their tokens.",
   keywords: ["creator tokens", "bonding curve", "live streaming", "crypto", "web3"],
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover", // Enable safe area insets for iOS
 };
 
 export default function RootLayout({

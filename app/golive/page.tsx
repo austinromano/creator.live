@@ -48,6 +48,7 @@ export default function ProfilePage() {
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const desktopVideoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const livekitStreamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
@@ -168,20 +169,27 @@ export default function ProfilePage() {
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // Assign stream to video element when it becomes available
+  // Assign stream to video elements when it becomes available
   useEffect(() => {
-    // Use a small delay to ensure the video element is fully mounted
+    // Use a small delay to ensure the video elements are fully mounted
     const timer = setTimeout(() => {
-      if (isLive && streamRef.current && videoRef.current) {
-        // Only assign if not already assigned to prevent flickering
-        if (videoRef.current.srcObject !== streamRef.current) {
-          console.log('Assigning stream to video element');
+      if (isLive && streamRef.current) {
+        // Assign to mobile video ref
+        if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
+          console.log('Assigning stream to mobile video element');
           videoRef.current.srcObject = streamRef.current;
-          videoRef.current.play().catch(err => console.error('Error playing video:', err));
+          videoRef.current.play().catch(err => console.error('Error playing mobile video:', err));
         }
-      } else if (!isLive && videoRef.current) {
-        // Clear video when not live
-        videoRef.current.srcObject = null;
+        // Assign to desktop video ref
+        if (desktopVideoRef.current && desktopVideoRef.current.srcObject !== streamRef.current) {
+          console.log('Assigning stream to desktop video element');
+          desktopVideoRef.current.srcObject = streamRef.current;
+          desktopVideoRef.current.play().catch(err => console.error('Error playing desktop video:', err));
+        }
+      } else if (!isLive) {
+        // Clear videos when not live
+        if (videoRef.current) videoRef.current.srcObject = null;
+        if (desktopVideoRef.current) desktopVideoRef.current.srcObject = null;
       }
     }, 0);
 
@@ -198,6 +206,9 @@ export default function ProfilePage() {
       }
       if (videoRef.current) {
         videoRef.current.srcObject = null;
+      }
+      if (desktopVideoRef.current) {
+        desktopVideoRef.current.srcObject = null;
       }
       // Clear thumbnail interval
       if (thumbnailIntervalRef.current) {
@@ -288,17 +299,22 @@ export default function ProfilePage() {
       streamRef.current = stream;
       setStreamReady(true);
 
-      // If video element already exists, assign stream immediately
+      // Assign stream to video elements immediately if they exist
       if (videoRef.current) {
-        console.log('Video element exists, assigning stream immediately');
+        console.log('Mobile video element exists, assigning stream immediately');
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(err => {
-          console.error('Error playing video:', err);
-          throw err;
+          console.error('Error playing mobile video:', err);
         });
-        console.log('✅ Video playing');
-      } else {
-        console.log('Video element does not exist yet, will be assigned via callback ref');
+        console.log('✅ Mobile video playing');
+      }
+      if (desktopVideoRef.current) {
+        console.log('Desktop video element exists, assigning stream immediately');
+        desktopVideoRef.current.srcObject = stream;
+        await desktopVideoRef.current.play().catch(err => {
+          console.error('Error playing desktop video:', err);
+        });
+        console.log('✅ Desktop video playing');
       }
     } catch (error) {
       console.error('❌ Error accessing camera:', error);
@@ -327,6 +343,9 @@ export default function ProfilePage() {
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+    }
+    if (desktopVideoRef.current) {
+      desktopVideoRef.current.srcObject = null;
     }
     setStreamReady(false);
   };
@@ -681,65 +700,260 @@ export default function ProfilePage() {
     }
   };
 
-  // Show the Twitch-style stream manager for all authenticated users
+  // TikTok-style mobile layout with full-screen video and overlays
+  // Desktop keeps traditional 3-column layout
   return (
     <div className="min-h-screen bg-[#0e0e10] text-white">
-      {/* Top Stats Bar */}
-      <div className="bg-[#18181b] border-b border-gray-800 px-2 lg:px-4 py-2 overflow-x-auto">
-        <div className="flex items-center justify-center max-w-[1920px] mx-auto">
-          <div className="flex items-center space-x-3 lg:space-x-8 text-sm">
-            <div className="flex items-center space-x-1 lg:space-x-2">
-              <Clock className="h-3 w-3 lg:h-5 lg:w-5 text-blue-400" />
-              <div>
-                <div className="text-sm lg:text-xl font-bold">{formatTime(sessionTime)}</div>
-                <div className="text-[10px] lg:text-xs text-gray-400">Session</div>
-              </div>
+      {/* ===== MOBILE LAYOUT (< lg) - Full screen video with overlays ===== */}
+      <div className="lg:hidden fixed inset-0 bg-black z-[60]">
+        {/* Full-screen Video Background - Mobile only */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`absolute inset-0 w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
+        />
+
+        {/* Offline State - Full screen */}
+        {!isLive && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e10]">
+            <div className="text-center">
+              <div className="text-4xl font-bold text-gray-600 mb-4">OFFLINE</div>
+              <Button
+                onClick={handleGoLive}
+                className="bg-purple-600 hover:bg-purple-700 text-lg px-6 py-3"
+              >
+                <Radio className="h-5 w-5 mr-2" />
+                Go Live
+              </Button>
             </div>
-            <div className="flex items-center space-x-1 lg:space-x-2">
-              <Eye className="h-3 w-3 lg:h-5 lg:w-5 text-yellow-400" />
-              <div>
-                <div className="text-sm lg:text-xl font-bold">{userToken?.viewers || 0}</div>
-                <div className="text-[10px] lg:text-xs text-gray-400">Viewers</div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 lg:space-x-2">
-              <Users className="h-3 w-3 lg:h-5 lg:w-5 text-purple-400" />
-              <div>
-                <div className="text-sm lg:text-xl font-bold">{userToken?.holders || 0}</div>
-                <div className="text-[10px] lg:text-xs text-gray-400">Followers</div>
-              </div>
-            </div>
-            {userToken && (
-              <div className="hidden lg:flex items-center space-x-2">
-                <DollarSign className="h-5 w-5 text-green-400" />
+          </div>
+        )}
+
+        {/* Gradient overlays for better text readability */}
+        {isLive && (
+          <>
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+          </>
+        )}
+
+        {/* Top Stats Bar - Floating overlay */}
+        {isLive && (
+          <div className="absolute top-0 left-0 right-0 z-10 px-3 py-2 pt-safe">
+            <div className="flex items-center justify-between">
+              {/* Left: Creator info + Live badge */}
+              <div className="flex items-center gap-2">
+                <Avatar className="h-8 w-8 border-2 border-red-500">
+                  <AvatarImage src={user.image || userData?.avatar || userToken?.avatar} />
+                  <AvatarFallback className="bg-purple-600 text-xs">{initials}</AvatarFallback>
+                </Avatar>
                 <div>
-                  <div className="text-xl font-bold">${userToken.marketCap.toLocaleString()}</div>
-                  <div className="text-xs text-gray-400">Market Cap</div>
+                  <div className="text-sm font-semibold">{username}</div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-red-600 text-[10px] px-1.5 py-0">LIVE</Badge>
+                    <span className="text-xs text-gray-300">{formatTime(sessionTime)}</span>
+                  </div>
                 </div>
               </div>
-            )}
-            <div className="flex items-center space-x-1 lg:space-x-2">
-              <Wallet className="h-3 w-3 lg:h-5 lg:w-5 text-orange-400" />
-              <div>
-                <div className="text-sm lg:text-xl font-bold">0.00</div>
-                <div className="text-[10px] lg:text-xs text-gray-400">SOL</div>
+
+              {/* Right: Stats */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 bg-black/50 rounded-full px-2 py-1">
+                  <Eye className="h-3 w-3 text-white" />
+                  <span className="text-xs font-medium">{userToken?.viewers || 0}</span>
+                </div>
+                <div className="flex items-center gap-1 bg-black/50 rounded-full px-2 py-1">
+                  <Users className="h-3 w-3 text-white" />
+                  <span className="text-xs font-medium">{userToken?.holders || 0}</span>
+                </div>
               </div>
             </div>
-            <div className="flex items-center space-x-1 lg:space-x-2">
-              <Trophy className="h-3 w-3 lg:h-5 lg:w-5 text-yellow-500" />
-              <div>
-                <div className="text-sm lg:text-xl font-bold">-</div>
-                <div className="text-[10px] lg:text-xs text-gray-400">Rank</div>
+          </div>
+        )}
+
+        {/* Right Side Controls - Floating vertical buttons */}
+        {isLive && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-3">
+            <button
+              onClick={toggleCamera}
+              className={`w-11 h-11 rounded-full flex items-center justify-center ${
+                cameraEnabled ? 'bg-white/20' : 'bg-red-500/80'
+              }`}
+            >
+              {cameraEnabled ? (
+                <Video className="h-5 w-5 text-white" />
+              ) : (
+                <VideoOff className="h-5 w-5 text-white" />
+              )}
+            </button>
+            <button
+              onClick={toggleMicrophone}
+              className={`w-11 h-11 rounded-full flex items-center justify-center ${
+                microphoneEnabled ? 'bg-white/20' : 'bg-red-500/80'
+              }`}
+            >
+              {microphoneEnabled ? (
+                <Mic className="h-5 w-5 text-white" />
+              ) : (
+                <MicOff className="h-5 w-5 text-white" />
+              )}
+            </button>
+            <button
+              onClick={handleEndStream}
+              className="w-11 h-11 rounded-full bg-red-600 flex items-center justify-center"
+            >
+              <Square className="h-5 w-5 text-white" />
+            </button>
+          </div>
+        )}
+
+        {/* Activity Notifications - Floating on left side */}
+        {isLive && activityEvents.length > 0 && (
+          <div className="absolute left-3 top-20 z-10 w-48">
+            <div className="space-y-2">
+              {[...activityEvents].slice(-3).map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 animate-in slide-in-from-left duration-300"
+                >
+                  <Avatar className="h-6 w-6 flex-shrink-0">
+                    <AvatarImage src={event.avatar} />
+                    <AvatarFallback className="text-[10px] bg-gray-700">
+                      {event.user.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex items-center gap-1 min-w-0">
+                    {event.type === 'like' && <Heart className="h-3 w-3 text-red-500 fill-red-500 flex-shrink-0" />}
+                    {event.type === 'follow' && <UserPlus className="h-3 w-3 text-purple-400 flex-shrink-0" />}
+                    {event.type === 'tip' && <DollarSign className="h-3 w-3 text-green-400 flex-shrink-0" />}
+                    <span className="text-xs text-white truncate">{event.user}</span>
+                    {event.type === 'tip' && (
+                      <span className="text-xs text-green-400 font-medium flex-shrink-0">{event.amount}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Chat Overlay - Bottom of screen */}
+        {isLive && (
+          <div className="absolute bottom-0 left-0 right-14 z-10 pb-safe">
+            {/* Chat Messages - Scrollable with fade */}
+            <div className="px-3 mb-2 max-h-48 overflow-y-auto">
+              <div className="space-y-1.5">
+                {chatMessages.slice(-8).map((msg, index) => (
+                  <div
+                    key={`${msg.id}-${index}`}
+                    className="flex items-start gap-2 bg-black/40 backdrop-blur-sm rounded-lg px-2 py-1.5"
+                  >
+                    <Avatar className="h-6 w-6 flex-shrink-0">
+                      <AvatarImage src={msg.avatar} />
+                      <AvatarFallback className="text-[10px] bg-gray-700">
+                        {msg.user.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-xs font-semibold ${msg.isCreator ? 'text-purple-400' : 'text-gray-300'}`}>
+                        {msg.user}
+                        {msg.isCreator && <span className="text-yellow-500 ml-0.5">★</span>}
+                      </span>
+                      {msg.tip && (
+                        <span className="text-[10px] bg-green-600 text-white px-1 py-0.5 rounded ml-1">
+                          {msg.tip} SOL
+                        </span>
+                      )}
+                      <p className="text-xs text-white break-words">{msg.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Chat Input */}
+            <div className="px-3 pb-3">
+              <form onSubmit={(e) => { e.preventDefault(); handleSendChat(); }} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Say something..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  className="flex-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-purple-500 placeholder-gray-400"
+                />
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim()}
+                  className="w-10 h-10 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:opacity-50 rounded-full flex items-center justify-center"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ===== DESKTOP LAYOUT (>= lg) - Traditional 3-column layout ===== */}
+      <div className="hidden lg:block">
+        {/* Top Stats Bar */}
+        <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
+          <div className="flex items-center justify-center max-w-[1920px] mx-auto">
+            <div className="flex items-center space-x-8 text-sm">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-5 w-5 text-blue-400" />
+                <div>
+                  <div className="text-xl font-bold">{formatTime(sessionTime)}</div>
+                  <div className="text-xs text-gray-400">Session</div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Eye className="h-5 w-5 text-yellow-400" />
+                <div>
+                  <div className="text-xl font-bold">{userToken?.viewers || 0}</div>
+                  <div className="text-xs text-gray-400">Viewers</div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Users className="h-5 w-5 text-purple-400" />
+                <div>
+                  <div className="text-xl font-bold">{userToken?.holders || 0}</div>
+                  <div className="text-xs text-gray-400">Followers</div>
+                </div>
+              </div>
+              {userToken && (
+                <div className="flex items-center space-x-2">
+                  <DollarSign className="h-5 w-5 text-green-400" />
+                  <div>
+                    <div className="text-xl font-bold">${userToken.marketCap.toLocaleString()}</div>
+                    <div className="text-xs text-gray-400">Market Cap</div>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center space-x-2">
+                <Wallet className="h-5 w-5 text-orange-400" />
+                <div>
+                  <div className="text-xl font-bold">0.00</div>
+                  <div className="text-xs text-gray-400">SOL</div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Trophy className="h-5 w-5 text-yellow-500" />
+                <div>
+                  <div className="text-xl font-bold">-</div>
+                  <div className="text-xs text-gray-400">Rank</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-        {/* Main Layout - Stacks on mobile, 3-column on desktop */}
-        <div className="flex flex-col lg:flex-row max-w-[1920px] mx-auto">
-          {/* Activity Feed - Below chat on mobile, Left Column on desktop */}
-          <div className="flex lg:flex bg-[#18181b] lg:border-r lg:border-t-0 border-gray-800 flex-col lg:h-[calc(100vh-180px)] w-full lg:w-[280px] flex-shrink-0 order-last lg:order-first">
+        {/* Main 3-Column Layout */}
+        <div className="flex max-w-[1920px] mx-auto">
+          {/* Left Column - Activity Feed */}
+          <div className="bg-[#18181b] border-r border-gray-800 flex flex-col h-[calc(100vh-72px)] w-[280px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">Activity Feed</h2>
@@ -747,17 +961,17 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div ref={activityContainerRef} className="p-4 lg:flex-1 overflow-y-auto">
+            <div ref={activityContainerRef} className="p-4 flex-1 overflow-y-auto">
               {activityEvents.length === 0 ? (
-                <div className="text-center py-4 lg:py-12">
-                  <div className="text-lg lg:text-2xl font-bold mb-2">It's quiet. Too quiet...</div>
+                <div className="text-center py-12">
+                  <div className="text-2xl font-bold mb-2">It&apos;s quiet. Too quiet...</div>
                   <p className="text-sm text-gray-400">
-                    We'll show your new follows, tips, and activity here.
+                    We&apos;ll show your new follows, tips, and activity here.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {[...activityEvents].reverse().slice(0, 5).map((event) => (
+                  {[...activityEvents].reverse().slice(0, 10).map((event) => (
                     <div key={event.id} className="flex items-center gap-3 p-2 bg-[#0e0e10] rounded-lg">
                       <Avatar className="h-8 w-8 flex-shrink-0">
                         <AvatarImage src={event.avatar} />
@@ -786,31 +1000,32 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Stream Preview - Full width on mobile, Center Column on desktop */}
-          <div className="flex-1 bg-[#0e0e10] flex flex-col lg:h-[calc(100vh-180px)] order-first lg:order-none">
+          {/* Center Column - Video Preview */}
+          <div className="flex-1 bg-[#0e0e10] flex flex-col h-[calc(100vh-72px)]">
             {/* Video Preview */}
             <div className="relative bg-black aspect-video overflow-hidden flex-shrink-0">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
-                />
-                {!isLive && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-6xl font-bold text-gray-600 mb-4">OFFLINE</div>
-                      <Button
-                        onClick={handleGoLive}
-                        className="bg-purple-600 hover:bg-purple-700"
-                      >
-                        <Radio className="h-4 w-4 mr-2" />
-                        Go Live
-                      </Button>
-                    </div>
+              {/* Desktop video */}
+              <video
+                ref={desktopVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
+              />
+              {!isLive && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-6xl font-bold text-gray-600 mb-4">OFFLINE</div>
+                    <Button
+                      onClick={handleGoLive}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Radio className="h-4 w-4 mr-2" />
+                      Go Live
+                    </Button>
                   </div>
-                )}
+                </div>
+              )}
             </div>
 
             {/* Stream Info Below Video */}
@@ -866,8 +1081,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* My Chat - Full width on mobile below video, Right Column on desktop */}
-          <div className="bg-[#18181b] border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col lg:h-[calc(100vh-180px)] w-full lg:w-[300px] flex-shrink-0">
+          {/* Right Column - Chat */}
+          <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-[calc(100vh-72px)] w-[300px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">My Chat</h2>
@@ -875,7 +1090,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div ref={chatContainerRef} className="p-4 overflow-y-auto">
+            <div ref={chatContainerRef} className="p-4 flex-1 overflow-y-auto">
               {chatMessages.length === 0 ? (
                 <div className="text-sm text-gray-400 text-center py-8">
                   <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-600" />
@@ -884,7 +1099,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {[...chatMessages].reverse().slice(0, 4).map((msg, index) => (
+                  {chatMessages.slice(-20).map((msg, index) => (
                     <div key={`${msg.id}-${index}`} className="flex items-start gap-2 text-sm">
                       <Avatar className="h-6 w-6 flex-shrink-0">
                         <AvatarImage src={msg.avatar} />
@@ -899,7 +1114,7 @@ export default function ProfilePage() {
                         </span>
                         {msg.tip && (
                           <span className="text-xs bg-green-600 text-white px-1.5 py-0.5 rounded ml-2">
-                            ${msg.tip}
+                            {msg.tip} SOL
                           </span>
                         )}
                         <p className="text-white break-words">{msg.message}</p>
@@ -910,7 +1125,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="border-t border-gray-800 p-3">
+            <div className="border-t border-gray-800 p-3 mt-auto">
               <form onSubmit={(e) => { e.preventDefault(); handleSendChat(); }} className="flex gap-2">
                 <input
                   type="text"
@@ -932,5 +1147,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
-    );
+    </div>
+  );
 }

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "signaling": "node server/signaling-server.js",
-    "postinstall": "prisma generate"
+    "postinstall": "node -e \"if(process.env.DATABASE_URL){require('child_process').execSync('prisma generate',{stdio:'inherit'})}\""
   },
   "dependencies": {
     "@auth/core": "^0.34.3",
