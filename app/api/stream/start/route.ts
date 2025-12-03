@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Generate user-based room name for LiveKit
+    const roomName = `user-${(session.user as any).id}`;
+
     return NextResponse.json({
       success: true,
       stream: {
@@ -53,6 +56,7 @@ export async function POST(req: NextRequest) {
         isLive: stream.isLive,
         startedAt: stream.startedAt,
       },
+      roomName, // User-based room name for LiveKit
     });
   } catch (error) {
     console.error('Error starting stream:', error);

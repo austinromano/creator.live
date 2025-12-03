@@ -12,12 +12,14 @@ datasource db {
 // Users table - stores user accounts (wallet-based or email-based)
 model User {
   id            String   @id @default(cuid())
-  username      String   @unique
+  username      String?  @unique  // Made optional for wallet-first onboarding
   email         String?  @unique
   password      String?  // For email/password auth
   walletAddress String?  @unique @map("wallet_address")
   avatar        String?  @default("https://api.dicebear.com/7.x/avataaars/svg")
   bio           String?
+  isAI          Boolean  @default(false) @map("is_ai") // AI streamers that are always live
+  hasCompletedOnboarding Boolean @default(false) @map("has_completed_onboarding")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

@@ -48,7 +48,7 @@ export function Homepage() {
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       {/* Live Streams */}
-      <LiveStreamGrid creators={tokens} />
+      <LiveStreamGrid />
 
       {/* Filters */}
       <section>

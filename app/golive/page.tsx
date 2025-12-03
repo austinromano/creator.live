@@ -12,27 +12,31 @@ import {
   Wallet,
   Trophy,
   Users,
-  TrendingUp,
-  Settings,
-  Mail,
   Radio,
   DollarSign,
   Eye,
   Loader2,
   Clock,
-  Edit3,
-  Star,
   MessageSquare,
   ChevronDown,
   Video,
   VideoOff,
   Mic,
   MicOff,
-  Monitor,
   Square,
 } from 'lucide-react';
 import { LiveStreamBroadcast } from '@/components/streaming/LiveStreamBroadcast';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
+
+// User data from /api/user/me
+interface UserData {
+  id: string;
+  username: string | null;
+  email: string | null;
+  walletAddress: string | null;
+  avatar: string | null;
+  hasCompletedOnboarding: boolean;
+}
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
@@ -47,16 +51,56 @@ export default function ProfilePage() {
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [streamReady, setStreamReady] = useState(false);
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const [streamTitle, setStreamTitle] = useState('');
   const [userToken, setUserToken] = useState<Creator | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
   const thumbnailIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const currentRoomNameRef = React.useRef<string | null>(null);
 
   const user = session?.user as any;
   const userId = user?.id;
-  const username = user?.name || 'User';
+  const username = userData?.username || user?.name || 'User';
 
-  // Fetch tokens from database on mount and find user's token
+  // Check onboarding status
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (status === 'loading') return;
+
+      if (status === 'unauthenticated') {
+        router.push('/');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/user/me');
+        const data = await response.json();
+
+        if (!data.user) {
+          router.push('/');
+          return;
+        }
+
+        // If onboarding not complete, redirect to onboarding
+        if (!data.user.hasCompletedOnboarding || !data.user.username) {
+          router.push('/onboarding');
+          return;
+        }
+
+        setUserData(data.user);
+        setUserLoading(false);
+      } catch (error) {
+        console.error('Error checking onboarding:', error);
+        setUserLoading(false);
+      }
+    };
+
+    checkOnboarding();
+  }, [status, router]);
+
+  // Fetch tokens from database on mount and find user's token (optional - for token-based features)
   useEffect(() => {
     const loadUserToken = async () => {
       if (!userId) {
@@ -69,22 +113,18 @@ export default function ProfilePage() {
         await fetchTokens();
       }
 
-      // Look for user's token
+      // Look for user's token (optional - streaming works without it now)
       const token = getTokenByCreator(userId);
       if (token) {
         console.log('Found user token:', token.symbol);
         setUserToken(token);
-      } else {
-        // Fallback to GOTH for testing only if no user token exists
-        const gothToken = getTokenBySymbol('GOTH');
-        console.log('No user token found, using GOTH for testing');
-        setUserToken(gothToken || null);
       }
+      // No longer falling back to GOTH - token is optional
       setTokenLoading(false);
     };
 
     loadUserToken();
-  }, [userId, initialized, fetchTokens, getTokenByCreator, getTokenBySymbol]);
+  }, [userId, initialized, fetchTokens, getTokenByCreator]);
 
   // Update userToken when tokens change (in case fetchTokens completes)
   useEffect(() => {
@@ -159,7 +199,7 @@ export default function ProfilePage() {
     };
   }, []);
 
-  if (status === 'loading' || tokenLoading) {
+  if (status === 'loading' || tokenLoading || userLoading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center py-20">
@@ -170,12 +210,12 @@ export default function ProfilePage() {
     );
   }
 
-  if (!session?.user) {
+  if (!session?.user || !userData) {
     return (
       <div className="min-h-screen bg-[#0e0e10] text-white flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
-          <p className="text-gray-400">Redirecting to login...</p>
+          <p className="text-gray-400">Redirecting...</p>
         </div>
       </div>
     );
@@ -270,75 +310,93 @@ export default function ProfilePage() {
   };
 
   const handleGoLive = async () => {
-    if (userToken) {
-      try {
-        console.log('=== STARTING GO LIVE PROCESS ===');
+    try {
+      console.log('=== STARTING GO LIVE PROCESS ===');
 
-        // Call API to create stream record in database
-        console.log('Creating stream record in database...');
-        const response = await fetch('/api/stream/start', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            title: streamTitle || `${username}'s Live Stream`,
-          }),
-        });
+      // Call API to create stream record in database
+      console.log('Creating stream record in database...');
+      const response = await fetch('/api/stream/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: streamTitle || `${username}'s Live Stream`,
+        }),
+      });
 
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('Failed to create stream:', error);
-          alert(error.error || 'Failed to start stream');
-          return;
-        }
-
-        const data = await response.json();
-        console.log('Stream created:', data);
-        setCurrentStreamId(data.stream.id);
-
-        // Start camera BEFORE setting isLive
-        console.log('Starting camera...');
-        await startCamera();
-
-        console.log('Camera started, stream ref:', streamRef.current);
-        console.log('Setting isLive to true...');
-        setIsLive(true);
-        updateToken(userToken.symbol, { isLive: true });
-
-        // Start LiveKit broadcast
-        if (streamRef.current) {
-          console.log('Starting LiveKit broadcast...');
-          livekitStreamerRef.current = new LiveKitStreamer(userToken.symbol);
-          await livekitStreamerRef.current.startBroadcast(streamRef.current);
-          console.log('LiveKit broadcast started for:', userToken.symbol);
-
-          // Start capturing thumbnails
-          startThumbnailCapture();
-        } else {
-          console.error('ERROR: streamRef.current is null after startCamera!');
-        }
-
-        console.log('=== GO LIVE COMPLETE ===');
-      } catch (error) {
-        console.error('Error starting stream:', error);
-        alert('Failed to start stream: ' + (error as Error).message);
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Failed to create stream:', error);
+        alert(error.error || 'Failed to start stream');
+        return;
       }
+
+      const data = await response.json();
+      console.log('Stream created:', data);
+      setCurrentStreamId(data.stream.id);
+
+      // Use user-based room name from API, or fallback to token symbol if available
+      const roomName = data.roomName || (userToken ? userToken.symbol : `user-${userId}`);
+      setCurrentRoomName(roomName);
+      currentRoomNameRef.current = roomName; // Also set ref for use in intervals
+      console.log('Using room name:', roomName);
+
+      // Start camera BEFORE setting isLive
+      console.log('Starting camera...');
+      await startCamera();
+
+      console.log('Camera started, stream ref:', streamRef.current);
+      console.log('Setting isLive to true...');
+      setIsLive(true);
+
+      // Update token if user has one (optional)
+      if (userToken) {
+        updateToken(userToken.symbol, { isLive: true });
+      }
+
+      // Start LiveKit broadcast with room name
+      if (streamRef.current) {
+        console.log('Starting LiveKit broadcast...');
+        livekitStreamerRef.current = new LiveKitStreamer(roomName);
+        await livekitStreamerRef.current.startBroadcast(streamRef.current);
+        console.log('LiveKit broadcast started for room:', roomName);
+
+        // Start capturing thumbnails for all streams (token-based or user-based)
+        startThumbnailCapture();
+      } else {
+        console.error('ERROR: streamRef.current is null after startCamera!');
+      }
+
+      console.log('=== GO LIVE COMPLETE ===');
+    } catch (error) {
+      console.error('Error starting stream:', error);
+      alert('Failed to start stream: ' + (error as Error).message);
     }
   };
 
   const handleEndStream = async () => {
     console.log('=== STOPPING STREAM ===');
     console.log('currentStreamId:', currentStreamId);
+    console.log('currentRoomName:', currentRoomName);
     console.log('userToken:', userToken?.symbol);
+
+    // Save roomName before clearing state
+    const roomNameToDelete = currentRoomNameRef.current;
 
     try {
       // Stop camera and UI regardless of stream ID
       stopCamera();
       setIsLive(false);
-      updateToken(userToken?.symbol || '', { isLive: false });
       setSessionTime(0);
       setStreamTitle('');
+      setCurrentRoomName(null);
+      currentRoomNameRef.current = null;
+
+      // Update token if user has one (optional)
+      if (userToken) {
+        updateToken(userToken.symbol, { isLive: false });
+      }
 
       // Stop LiveKit broadcast
       if (livekitStreamerRef.current) {
@@ -347,8 +405,8 @@ export default function ProfilePage() {
         livekitStreamerRef.current = null;
       }
 
-      // Stop thumbnail capture and delete thumbnail
-      await stopThumbnailCapture();
+      // Stop thumbnail capture and delete thumbnail (pass saved roomName)
+      await stopThumbnailCapture(roomNameToDelete);
 
       // Try to end stream in database if we have an ID
       if (currentStreamId) {
@@ -417,12 +475,19 @@ export default function ProfilePage() {
 
   // Capture and upload thumbnail from video element
   const captureThumbnail = async () => {
-    if (!videoRef.current || !userToken) return;
+    const roomName = currentRoomNameRef.current;
+    if (!videoRef.current || !roomName) {
+      console.log('Cannot capture thumbnail - videoRef:', !!videoRef.current, 'roomName:', roomName);
+      return;
+    }
 
     try {
       const video = videoRef.current;
       // Make sure video has dimensions
-      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log('Video has no dimensions yet, skipping thumbnail capture');
+        return;
+      }
 
       // Create canvas and capture frame
       const canvas = document.createElement('canvas');
@@ -437,17 +502,21 @@ export default function ProfilePage() {
       // Convert to base64
       const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
 
-      // Upload to API
-      await fetch('/api/stream/thumbnail', {
+      // Upload to API - use roomName as the key (works for both token and user-based streams)
+      const response = await fetch('/api/stream/thumbnail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          symbol: userToken.symbol,
+          symbol: roomName,
           thumbnail
         })
       });
 
-      console.log('Thumbnail uploaded for:', userToken.symbol);
+      if (response.ok) {
+        console.log('✅ Thumbnail uploaded for:', roomName);
+      } else {
+        console.error('❌ Failed to upload thumbnail:', response.status);
+      }
     } catch (error) {
       console.error('Failed to capture thumbnail:', error);
     }
@@ -463,55 +532,57 @@ export default function ProfilePage() {
   };
 
   // Stop thumbnail capture and delete thumbnail
-  const stopThumbnailCapture = async () => {
+  const stopThumbnailCapture = async (roomName?: string | null) => {
     if (thumbnailIntervalRef.current) {
       clearInterval(thumbnailIntervalRef.current);
       thumbnailIntervalRef.current = null;
     }
 
-    // Delete thumbnail when stream ends
-    if (userToken) {
+    // Delete thumbnail when stream ends - use provided roomName or ref
+    const thumbnailKey = roomName || currentRoomNameRef.current;
+    if (thumbnailKey) {
       try {
         await fetch('/api/stream/thumbnail', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: userToken.symbol })
+          body: JSON.stringify({ symbol: thumbnailKey })
         });
+        console.log('Thumbnail deleted for:', thumbnailKey);
       } catch (error) {
         console.error('Failed to delete thumbnail:', error);
       }
     }
   };
 
-  // If user has a token, show the Twitch-style stream manager
-  if (userToken) {
-    return (
-      <div className="min-h-screen bg-[#0e0e10] text-white">
-        {/* Top Stats Bar */}
-        <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
-          <div className="flex items-center justify-between max-w-[1920px] mx-auto">
-            <div className="flex items-center space-x-8 text-sm">
-              <div className="flex items-center space-x-2">
-                <Clock className="h-5 w-5 text-blue-400" />
-                <div>
-                  <div className="text-xl font-bold">{formatTime(sessionTime)}</div>
-                  <div className="text-xs text-gray-400">Session</div>
-                </div>
+  // Show the Twitch-style stream manager for all authenticated users
+  return (
+    <div className="min-h-screen bg-[#0e0e10] text-white">
+      {/* Top Stats Bar */}
+      <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
+        <div className="flex items-center justify-between max-w-[1920px] mx-auto">
+          <div className="flex items-center space-x-8 text-sm">
+            <div className="flex items-center space-x-2">
+              <Clock className="h-5 w-5 text-blue-400" />
+              <div>
+                <div className="text-xl font-bold">{formatTime(sessionTime)}</div>
+                <div className="text-xs text-gray-400">Session</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Eye className="h-5 w-5 text-yellow-400" />
-                <div>
-                  <div className="text-xl font-bold">{userToken.viewers || 0}</div>
-                  <div className="text-xs text-gray-400">Viewers</div>
-                </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Eye className="h-5 w-5 text-yellow-400" />
+              <div>
+                <div className="text-xl font-bold">{userToken?.viewers || 0}</div>
+                <div className="text-xs text-gray-400">Viewers</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-purple-400" />
-                <div>
-                  <div className="text-xl font-bold">{userToken.holders}</div>
-                  <div className="text-xs text-gray-400">Followers</div>
-                </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-purple-400" />
+              <div>
+                <div className="text-xl font-bold">{userToken?.holders || 0}</div>
+                <div className="text-xs text-gray-400">Followers</div>
               </div>
+            </div>
+            {userToken && (
               <div className="flex items-center space-x-2">
                 <DollarSign className="h-5 w-5 text-green-400" />
                 <div>
@@ -519,25 +590,26 @@ export default function ProfilePage() {
                   <div className="text-xs text-gray-400">Market Cap</div>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Wallet className="h-5 w-5 text-orange-400" />
-                <div>
-                  <div className="text-xl font-bold">0.00 SOL</div>
-                  <div className="text-xs text-gray-400">SOL Received</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Trophy className="h-5 w-5 text-yellow-500" />
-                <div>
-                  <div className="text-xl font-bold">-</div>
-                  <div className="text-xs text-gray-400">Ranking</div>
-                </div>
+            )}
+            <div className="flex items-center space-x-2">
+              <Wallet className="h-5 w-5 text-orange-400" />
+              <div>
+                <div className="text-xl font-bold">0.00 SOL</div>
+                <div className="text-xs text-gray-400">SOL Received</div>
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              <div>
+                <div className="text-xl font-bold">-</div>
+                <div className="text-xs text-gray-400">Ranking</div>
+              </div>
             </div>
           </div>
+          <div className="flex items-center space-x-2">
+          </div>
         </div>
+      </div>
 
         {/* Main 2-Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 max-w-[1920px] mx-auto">
@@ -608,22 +680,22 @@ export default function ProfilePage() {
               {/* Stream Info */}
               <div className="flex items-center space-x-3">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={user.image || userToken.avatar} />
+                  <AvatarImage src={user.image || userData?.avatar || userToken?.avatar} />
                   <AvatarFallback className="bg-purple-600">{initials}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="font-semibold">Live!</div>
+                  <div className="font-semibold">{username}</div>
                   <Badge className={isLive ? "bg-red-600" : "bg-gray-600"}>
                     {isLive ? "LIVE" : "OFFLINE"}
                   </Badge>
-                  {isLive && (
+                  {isLive && currentRoomName && (
                     <div className="text-xs text-green-400 mt-1">
-                      Broadcasting as: {userToken.symbol}
+                      Broadcasting as: {currentRoomName}
                     </div>
                   )}
-                  {isLive && (
+                  {isLive && currentRoomName && (
                     <div className="text-xs text-blue-400 mt-1">
-                      Viewers can watch at: <a href={`/live/${userToken.symbol}`} target="_blank" className="underline hover:text-blue-300">/live/{userToken.symbol}</a>
+                      Viewers can watch at: <a href={`/live/${currentRoomName}`} target="_blank" className="underline hover:text-blue-300">/live/{currentRoomName}</a>
                     </div>
                   )}
                 </div>
@@ -678,148 +750,4 @@ export default function ProfilePage() {
         </div>
       </div>
     );
-  }
-
-  // If user doesn't have a token, show the regular profile page
-
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Profile Header */}
-      <div className="bg-gradient-to-r from-purple-900/20 to-pink-900/20 rounded-lg border border-gray-800 p-8 mb-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex items-center space-x-6">
-            <Avatar className="h-24 w-24 border-4 border-purple-500">
-              <AvatarImage src={user.image} alt={username} />
-              <AvatarFallback className="bg-purple-600 text-white text-2xl">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-
-            <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-3xl font-bold text-white">{username}</h1>
-                <Badge className="bg-green-600 text-white">
-                  Active
-                </Badge>
-              </div>
-
-              <div className="flex flex-col space-y-2 text-gray-400">
-                {user.email && (
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4" />
-                    <span className="text-sm">{user.email}</span>
-                  </div>
-                )}
-                {user.walletAddress && (
-                  <div className="flex items-center space-x-2">
-                    <Wallet className="h-4 w-4" />
-                    <span className="text-sm font-mono">
-                      {user.walletAddress.slice(0, 8)}...{user.walletAddress.slice(-6)}
-                    </span>
-                  </div>
-                )}
-                {user.provider && (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-gray-500">
-                      Connected via {user.provider === 'phantom' ? 'Phantom Wallet' : user.provider === 'google' ? 'Google' : 'Email'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col space-y-2">
-            <Button
-              onClick={() => router.push('/create')}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              Create Token
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <Card className="bg-gray-900 border-gray-800 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Reputation</p>
-              <p className="text-3xl font-bold text-white mt-1">0</p>
-            </div>
-            <Trophy className="h-12 w-12 text-yellow-500" />
-          </div>
-        </Card>
-
-        <Card className="bg-gray-900 border-gray-800 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">SOL Received</p>
-              <p className="text-3xl font-bold text-white mt-1">0.00</p>
-              <p className="text-xs text-gray-500 mt-1">SOL</p>
-            </div>
-            <Wallet className="h-12 w-12 text-purple-500" />
-          </div>
-        </Card>
-
-        <Card className="bg-gray-900 border-gray-800 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Followers</p>
-              <p className="text-3xl font-bold text-white mt-1">0</p>
-            </div>
-            <Users className="h-12 w-12 text-blue-500" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Activity Section */}
-      <Card className="bg-gray-900 border-gray-800 p-6 mb-6">
-        <h3 className="text-xl font-bold text-white mb-4">Activity</h3>
-        <div className="space-y-4">
-          <div className="flex items-center space-x-3 text-gray-400">
-            <div className="h-2 w-2 bg-green-500 rounded-full" />
-            <p>Welcome to creator.fun! Your profile has been created.</p>
-          </div>
-          <div className="text-center py-8 border-t border-gray-800 mt-4">
-            <TrendingUp className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400 mb-4">Start your creator journey!</p>
-            <p className="text-sm text-gray-500 mb-4">
-              Create your first token, build your community, and unlock achievements.
-            </p>
-            <Button
-              onClick={() => router.push('/create')}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              Create Your First Token
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Quick Actions */}
-      <Card className="bg-gray-900 border-gray-800 p-6">
-        <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Button
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 justify-start"
-            onClick={() => router.push('/create')}
-          >
-            <Wallet className="h-5 w-5 mr-3 text-purple-500" />
-            Create a Token
-          </Button>
-          <Button
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 justify-start"
-            onClick={() => router.push('/')}
-          >
-            <TrendingUp className="h-5 w-5 mr-3 text-blue-500" />
-            Explore Trending
-          </Button>
-        </div>
-      </Card>
-    </div>
-  );
 }
