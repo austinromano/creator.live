@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useConnection, useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -47,9 +47,17 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Use ref to always have access to latest streamer
+  const streamerRef = useRef<LiveKitStreamer | null>(null);
+  useEffect(() => {
+    streamerRef.current = streamer || null;
+    console.log('TipButton: streamer ref updated, value:', streamer ? 'PRESENT' : 'NULL');
+  }, [streamer]);
+
   const handleTip = async () => {
     console.log('=== TIP BUTTON CLICKED ===');
-    console.log('TipButton: streamer available?', streamer ? 'YES' : 'NO');
+    console.log('TipButton: streamer prop:', streamer ? 'YES' : 'NO');
+    console.log('TipButton: streamerRef.current:', streamerRef.current ? 'YES' : 'NO');
     console.log('TipButton: userName:', userName);
     console.log('TipButton: isConnected:', isConnected);
 
@@ -78,6 +86,7 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
       );
 
       setTxSignature(signature);
+      console.log('TipButton: Transaction successful, signature:', signature);
 
       // Call the onTip callback to show in chat
       await onTip(
@@ -86,28 +95,56 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
         userName,
         userAvatar
       );
+      console.log('TipButton: onTip callback completed');
 
       // Send activity event to broadcaster
-      console.log('TipButton: Attempting to send activity event, streamer:', streamer ? 'present' : 'null');
-      if (streamer) {
+      // Use streamerRef.current to get the latest streamer instance
+      const currentStreamer = streamerRef.current;
+      console.log('TipButton: Attempting to send activity event');
+      console.log('TipButton: streamer prop:', streamer ? 'YES' : 'NO');
+      console.log('TipButton: streamerRef.current:', currentStreamer ? 'YES' : 'NO');
+      console.log('TipButton: currentStreamer room:', currentStreamer?.getRoom ? currentStreamer.getRoom() : 'no getRoom method');
+
+      if (currentStreamer) {
         const displayName = userName || 'Someone';
         const wireAvatar = userAvatar?.startsWith('data:')
           ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
           : userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
 
-        console.log('TipButton: Sending tip activity event for user:', displayName);
-        await streamer.sendActivityEvent({
-          id: `tip-${Date.now()}`,
-          type: 'tip',
-          user: displayName,
-          avatar: wireAvatar,
-          amount: TIP_AMOUNT_SOL,
-          message: message || undefined,
-          timestamp: Date.now(),
-        });
-        console.log('TipButton: Activity event sent successfully');
+        const tipMessage = message
+          ? `🪙 Tipped ${TIP_AMOUNT_SOL} SOL: "${message}"`
+          : `🪙 Tipped ${TIP_AMOUNT_SOL} SOL!`;
+
+        console.log('TipButton: Sending tip chat message and activity event for user:', displayName);
+        try {
+          // Send as chat message so all viewers see it
+          await currentStreamer.sendChatMessage({
+            id: `tip-chat-${Date.now()}`,
+            user: displayName,
+            message: tipMessage,
+            avatar: wireAvatar,
+            tip: TIP_AMOUNT_SOL,
+            timestamp: Date.now(),
+          });
+          console.log('TipButton: Chat message sent successfully');
+
+          // Also send activity event to broadcaster's activity feed
+          await currentStreamer.sendActivityEvent({
+            id: `tip-${Date.now()}`,
+            type: 'tip',
+            user: displayName,
+            avatar: wireAvatar,
+            amount: TIP_AMOUNT_SOL,
+            message: message || undefined,
+            timestamp: Date.now(),
+          });
+          console.log('TipButton: Activity event sent successfully');
+        } catch (sendError) {
+          console.error('TipButton: Failed to send tip messages:', sendError);
+        }
       } else {
         console.warn('TipButton: No streamer available to send activity event');
+        console.warn('TipButton: This is likely because the video stream has not connected yet');
       }
 
       setMessage('');
@@ -122,14 +159,32 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
       setError(error?.message || 'Failed to send tip. Please try again.');
 
       // Still send activity event even if transaction fails (for testing)
+      const currentStreamerOnError = streamerRef.current;
       console.log('TipButton: Transaction failed, but still trying to send activity event');
-      if (streamer) {
+      console.log('TipButton: streamerRef.current on error:', currentStreamerOnError ? 'YES' : 'NO');
+      if (currentStreamerOnError) {
         const displayName = userName || 'Someone';
         const wireAvatar = userAvatar?.startsWith('data:')
           ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
           : userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+
+        const tipMessage = message
+          ? `🪙 Tipped ${TIP_AMOUNT_SOL} SOL: "${message}"`
+          : `🪙 Tipped ${TIP_AMOUNT_SOL} SOL!`;
+
         try {
-          await streamer.sendActivityEvent({
+          // Send as chat message so all viewers see it
+          await currentStreamerOnError.sendChatMessage({
+            id: `tip-chat-${Date.now()}`,
+            user: displayName,
+            message: tipMessage,
+            avatar: wireAvatar,
+            tip: TIP_AMOUNT_SOL,
+            timestamp: Date.now(),
+          });
+
+          // Also send activity event
+          await currentStreamerOnError.sendActivityEvent({
             id: `tip-${Date.now()}`,
             type: 'tip',
             user: displayName,

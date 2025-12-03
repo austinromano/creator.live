@@ -94,19 +94,28 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
       // Use actual user name and avatar
       const displayName = userName || session?.user?.name || 'You';
       const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+      const wireAvatar = userAvatar?.startsWith('data:')
+        ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+        : avatar;
 
+      // Add locally for immediate feedback
       addMessage({
         user: displayName,
         message: '❤️ Liked the stream!',
         avatar,
       });
 
-      // Send activity event to broadcaster
       if (streamer) {
-        const wireAvatar = userAvatar?.startsWith('data:')
-          ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
-          : avatar;
+        // Send as chat message so all viewers see it
+        await streamer.sendChatMessage({
+          id: `like-${Date.now()}`,
+          user: displayName,
+          message: '❤️ Liked the stream!',
+          avatar: wireAvatar,
+          timestamp: Date.now(),
+        });
 
+        // Also send activity event to broadcaster's activity feed
         await streamer.sendActivityEvent({
           id: `like-${Date.now()}`,
           type: 'like',
@@ -131,19 +140,28 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
     // Use actual user name and avatar
     const displayName = userName || session?.user?.name || 'Someone';
     const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+    const wireAvatar = userAvatar?.startsWith('data:')
+      ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+      : avatar;
 
+    // Add locally for immediate feedback
     addMessage({
       user: displayName,
       message: '🎉 Started following!',
       avatar,
     });
 
-    // Send activity event to broadcaster
     if (streamer) {
-      const wireAvatar = userAvatar?.startsWith('data:')
-        ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
-        : avatar;
+      // Send as chat message so all viewers see it
+      await streamer.sendChatMessage({
+        id: `follow-${Date.now()}`,
+        user: displayName,
+        message: '🎉 Started following!',
+        avatar: wireAvatar,
+        timestamp: Date.now(),
+      });
 
+      // Also send activity event to broadcaster's activity feed
       await streamer.sendActivityEvent({
         id: `follow-${Date.now()}`,
         type: 'follow',
@@ -201,36 +219,34 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
                 </Avatar>
                 <div>
                   <h2 className="text-white font-bold text-lg">{creator.name}</h2>
-                  <p className="text-gray-400 text-sm">${creator.symbol}</p>
+                  <span className="flex items-center text-sm text-gray-400">
+                    <Star className="h-4 w-4 mr-1 text-yellow-400" />
+                    {formatNumber(likes)} likes
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleLike}
                   disabled={hasLiked}
-                  className={`w-[100px] ${hasLiked
-                    ? "bg-gray-600 text-white font-semibold"
-                    : "bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-semibold"}`}
+                  size="icon"
+                  className={`w-10 h-10 ${hasLiked
+                    ? "bg-gray-600 text-white"
+                    : "bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white"}`}
                 >
-                  <Heart className={`h-4 w-4 mr-2 ${hasLiked ? 'fill-current' : ''}`} />
-                  {hasLiked ? 'Liked' : 'Like'}
+                  <Heart className={`h-5 w-5 ${hasLiked ? 'fill-current' : ''}`} />
                 </Button>
                 <Button
                   onClick={handleFollow}
-                  className={`w-[120px] ${isFollowing
-                    ? "bg-gray-600 hover:bg-gray-700 text-white font-semibold"
-                    : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold"}`}
+                  size="icon"
+                  className={`w-10 h-10 ${isFollowing
+                    ? "bg-gray-600 hover:bg-gray-700 text-white"
+                    : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"}`}
                 >
                   {isFollowing ? (
-                    <>
-                      <UserCheck className="h-4 w-4 mr-2" />
-                      Following
-                    </>
+                    <UserCheck className="h-5 w-5" />
                   ) : (
-                    <>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Follow
-                    </>
+                    <UserPlus className="h-5 w-5" />
                   )}
                 </Button>
                 <TipButton
@@ -240,18 +256,6 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
                   userAvatar={userAvatar || undefined}
                   streamer={streamer}
                 />
-              </div>
-            </div>
-            <div className="flex items-center">
-              <p className="text-gray-300 text-base">{creator.description}</p>
-              {/* Quick Stats */}
-              <div className="flex items-center space-x-4 text-sm text-gray-400 ml-4">
-                <span className="flex items-center">
-                  <Star className="h-4 w-4 mr-1 text-yellow-400" />
-                  {formatNumber(likes)} likes
-                </span>
-                <span>•</span>
-                <span>Market Cap: ${formatNumber(creator.marketCap)}</span>
               </div>
             </div>
           </div>
