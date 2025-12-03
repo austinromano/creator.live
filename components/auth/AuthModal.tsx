@@ -142,6 +142,9 @@ export function AuthModal() {
 
   // Open in Phantom's in-app browser for mobile users
   const openInPhantomBrowser = () => {
+    // Clear any pending auth flag - user should manually authenticate in Phantom browser
+    localStorage.removeItem('pendingPhantomAuth');
+
     const currentUrl = window.location.href;
     // Phantom deep link to open URL in Phantom's in-app browser
     // Format: https://phantom.app/ul/browse/{encodedUrl}
