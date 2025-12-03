@@ -8,7 +8,8 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    const userId = (session?.user as any)?.id;
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       where: { username: trimmedUsername },
     });
 
-    if (existingUser && existingUser.id !== session.user.id) {
+    if (existingUser && existingUser.id !== userId) {
       return NextResponse.json(
         { error: 'Username is already taken' },
         { status: 400 }
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: updateData,
       select: {
         id: true,
