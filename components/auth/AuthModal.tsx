@@ -8,7 +8,20 @@ import { useAuthStore } from '@/stores/authStore';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { signIn, useSession } from 'next-auth/react';
 import { signInWithPhantom } from '@/lib/phantom-auth';
-import { Loader2, Mail } from 'lucide-react';
+import { Loader2, Mail, ExternalLink } from 'lucide-react';
+
+// Detect if user is on mobile device (not in Phantom browser)
+function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Check if we're in Phantom's in-app browser
+function isPhantomBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  // Phantom injects window.phantom when in its browser
+  return !!(window as any).phantom?.solana?.isPhantom;
+}
 
 export function AuthModal() {
   const { showAuthModal, setShowAuthModal } = useAuthStore();
@@ -23,6 +36,14 @@ export function AuthModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const hasAutoSignedRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isInPhantom, setIsInPhantom] = useState(false);
+
+  // Check device type on mount
+  useEffect(() => {
+    setIsMobile(isMobileDevice());
+    setIsInPhantom(isPhantomBrowser());
+  }, []);
 
   // Mobile-specific: Auto-complete Phantom auth when returning from Phantom app
   // This handles the case where user is redirected back after approving in Phantom
@@ -119,10 +140,25 @@ export function AuthModal() {
     }
   };
 
+  // Open in Phantom's in-app browser for mobile users
+  const openInPhantomBrowser = () => {
+    const currentUrl = window.location.href;
+    // Phantom deep link to open URL in Phantom's in-app browser
+    // Format: https://phantom.app/ul/browse/{encodedUrl}
+    const phantomBrowseUrl = `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
+    window.location.href = phantomBrowseUrl;
+  };
+
   const handlePhantomConnect = async () => {
     try {
       setLoading(true);
       setError('');
+
+      // If on mobile and NOT in Phantom browser, redirect to Phantom's browser
+      if (isMobile && !isInPhantom) {
+        openInPhantomBrowser();
+        return;
+      }
 
       if (!connected || !publicKey) {
         // Find and select Phantom wallet
@@ -380,6 +416,16 @@ export function AuthModal() {
                   </svg>
                   <span>Sign & Continue</span>
                 </>
+              ) : isMobile && !isInPhantom ? (
+                <>
+                  <svg className="w-6 h-6" viewBox="0 0 128 128" fill="none">
+                    <path d="M105.5 35.5C94.5 21.5 78.5 14 60.5 14C31.5 14 8 37.5 8 66.5C8 95.5 31.5 119 60.5 119C78.5 119 94.5 111.5 105.5 97.5" stroke="white" strokeWidth="8" strokeLinecap="round"/>
+                    <circle cx="60.5" cy="66.5" r="20" fill="white"/>
+                    <path d="M105.5 50.5L120 66.5L105.5 82.5" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Open in Phantom</span>
+                  <ExternalLink className="h-4 w-4" />
+                </>
               ) : (
                 <>
                   <svg className="w-6 h-6" viewBox="0 0 128 128" fill="none">
@@ -391,6 +437,13 @@ export function AuthModal() {
                 </>
               )}
             </Button>
+
+            {/* Show helpful message for mobile users */}
+            {isMobile && !isInPhantom && (
+              <p className="text-xs text-gray-400 text-center">
+                Tap to open this page in Phantom&apos;s browser for wallet connection
+              </p>
+            )}
 
             {/* Show connected wallet address when connected */}
             {connected && publicKey && (
