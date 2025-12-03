@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,6 @@ export function AuthModal() {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const hasAutoSignedRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isInPhantom, setIsInPhantom] = useState(false);
 
@@ -45,64 +44,10 @@ export function AuthModal() {
     setIsInPhantom(isPhantomBrowser());
   }, []);
 
-  // Mobile-specific: Auto-complete Phantom auth when returning from Phantom app
-  // This handles the case where user is redirected back after approving in Phantom
+  // Clear any stale pendingPhantomAuth flags on mount
   useEffect(() => {
-    const completePhantomAuth = async () => {
-      // Only proceed if:
-      // 1. Wallet is connected
-      // 2. User is not already authenticated
-      // 3. We haven't already tried auto-signing
-      // 4. signMessage is available
-      if (!connected || !publicKey || sessionStatus === 'authenticated' || hasAutoSignedRef.current || !signMessage) {
-        return;
-      }
-
-      // Check if there's a pending phantom auth flag in localStorage (set before redirect)
-      const pendingAuth = localStorage.getItem('pendingPhantomAuth');
-      if (!pendingAuth) {
-        return;
-      }
-
-      // Clear the pending flag
-      localStorage.removeItem('pendingPhantomAuth');
-      hasAutoSignedRef.current = true;
-
-      console.log('Mobile: Detected return from Phantom, completing authentication...');
-      setLoading(true);
-      setShowAuthModal(true);
-
-      try {
-        // Create and sign authentication message
-        const { publicKey: pubKey, signature, message } = await signInWithPhantom(
-          publicKey.toBase58(),
-          signMessage
-        );
-
-        // Authenticate with NextAuth
-        const result = await signIn('phantom', {
-          publicKey: pubKey,
-          signature,
-          message,
-          username: `phantom_${pubKey.slice(0, 6)}`,
-          redirect: false,
-        });
-
-        if (result?.error) {
-          throw new Error(result.error);
-        }
-
-        // Redirect to golive/onboarding
-        window.location.href = '/golive';
-      } catch (error: any) {
-        console.error('Auto Phantom auth failed:', error);
-        setError(error.message || 'Failed to complete authentication');
-        setLoading(false);
-      }
-    };
-
-    completePhantomAuth();
-  }, [connected, publicKey, signMessage, sessionStatus, setShowAuthModal]);
+    localStorage.removeItem('pendingPhantomAuth');
+  }, []);
 
   const resetForm = () => {
     setEmail('');
