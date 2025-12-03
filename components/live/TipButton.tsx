@@ -26,6 +26,7 @@ import {
   ExternalLink,
   CheckCircle
 } from 'lucide-react';
+import { LiveKitStreamer } from '@/lib/livekit-stream';
 
 interface TipButtonProps {
   creator: Creator;
@@ -33,9 +34,10 @@ interface TipButtonProps {
   className?: string;
   userName?: string;
   userAvatar?: string;
+  streamer?: LiveKitStreamer | null;
 }
 
-export function TipButton({ creator, onTip, className = '', userName, userAvatar }: TipButtonProps) {
+export function TipButton({ creator, onTip, className = '', userName, userAvatar, streamer }: TipButtonProps) {
   const { isConnected, balance, connect } = useWallet();
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useSolanaWallet();
@@ -46,6 +48,11 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
   const [error, setError] = useState<string | null>(null);
 
   const handleTip = async () => {
+    console.log('=== TIP BUTTON CLICKED ===');
+    console.log('TipButton: streamer available?', streamer ? 'YES' : 'NO');
+    console.log('TipButton: userName:', userName);
+    console.log('TipButton: isConnected:', isConnected);
+
     if (!isConnected || !publicKey || !sendTransaction) {
       connect();
       return;
@@ -80,6 +87,29 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
         userAvatar
       );
 
+      // Send activity event to broadcaster
+      console.log('TipButton: Attempting to send activity event, streamer:', streamer ? 'present' : 'null');
+      if (streamer) {
+        const displayName = userName || 'Someone';
+        const wireAvatar = userAvatar?.startsWith('data:')
+          ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+          : userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+
+        console.log('TipButton: Sending tip activity event for user:', displayName);
+        await streamer.sendActivityEvent({
+          id: `tip-${Date.now()}`,
+          type: 'tip',
+          user: displayName,
+          avatar: wireAvatar,
+          amount: TIP_AMOUNT_SOL,
+          message: message || undefined,
+          timestamp: Date.now(),
+        });
+        console.log('TipButton: Activity event sent successfully');
+      } else {
+        console.warn('TipButton: No streamer available to send activity event');
+      }
+
       setMessage('');
 
       // Close dialog after a delay to show success
@@ -90,6 +120,29 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
     } catch (error: any) {
       console.error('Failed to send tip:', error);
       setError(error?.message || 'Failed to send tip. Please try again.');
+
+      // Still send activity event even if transaction fails (for testing)
+      console.log('TipButton: Transaction failed, but still trying to send activity event');
+      if (streamer) {
+        const displayName = userName || 'Someone';
+        const wireAvatar = userAvatar?.startsWith('data:')
+          ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+          : userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+        try {
+          await streamer.sendActivityEvent({
+            id: `tip-${Date.now()}`,
+            type: 'tip',
+            user: displayName,
+            avatar: wireAvatar,
+            amount: TIP_AMOUNT_SOL,
+            message: message || undefined,
+            timestamp: Date.now(),
+          });
+          console.log('TipButton: Activity event sent despite transaction failure');
+        } catch (activityError) {
+          console.error('TipButton: Failed to send activity event:', activityError);
+        }
+      }
     } finally {
       setIsSending(false);
     }

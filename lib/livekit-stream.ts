@@ -31,6 +31,7 @@ export interface LiveKitActivityEvent {
   user: string;
   avatar?: string;
   amount?: number;
+  message?: string;
   timestamp: number;
 }
 

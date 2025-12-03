@@ -734,7 +734,7 @@ export default function ProfilePage() {
                         <p className="text-xs text-gray-400">
                           {event.type === 'like' && 'liked your stream'}
                           {event.type === 'follow' && 'started following you'}
-                          {event.type === 'tip' && `tipped $${event.amount}`}
+                          {event.type === 'tip' && `tipped ${event.amount} SOL`}
                           {event.type === 'join' && 'joined the stream'}
                         </p>
                       </div>

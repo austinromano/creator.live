@@ -238,6 +238,7 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
                   onTip={sendTip}
                   userName={userName || session?.user?.name || undefined}
                   userAvatar={userAvatar || undefined}
+                  streamer={streamer}
                 />
               </div>
             </div>
