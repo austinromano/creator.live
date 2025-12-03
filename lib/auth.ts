@@ -35,34 +35,57 @@ export const authOptions: NextAuthOptions = {
         username: { label: "Username", type: "text" },
       },
       async authorize(credentials) {
+        console.log('Phantom auth attempt:', {
+          hasPublicKey: !!credentials?.publicKey,
+          hasSignature: !!credentials?.signature,
+          hasMessage: !!credentials?.message,
+          publicKeyLength: credentials?.publicKey?.length,
+          signatureLength: credentials?.signature?.length,
+        });
+
         if (!credentials?.publicKey || !credentials?.signature || !credentials?.message) {
+          console.error('Phantom auth: Missing credentials');
           return null;
         }
 
         try {
           // Verify the signature
+          console.log('Decoding public key and signature...');
           const publicKeyBytes = bs58.decode(credentials.publicKey);
           const signatureBytes = bs58.decode(credentials.signature);
           const messageBytes = new TextEncoder().encode(credentials.message);
 
+          console.log('Verifying signature...', {
+            publicKeyBytesLength: publicKeyBytes.length,
+            signatureBytesLength: signatureBytes.length,
+            messageBytesLength: messageBytes.length,
+          });
+
           const isValid = await ed.verify(signatureBytes, messageBytes, publicKeyBytes);
+          console.log('Signature valid:', isValid);
 
           if (!isValid) {
+            console.error('Phantom auth: Invalid signature');
             return null;
           }
 
           // Check if user exists in database or create new one
+          console.log('Looking up user by wallet:', credentials.publicKey);
           let user = await prisma.user.findUnique({
             where: { walletAddress: credentials.publicKey },
           });
 
           if (!user) {
+            console.log('Creating new user...');
             user = await prisma.user.create({
               data: {
                 username: credentials.username || `phantom_${credentials.publicKey.slice(0, 6)}`,
                 walletAddress: credentials.publicKey,
               },
             });
+            console.log('User created:', user.id);
+          } else {
+            console.log('Existing user found:', user.id);
           }
 
           return {
