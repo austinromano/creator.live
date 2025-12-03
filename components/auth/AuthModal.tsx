@@ -1,18 +1,19 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/stores/authStore';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { signInWithPhantom } from '@/lib/phantom-auth';
 import { Loader2, Mail } from 'lucide-react';
 
 export function AuthModal() {
   const { showAuthModal, setShowAuthModal } = useAuthStore();
   const { connect, select, publicKey, connected, signMessage, wallets } = useWallet();
+  const { data: session, status: sessionStatus } = useSession();
 
   // Form states
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
@@ -22,6 +23,67 @@ export function AuthModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [phantomStep, setPhantomStep] = useState<'initial' | 'username'>('initial');
+  const pendingPhantomAuthRef = useRef(false);
+  const hasAutoSignedRef = useRef(false);
+
+  // Mobile-specific: Auto-complete Phantom auth when returning from Phantom app
+  // This handles the case where user is redirected back after approving in Phantom
+  useEffect(() => {
+    const completePhantomAuth = async () => {
+      // Only proceed if:
+      // 1. Wallet is connected
+      // 2. User is not already authenticated
+      // 3. We haven't already tried auto-signing
+      // 4. signMessage is available
+      if (!connected || !publicKey || sessionStatus === 'authenticated' || hasAutoSignedRef.current || !signMessage) {
+        return;
+      }
+
+      // Check if there's a pending phantom auth flag in localStorage (set before redirect)
+      const pendingAuth = localStorage.getItem('pendingPhantomAuth');
+      if (!pendingAuth) {
+        return;
+      }
+
+      // Clear the pending flag
+      localStorage.removeItem('pendingPhantomAuth');
+      hasAutoSignedRef.current = true;
+
+      console.log('Mobile: Detected return from Phantom, completing authentication...');
+      setLoading(true);
+      setShowAuthModal(true);
+
+      try {
+        // Create and sign authentication message
+        const { publicKey: pubKey, signature, message } = await signInWithPhantom(
+          publicKey.toBase58(),
+          signMessage
+        );
+
+        // Authenticate with NextAuth
+        const result = await signIn('phantom', {
+          publicKey: pubKey,
+          signature,
+          message,
+          username: `phantom_${pubKey.slice(0, 6)}`,
+          redirect: false,
+        });
+
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+
+        // Redirect to golive/onboarding
+        window.location.href = '/golive';
+      } catch (error: any) {
+        console.error('Auto Phantom auth failed:', error);
+        setError(error.message || 'Failed to complete authentication');
+        setLoading(false);
+      }
+    };
+
+    completePhantomAuth();
+  }, [connected, publicKey, signMessage, sessionStatus, setShowAuthModal]);
 
   const resetForm = () => {
     setEmail('');
@@ -75,6 +137,9 @@ export function AuthModal() {
           throw new Error('Phantom wallet not found. Please install Phantom browser extension.');
         }
 
+        // Set pending auth flag BEFORE connecting - this persists across mobile app switches
+        localStorage.setItem('pendingPhantomAuth', 'true');
+
         try {
           // Select triggers connection automatically in wallet adapter
           select(phantomWallet.adapter.name);
@@ -87,6 +152,8 @@ export function AuthModal() {
           }
         } catch (connectError: any) {
           console.error('Connection error:', connectError);
+          // Clear pending flag on error
+          localStorage.removeItem('pendingPhantomAuth');
           // WalletNotSelectedError is expected on first click, just retry
           if (connectError.name === 'WalletNotSelectedError') {
             throw new Error('Please click the Phantom button again to connect.');
@@ -122,10 +189,15 @@ export function AuthModal() {
         throw new Error(result.error);
       }
 
-      // Refresh the page to update session
-      window.location.reload();
+      // Clear pending auth flag on success
+      localStorage.removeItem('pendingPhantomAuth');
+
+      // Redirect to golive (which will redirect to onboarding if needed)
+      window.location.href = '/golive';
     } catch (error: any) {
       console.error('Phantom authentication failed:', error);
+      // Clear pending flag on error too
+      localStorage.removeItem('pendingPhantomAuth');
       setError(error.message || 'Failed to authenticate with Phantom wallet');
       setLoading(false);
     }
