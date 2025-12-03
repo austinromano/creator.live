@@ -109,7 +109,6 @@ export default function LivePage({ params }: LivePageProps) {
       symbol: userStream.roomName, // Use room name as symbol for LiveKit connection
       description: userStream.title,
       avatar: userStream.user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg',
-      creatorAddress: userStream.user.id,
       price: 0,
       marketCap: 0,
       volume24h: 0,
@@ -120,6 +119,7 @@ export default function LivePage({ params }: LivePageProps) {
       transactions: 0,
       isLive: true,
       viewers: 0,
+      created: new Date().toISOString(),
     };
     return <LiveStreamPage creator={userAsCreator} />;
   }
