@@ -10,19 +10,23 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { WalletConnect } from './WalletConnect';
-import { 
-  Menu, 
+import { useSession } from 'next-auth/react';
+import {
+  Menu,
   X,
-  Radio, 
-  Rocket, 
+  Radio,
+  Rocket,
   TrendingUp,
   Sparkles,
   Home,
-  Plus
+  Plus,
+  Video
 } from 'lucide-react';
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
+  const { data: session } = useSession();
+  const isAuthenticated = !!session?.user;
 
   const navItems = [
     { href: '/', label: 'Home', icon: <Home className="h-5 w-5" /> },
@@ -30,6 +34,8 @@ export function MobileNav() {
     { href: '/?filter=new', label: 'New Tokens', icon: <Rocket className="h-5 w-5 text-blue-500" /> },
     { href: '/?filter=trending', label: 'Trending', icon: <TrendingUp className="h-5 w-5 text-green-500" /> },
     { href: '/create', label: 'Create Token', icon: <Plus className="h-5 w-5 text-green-500" /> },
+    // Only show Go Live for authenticated users
+    ...(isAuthenticated ? [{ href: '/golive', label: 'Go Live', icon: <Video className="h-5 w-5 text-purple-500" /> }] : []),
   ];
 
   const handleLinkClick = () => {

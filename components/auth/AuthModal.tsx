@@ -13,7 +13,7 @@ import { Loader2, Mail } from 'lucide-react';
 export function AuthModal() {
   const { showAuthModal, setShowAuthModal } = useAuthStore();
   const { connect, select, publicKey, connected, signMessage, wallets } = useWallet();
-  const { data: session, status: sessionStatus } = useSession();
+  const { status: sessionStatus } = useSession();
 
   // Form states
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
@@ -22,8 +22,6 @@ export function AuthModal() {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [phantomStep, setPhantomStep] = useState<'initial' | 'username'>('initial');
-  const pendingPhantomAuthRef = useRef(false);
   const hasAutoSignedRef = useRef(false);
 
   // Mobile-specific: Auto-complete Phantom auth when returning from Phantom app
@@ -91,7 +89,6 @@ export function AuthModal() {
     setUsername('');
     setError('');
     setLoading(false);
-    setPhantomStep('initial');
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -161,7 +158,7 @@ export function AuthModal() {
           throw new Error('Failed to connect to Phantom. Please make sure Phantom is unlocked and try again.');
         }
 
-        setPhantomStep('username');
+        // Wait a moment for the wallet to be connected, then continue to signing
         setLoading(false);
         return;
       }
@@ -176,12 +173,12 @@ export function AuthModal() {
         signMessage
       );
 
-      // Authenticate with NextAuth
+      // Authenticate with NextAuth - no username yet, will be set in onboarding
       const result = await signIn('phantom', {
         publicKey: pubKey,
         signature,
         message,
-        username: username || `phantom_${pubKey.slice(0, 6)}`,
+        username: `phantom_${pubKey.slice(0, 6)}`, // Temporary username
         redirect: false,
       });
 
@@ -234,8 +231,7 @@ export function AuthModal() {
           </DialogDescription>
         </DialogHeader>
 
-        {phantomStep === 'initial' ? (
-          <div className="space-y-4 mt-4">
+        <div className="space-y-4 mt-4">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'login' | 'signup')} className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-gray-800">
                 <TabsTrigger value="login" className="data-[state=active]:bg-gray-700">
@@ -371,10 +367,19 @@ export function AuthModal() {
             <Button
               onClick={handlePhantomConnect}
               disabled={loading}
-              className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-semibold flex items-center justify-center space-x-3"
+              className={`w-full h-12 ${connected && publicKey ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'} text-white font-semibold flex items-center justify-center space-x-3`}
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
+              ) : connected && publicKey ? (
+                <>
+                  <svg className="w-6 h-6" viewBox="0 0 128 128" fill="none">
+                    <path d="M105.5 35.5C94.5 21.5 78.5 14 60.5 14C31.5 14 8 37.5 8 66.5C8 95.5 31.5 119 60.5 119C78.5 119 94.5 111.5 105.5 97.5" stroke="white" strokeWidth="8" strokeLinecap="round"/>
+                    <circle cx="60.5" cy="66.5" r="20" fill="white"/>
+                    <path d="M105.5 50.5L120 66.5L105.5 82.5" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Sign & Continue</span>
+                </>
               ) : (
                 <>
                   <svg className="w-6 h-6" viewBox="0 0 128 128" fill="none">
@@ -386,6 +391,13 @@ export function AuthModal() {
                 </>
               )}
             </Button>
+
+            {/* Show connected wallet address when connected */}
+            {connected && publicKey && (
+              <p className="text-xs text-green-400 text-center">
+                Wallet connected: {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
+              </p>
+            )}
 
             {/* Google Option */}
             <Button
@@ -406,57 +418,6 @@ export function AuthModal() {
               By continuing, you agree to our Terms of Service and Privacy Policy
             </p>
           </div>
-        ) : (
-          // Phantom username step
-          <div className="space-y-4 mt-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Choose a username (optional)
-              </label>
-              <Input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                className="bg-gray-800 border-gray-700 text-white"
-                autoFocus
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Leave blank to use a random username
-              </p>
-            </div>
-
-            {error && (
-              <div className="text-red-400 text-sm bg-red-900/20 p-3 rounded-md">
-                {error}
-              </div>
-            )}
-
-            <Button
-              onClick={handlePhantomConnect}
-              disabled={loading}
-              className="w-full bg-purple-600 hover:bg-purple-700"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Authenticating...
-                </>
-              ) : (
-                'Sign Message & Continue'
-              )}
-            </Button>
-
-            <Button
-              onClick={() => setPhantomStep('initial')}
-              variant="ghost"
-              className="w-full text-gray-400"
-              disabled={loading}
-            >
-              Back
-            </Button>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
