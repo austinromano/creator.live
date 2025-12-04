@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { SolanaWalletProvider } from "@/components/providers/WalletProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { AudioUnlockProvider } from "@/components/providers/AudioUnlockProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,11 +43,13 @@ export default function RootLayout({
       >
         <SessionProvider>
           <SolanaWalletProvider>
-            <Header />
-            <main className="min-h-screen bg-black">
-              {children}
-            </main>
-            <AuthModal />
+            <AudioUnlockProvider>
+              <Header />
+              <main className="min-h-screen bg-black">
+                {children}
+              </main>
+              <AuthModal />
+            </AudioUnlockProvider>
           </SolanaWalletProvider>
         </SessionProvider>
       </body>
