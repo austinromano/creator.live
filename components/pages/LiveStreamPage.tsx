@@ -191,13 +191,13 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
   const isPositive = creator.priceChange24h > 0;
 
   return (
-    <div className="min-h-screen bg-[#0e0e10]">
+    <div className="h-[100dvh] bg-[#0e0e10] overflow-hidden fixed inset-0">
       {/* Main Layout - Responsive: stacked on mobile, side-by-side on desktop */}
-      <div className="flex flex-col lg:flex-row lg:h-screen overflow-hidden">
+      <div className="flex flex-col lg:flex-row h-full overflow-hidden">
         {/* Video & Stream Info - Shows first on mobile */}
-        <div className="flex-1 order-1 lg:order-2 flex flex-col lg:h-screen overflow-y-auto">
-          {/* Video Player - aspect ratio with max height to leave room for profile */}
-          <div className="bg-black w-full aspect-video flex-shrink-0 lg:max-h-[calc(100vh-180px)]">
+        <div className="flex-1 order-1 lg:order-2 flex flex-col overflow-hidden">
+          {/* Video Player - Fixed height on mobile to prevent keyboard resize */}
+          <div className="bg-black w-full h-[50dvh] lg:h-auto lg:aspect-video flex-shrink-0 lg:max-h-[calc(100vh-180px)]">
             <StreamPlayer
               creator={creator}
               isLive={isLive}
@@ -208,7 +208,7 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
           </div>
 
           {/* Stream Info Below Video */}
-          <div className="bg-[#18181b] p-4 flex-shrink-0 flex-1">
+          <div className="bg-[#18181b] p-4 flex-shrink-0 hidden lg:block">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center space-x-3">
                 <Avatar className="h-12 w-12">
@@ -262,7 +262,7 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
         </div>
 
         {/* Live Chat - Shows below video on mobile, left side on desktop */}
-        <div className="w-full lg:w-[340px] bg-[#18181b] lg:border-r border-t lg:border-t-0 border-gray-800 flex flex-col h-[400px] lg:h-screen order-2 lg:order-1">
+        <div className="w-full lg:w-[340px] bg-[#18181b] lg:border-r border-t lg:border-t-0 border-gray-800 flex flex-col flex-1 lg:flex-none lg:h-full order-2 lg:order-1 min-h-0">
           {/* Chat Header */}
           <div className="px-4 py-2 bg-[#18181b] border-b border-gray-800">
             <h3 className="text-gray-400 font-medium text-xs uppercase tracking-wide">Live Chat</h3>
