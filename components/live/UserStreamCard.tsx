@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
 import { Eye } from 'lucide-react';
-import { isAudioUnlocked } from '@/lib/audio-unlock';
+import { isAudioUnlocked, onAudioUnlock } from '@/lib/audio-unlock';
 
 interface UserStream {
   id: string;
@@ -31,9 +31,23 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const hasTriedPlay = useRef(false);
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
+
+  // Try to play video - called on connection and on user interaction
+  const tryPlay = () => {
+    if (!videoRef.current) return;
+
+    videoRef.current.muted = true;
+    videoRef.current.play()
+      .then(() => {
+        setIsConnected(true);
+        hasTriedPlay.current = true;
+      })
+      .catch(() => {});
+  };
 
   // Auto-connect to live stream immediately on mount
   useEffect(() => {
@@ -42,6 +56,7 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         streamerRef.current.close();
         streamerRef.current = null;
         setIsConnected(false);
+        hasTriedPlay.current = false;
       }
       return;
     }
@@ -59,12 +74,7 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         await streamerRef.current.startViewingWithElement(
           videoRef.current!,
           () => {
-            setIsConnected(true);
-            // Force play again after connection to ensure it starts
-            if (videoRef.current) {
-              videoRef.current.muted = true;
-              videoRef.current.play().catch(() => {});
-            }
+            tryPlay();
           },
           undefined,
           { muteAudio: true } // Don't attach audio on homepage previews
@@ -84,21 +94,51 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
     };
   }, [stream.isLive, stream.roomName]);
 
-  // Retry play when audio becomes unlocked (iOS Safari)
+  // Listen for ANY user interaction on the page to trigger play (iOS Safari)
   useEffect(() => {
-    if (!videoRef.current || isConnected) return;
+    if (isConnected) return;
 
-    const checkAndPlay = () => {
-      if (isAudioUnlocked() && videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.muted = true;
-        videoRef.current.play()
-          .then(() => setIsConnected(true))
-          .catch(() => {});
+    const handleInteraction = () => {
+      if (videoRef.current?.srcObject && !isConnected) {
+        tryPlay();
       }
     };
 
-    // Check periodically until audio is unlocked and video plays
-    const interval = setInterval(checkAndPlay, 500);
+    // Listen on document for any interaction
+    const events = ['touchstart', 'touchend', 'click', 'scroll'];
+    events.forEach(event => {
+      document.addEventListener(event, handleInteraction, { passive: true, capture: true });
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, handleInteraction, true);
+      });
+    };
+  }, [isConnected]);
+
+  // Register callback for when audio unlocks (user interacts)
+  useEffect(() => {
+    if (isConnected) return;
+
+    // When audio unlocks, try to play all pending videos
+    onAudioUnlock(() => {
+      if (videoRef.current?.srcObject) {
+        tryPlay();
+      }
+    });
+  }, [isConnected]);
+
+  // Also poll to catch when srcObject becomes available
+  useEffect(() => {
+    if (isConnected) return;
+
+    const interval = setInterval(() => {
+      if (videoRef.current?.srcObject && isAudioUnlocked()) {
+        tryPlay();
+      }
+    }, 300);
+
     return () => clearInterval(interval);
   }, [isConnected]);
 
