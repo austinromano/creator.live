@@ -195,9 +195,9 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
       {/* Main Layout - Responsive: stacked on mobile, side-by-side on desktop */}
       <div className="flex flex-col lg:flex-row h-full overflow-hidden">
         {/* Video & Stream Info - Shows first on mobile */}
-        <div className="flex-1 order-1 lg:order-2 flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 lg:flex-1 order-1 lg:order-2 flex flex-col">
           {/* Video Player - Fixed height on mobile to prevent keyboard resize */}
-          <div className="bg-black w-full h-[50dvh] lg:h-auto lg:aspect-video flex-shrink-0 lg:max-h-[calc(100vh-180px)]">
+          <div className="bg-black w-full h-[45dvh] lg:h-auto lg:aspect-video flex-shrink-0 lg:max-h-[calc(100vh-180px)]">
             <StreamPlayer
               creator={creator}
               isLive={isLive}
@@ -207,8 +207,8 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
             />
           </div>
 
-          {/* Stream Info Below Video */}
-          <div className="bg-[#18181b] p-4 flex-shrink-0 hidden lg:block">
+          {/* Stream Info Below Video - Shows on both mobile and desktop */}
+          <div className="bg-[#18181b] p-3 lg:p-4 flex-shrink-0">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center space-x-3">
                 <Avatar className="h-12 w-12">
