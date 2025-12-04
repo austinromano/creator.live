@@ -85,7 +85,6 @@ export function Homepage() {
 
         {/* Results Header */}
         <div className="flex items-center justify-between mb-6">
-          <div className="bg-yellow-500 text-black text-center py-2 font-bold mb-4">⚠️ TEST: This is the DEV BRANCH - If you see this on creator-fun.vercel.app, something is wrong!</div>
           <h2 className="text-2xl font-bold text-white flex items-center space-x-2">
             <Sparkles className="h-6 w-6 text-purple-500" />
             <span>
