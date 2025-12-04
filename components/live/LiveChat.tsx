@@ -28,6 +28,18 @@ interface LiveChatProps {
   onReceiveMessage?: (message: ChatMessage) => void;
 }
 
+// Generate or retrieve a persistent guest ID for anonymous users
+function getGuestId(): string {
+  if (typeof window === 'undefined') return 'guest';
+
+  let guestId = sessionStorage.getItem('guestId');
+  if (!guestId) {
+    guestId = `Guest_${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    sessionStorage.setItem('guestId', guestId);
+  }
+  return guestId;
+}
+
 export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '', streamer, onReceiveMessage }: LiveChatProps) {
   const { isConnected, formatAddress, address } = useWallet();
   const { data: session } = useSession();
@@ -36,7 +48,14 @@ export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const avatarSeed = useRef(`${address || 'anon'}-${Date.now()}`);
+  const guestId = useRef<string>('');
+
+  // Initialize guest ID on mount
+  useEffect(() => {
+    guestId.current = getGuestId();
+  }, []);
+
+  const avatarSeed = address || guestId.current || 'anon';
 
   const emojis = ['😀', '😂', '❤️', '🚀', '🔥', '💎', '👏', '🌙', '⭐', '💯', '🎉', '🎊'];
 
@@ -86,9 +105,9 @@ export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '
   const handleSendMessage = async () => {
     if (!messageText.trim()) return;
 
-    // Use database username/avatar if available, otherwise fallback to wallet address/generated avatar
-    const user = userName || (isConnected ? formatAddress() : 'Anonymous');
-    const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed.current}`;
+    // Use database username/avatar if available, otherwise fallback to wallet address or guest ID
+    const user = userName || (isConnected ? formatAddress() : guestId.current || 'Guest');
+    const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
     const messageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // For LiveKit data channel, we need to avoid sending large base64 avatars
@@ -168,14 +187,13 @@ export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={isConnected ? "Send a message" : "Connect wallet to chat"}
-            disabled={!isConnected}
+            placeholder="Send a message"
             className="bg-[#0e0e10] border-gray-700 text-white text-base h-9 rounded-none"
             maxLength={500}
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!isConnected || !messageText.trim()}
+            disabled={!messageText.trim()}
             size="sm"
             className="bg-gray-700 hover:bg-gray-600 text-white h-9 px-3 rounded-none"
           >
