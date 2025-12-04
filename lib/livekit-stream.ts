@@ -226,12 +226,14 @@ export class LiveKitStreamer {
   async startViewingWithElement(
     videoElement: HTMLVideoElement,
     onConnected: () => void,
-    onNeedsInteraction?: () => void
+    onNeedsInteraction?: () => void,
+    options?: { muteAudio?: boolean }
   ): Promise<void> {
     console.log(`[${this.streamId}] Starting LiveKit viewing with element...`);
     this.onVideoElement = videoElement;
     this.onConnectedCallback = onConnected;
     this.onNeedsInteractionCallback = onNeedsInteraction;
+    const muteAudio = options?.muteAudio ?? false;
 
     const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
     if (!livekitUrl) {
@@ -276,8 +278,8 @@ export class LiveKitStreamer {
               this.onNeedsInteractionCallback();
             }
           });
-      } else if (track.kind === 'audio' && this.onVideoElement) {
-        // Attach audio track too
+      } else if (track.kind === 'audio' && this.onVideoElement && !muteAudio) {
+        // Attach audio track (skip if muteAudio option is set)
         track.attach(this.onVideoElement);
         console.log(`[${this.streamId}] Attached audio track to element`);
       }
@@ -322,7 +324,7 @@ export class LiveKitStreamer {
                 }
               })
               .catch(err => console.error('Failed to play:', err));
-          } else if (track.kind === 'audio' && this.onVideoElement) {
+          } else if (track.kind === 'audio' && this.onVideoElement && !muteAudio) {
             track.attach(this.onVideoElement);
             console.log(`[${this.streamId}] Attached existing audio track`);
           }

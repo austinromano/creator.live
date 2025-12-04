@@ -64,6 +64,11 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
       return;
     }
 
+    // Prevent duplicate connections
+    if (streamerRef.current) {
+      return;
+    }
+
     // Connect to LiveKit stream
     const connectToStream = async () => {
       streamerRef.current = new LiveKitStreamer(stream.roomName);
@@ -78,7 +83,9 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
               videoRef.current.muted = true;
               videoRef.current.play().catch(() => {});
             }
-          }
+          },
+          undefined,
+          { muteAudio: true } // Don't attach audio on homepage previews
         );
       } catch (error) {
         console.error('Failed to connect to stream preview:', error);

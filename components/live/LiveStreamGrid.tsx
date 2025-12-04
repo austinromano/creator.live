@@ -40,8 +40,8 @@ export function LiveStreamGrid() {
 
     fetchLiveStreams();
 
-    // Refresh every 10 seconds
-    const interval = setInterval(fetchLiveStreams, 10000);
+    // Refresh every 5 seconds for quicker stream discovery
+    const interval = setInterval(fetchLiveStreams, 5000);
     return () => clearInterval(interval);
   }, []);
 
