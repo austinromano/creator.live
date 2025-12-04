@@ -31,9 +31,26 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [needsInteraction, setNeedsInteraction] = useState(false);
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
+
+  // Handle tap to play on mobile
+  const handleTapToPlay = async (e: React.MouseEvent) => {
+    if (!needsInteraction || !videoRef.current) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      await videoRef.current.play();
+      setNeedsInteraction(false);
+      setIsConnected(true);
+    } catch (err) {
+      console.error('Failed to play after interaction:', err);
+    }
+  };
 
   // Auto-connect to live stream immediately on mount
   useEffect(() => {
@@ -43,6 +60,7 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         streamerRef.current = null;
         setIsConnected(false);
         setIsConnecting(false);
+        setNeedsInteraction(false);
       }
       return;
     }
@@ -57,6 +75,12 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
           videoRef.current!,
           () => {
             setIsConnected(true);
+            setIsConnecting(false);
+            setNeedsInteraction(false);
+          },
+          () => {
+            // Mobile autoplay blocked - need user interaction
+            setNeedsInteraction(true);
             setIsConnecting(false);
           }
         );
@@ -80,11 +104,12 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
     <Link href={`/live/${stream.roomName}`}>
       <div
         className="group relative bg-gray-900 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all"
+        onClick={needsInteraction ? handleTapToPlay : undefined}
       >
         {/* Video Preview */}
         <div className="relative aspect-[4/3] bg-black">
-          {/* Fallback shown while connecting */}
-          {!isConnected && (
+          {/* Fallback shown while connecting or needs interaction */}
+          {(!isConnected || needsInteraction) && (
             <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/80 to-pink-900/80">
               <Avatar className="h-20 w-20 ring-4 ring-white/20">
                 <AvatarImage src={stream.user.avatar || undefined} alt={username} />
@@ -98,7 +123,7 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
           {/* Live video element - always visible */}
           <video
             ref={videoRef}
-            className={`w-full h-full object-cover ${isConnected ? 'opacity-100' : 'opacity-0'}`}
+            className={`w-full h-full object-cover ${isConnected && !needsInteraction ? 'opacity-100' : 'opacity-0'}`}
             autoPlay
             muted
             playsInline
@@ -108,6 +133,17 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
           {isConnecting && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50">
               <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            </div>
+          )}
+
+          {/* Tap to play overlay for mobile */}
+          {needsInteraction && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
+                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
             </div>
           )}
 
