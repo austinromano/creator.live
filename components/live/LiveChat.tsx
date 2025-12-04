@@ -170,7 +170,7 @@ export function LiveChat({ messages, onSendMessage, creatorSymbol, className = '
             onKeyPress={handleKeyPress}
             placeholder={isConnected ? "Send a message" : "Connect wallet to chat"}
             disabled={!isConnected}
-            className="bg-[#0e0e10] border-gray-700 text-white text-sm h-9 rounded-none"
+            className="bg-[#0e0e10] border-gray-700 text-white text-base h-9 rounded-none"
             maxLength={500}
           />
           <Button
