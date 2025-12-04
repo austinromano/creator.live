@@ -4,9 +4,18 @@
 
 let audioUnlocked = false;
 let audioContext: AudioContext | null = null;
+let unlockCallbacks: (() => void)[] = [];
 
 export function isAudioUnlocked(): boolean {
   return audioUnlocked;
+}
+
+export function onAudioUnlock(callback: () => void): void {
+  if (audioUnlocked) {
+    callback();
+  } else {
+    unlockCallbacks.push(callback);
+  }
 }
 
 export function unlockAudio(): Promise<void> {
@@ -18,6 +27,8 @@ export function unlockAudio(): Promise<void> {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
         audioUnlocked = true;
+        unlockCallbacks.forEach(cb => cb());
+        unlockCallbacks = [];
         resolve();
         return;
       }
@@ -35,15 +46,21 @@ export function unlockAudio(): Promise<void> {
       if (audioContext.state === 'suspended') {
         audioContext.resume().then(() => {
           audioUnlocked = true;
+          unlockCallbacks.forEach(cb => cb());
+          unlockCallbacks = [];
           resolve();
         });
       } else {
         audioUnlocked = true;
+        unlockCallbacks.forEach(cb => cb());
+        unlockCallbacks = [];
         resolve();
       }
     } catch (e) {
       // If anything fails, just mark as unlocked and continue
       audioUnlocked = true;
+      unlockCallbacks.forEach(cb => cb());
+      unlockCallbacks = [];
       resolve();
     }
   });
@@ -53,7 +70,21 @@ export function unlockAudio(): Promise<void> {
 export function setupAutoUnlock(): void {
   if (typeof window === 'undefined') return;
 
-  const events = ['touchstart', 'touchend', 'click', 'keydown', 'scroll'];
+  // Check if already unlocked (non-iOS or user already interacted)
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass) {
+      const testCtx = new AudioContextClass();
+      if (testCtx.state === 'running') {
+        audioUnlocked = true;
+        testCtx.close();
+        return;
+      }
+      testCtx.close();
+    }
+  } catch (e) {}
+
+  const events = ['touchstart', 'touchend', 'click', 'keydown', 'scroll', 'mousemove'];
 
   const unlock = () => {
     unlockAudio().then(() => {
