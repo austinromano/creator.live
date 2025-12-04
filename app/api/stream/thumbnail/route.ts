@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// In-memory store for thumbnails (in production, use a database or blob storage)
-const thumbnails: Map<string, string> = new Map();
+import prisma from '@/lib/prisma';
 
 // POST - Upload thumbnail (base64 image data)
 export async function POST(request: NextRequest) {
@@ -15,10 +13,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store the base64 thumbnail
-    thumbnails.set(symbol.toUpperCase(), thumbnail);
-    console.log(`Thumbnail updated for ${symbol}`);
+    // Find the stream by streamKey (roomName)
+    const stream = await prisma.stream.findUnique({
+      where: { streamKey: symbol }
+    });
 
+    if (!stream) {
+      return NextResponse.json(
+        { error: 'Stream not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update the thumbnail
+    await prisma.stream.update({
+      where: { streamKey: symbol },
+      data: { thumbnail }
+    });
+
+    console.log(`Thumbnail updated for ${symbol}`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error saving thumbnail:', error);
@@ -42,16 +55,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const thumbnail = thumbnails.get(symbol.toUpperCase());
+    // Find the stream by streamKey
+    const stream = await prisma.stream.findUnique({
+      where: { streamKey: symbol },
+      select: { thumbnail: true }
+    });
 
-    if (!thumbnail) {
+    if (!stream || !stream.thumbnail) {
       return NextResponse.json(
         { error: 'Thumbnail not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ thumbnail });
+    return NextResponse.json({ thumbnail: stream.thumbnail });
   } catch (error) {
     console.error('Error retrieving thumbnail:', error);
     return NextResponse.json(
@@ -73,9 +90,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    thumbnails.delete(symbol.toUpperCase());
-    console.log(`Thumbnail deleted for ${symbol}`);
+    // Clear the thumbnail
+    await prisma.stream.update({
+      where: { streamKey: symbol },
+      data: { thumbnail: null }
+    });
 
+    console.log(`Thumbnail deleted for ${symbol}`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting thumbnail:', error);

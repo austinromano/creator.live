@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       isLive: stream.isLive,
       viewerCount: stream.viewerCount,
       startedAt: stream.startedAt,
+      thumbnail: stream.thumbnail, // Include thumbnail in response
       user: {
         id: stream.user.id,
         username: stream.user.username,

@@ -13,6 +13,7 @@ interface UserStream {
   isLive: boolean;
   viewerCount: number;
   startedAt: string | null;
+  thumbnail?: string | null;
   user: {
     id: string;
     username: string | null;
@@ -30,18 +31,24 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<string | null>(stream.thumbnail || null);
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
 
-  // Fetch thumbnail for the stream
+  // Update thumbnail when stream data changes or poll for updates
   useEffect(() => {
     if (!stream.isLive) {
       setThumbnail(null);
       return;
     }
 
+    // Use thumbnail from stream data
+    if (stream.thumbnail) {
+      setThumbnail(stream.thumbnail);
+    }
+
+    // Also poll for updates every 15 seconds
     const fetchThumbnail = async () => {
       try {
         const response = await fetch(`/api/stream/thumbnail?symbol=${stream.roomName}`);
@@ -52,18 +59,13 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch thumbnail:', error);
+        // Silently fail - thumbnail is optional
       }
     };
 
-    // Fetch immediately
-    fetchThumbnail();
-
-    // Refresh thumbnail every 15 seconds
     const interval = setInterval(fetchThumbnail, 15000);
-
     return () => clearInterval(interval);
-  }, [stream.isLive, stream.roomName]);
+  }, [stream.isLive, stream.roomName, stream.thumbnail]);
 
   useEffect(() => {
     // Only connect when hovering
