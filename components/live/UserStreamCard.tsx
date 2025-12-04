@@ -32,7 +32,6 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   const username = stream.user.username || 'Anonymous';
@@ -61,14 +60,12 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         streamerRef.current.close();
         streamerRef.current = null;
         setIsConnected(false);
-        setIsConnecting(false);
       }
       return;
     }
 
     // Connect to LiveKit stream
     const connectToStream = async () => {
-      setIsConnecting(true);
       streamerRef.current = new LiveKitStreamer(stream.roomName);
 
       try {
@@ -76,7 +73,6 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
           videoRef.current!,
           () => {
             setIsConnected(true);
-            setIsConnecting(false);
             // Force play again after connection to ensure it starts
             if (videoRef.current) {
               videoRef.current.muted = true;
@@ -86,7 +82,6 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         );
       } catch (error) {
         console.error('Failed to connect to stream preview:', error);
-        setIsConnecting(false);
       }
     };
 
@@ -148,12 +143,6 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
             webkit-playsinline="true"
           />
 
-          {/* Loading spinner while connecting */}
-          {isConnecting && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            </div>
-          )}
 
           {/* Live badge */}
           <div className="absolute top-2 left-2">
