@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 // POST - Upload thumbnail (base64 image data)
 export async function POST(request: NextRequest) {
