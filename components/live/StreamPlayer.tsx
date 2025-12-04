@@ -204,14 +204,13 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
             <div className="relative w-full h-full">
               <video
                 ref={videoRef}
-                className="w-full h-full object-cover bg-black"
+                className="w-full h-full object-contain bg-black"
                 autoPlay
                 muted={isMuted}
                 playsInline
                 webkit-playsinline="true"
                 x-webkit-airplay="allow"
                 controls={false}
-                style={{ objectFit: 'cover' }}
               />
               {/* Tap to play overlay for iOS */}
               {needsUserInteraction && hasStream && (
