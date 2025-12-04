@@ -88,7 +88,7 @@ export function Homepage() {
           <h2 className="text-2xl font-bold text-white flex items-center space-x-2">
             <Sparkles className="h-6 w-6 text-purple-500" />
             <span>
-              {filter === 'all' ? 'All Creators' : 
+              {filter === 'all' ? 'All Creators (DEV TEST)' : 
                filter === 'live' ? 'Live Streaming' :
                filter === 'new' ? 'Just Launched' :
                filter === 'trending' ? 'Trending' :
