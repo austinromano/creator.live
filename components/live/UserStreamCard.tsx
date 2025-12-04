@@ -28,34 +28,16 @@ interface UserStreamCardProps {
 }
 
 export function UserStreamCard({ stream }: UserStreamCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
 
-  // Use Intersection Observer to detect when card is visible
+  // Auto-connect to live stream immediately on mount
   useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsVisible(entry.isIntersecting);
-      },
-      { threshold: 0.1 }
-    );
-
-    observer.observe(card);
-    return () => observer.disconnect();
-  }, []);
-
-  // Auto-connect to live stream when visible
-  useEffect(() => {
-    if (!stream.isLive || !videoRef.current || !isVisible) {
+    if (!stream.isLive || !videoRef.current) {
       if (streamerRef.current) {
         streamerRef.current.close();
         streamerRef.current = null;
@@ -100,7 +82,7 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         streamerRef.current = null;
       }
     };
-  }, [stream.isLive, stream.roomName, isVisible]);
+  }, [stream.isLive, stream.roomName]);
 
   // Retry play when audio becomes unlocked (iOS Safari)
   useEffect(() => {
@@ -123,7 +105,6 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
   return (
     <Link href={`/live/${stream.roomName}`}>
       <div
-        ref={cardRef}
         className="group relative bg-gray-900 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all"
       >
         {/* Video Preview */}
