@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
 import { Eye } from 'lucide-react';
+import { isAudioUnlocked } from '@/lib/audio-unlock';
 
 interface UserStream {
   id: string;
@@ -98,6 +99,24 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
       }
     };
   }, [stream.isLive, stream.roomName, isVisible]);
+
+  // Retry play when audio becomes unlocked (iOS Safari)
+  useEffect(() => {
+    if (!videoRef.current || isConnected) return;
+
+    const checkAndPlay = () => {
+      if (isAudioUnlocked() && videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.muted = true;
+        videoRef.current.play()
+          .then(() => setIsConnected(true))
+          .catch(() => {});
+      }
+    };
+
+    // Check periodically until audio is unlocked and video plays
+    const interval = setInterval(checkAndPlay, 500);
+    return () => clearInterval(interval);
+  }, [isConnected]);
 
   return (
     <Link href={`/live/${stream.roomName}`}>
