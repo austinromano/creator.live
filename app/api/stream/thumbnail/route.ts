@@ -13,10 +13,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find the stream by streamKey (roomName)
-    const stream = await prisma.stream.findUnique({
-      where: { streamKey: symbol }
-    });
+    // symbol is the roomName (e.g., "user-abc123")
+    // Extract the userId from the roomName
+    let stream;
+
+    if (symbol.startsWith('user-')) {
+      const userId = symbol.replace('user-', '');
+      // Find the active stream for this user
+      stream = await prisma.stream.findFirst({
+        where: {
+          userId: userId,
+          isLive: true
+        }
+      });
+    } else {
+      // Token-based stream - try to find by streamKey
+      stream = await prisma.stream.findUnique({
+        where: { streamKey: symbol }
+      });
+    }
 
     if (!stream) {
       return NextResponse.json(
@@ -27,11 +42,11 @@ export async function POST(request: NextRequest) {
 
     // Update the thumbnail
     await prisma.stream.update({
-      where: { streamKey: symbol },
+      where: { id: stream.id },
       data: { thumbnail }
     });
 
-    console.log(`Thumbnail updated for ${symbol}`);
+    console.log(`Thumbnail updated for ${symbol} (stream ${stream.id})`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error saving thumbnail:', error);
@@ -55,11 +70,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find the stream by streamKey
-    const stream = await prisma.stream.findUnique({
-      where: { streamKey: symbol },
-      select: { thumbnail: true }
-    });
+    // symbol is the roomName (e.g., "user-abc123")
+    let stream;
+
+    if (symbol.startsWith('user-')) {
+      const userId = symbol.replace('user-', '');
+      // Find the active stream for this user
+      stream = await prisma.stream.findFirst({
+        where: {
+          userId: userId,
+          isLive: true
+        },
+        select: { thumbnail: true }
+      });
+    } else {
+      // Token-based stream
+      stream = await prisma.stream.findUnique({
+        where: { streamKey: symbol },
+        select: { thumbnail: true }
+      });
+    }
 
     if (!stream || !stream.thumbnail) {
       return NextResponse.json(
@@ -90,11 +120,21 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Clear the thumbnail
-    await prisma.stream.update({
-      where: { streamKey: symbol },
-      data: { thumbnail: null }
-    });
+    // symbol is the roomName (e.g., "user-abc123")
+    if (symbol.startsWith('user-')) {
+      const userId = symbol.replace('user-', '');
+      // Clear thumbnail for this user's streams
+      await prisma.stream.updateMany({
+        where: { userId: userId },
+        data: { thumbnail: null }
+      });
+    } else {
+      // Token-based stream
+      await prisma.stream.update({
+        where: { streamKey: symbol },
+        data: { thumbnail: null }
+      });
+    }
 
     console.log(`Thumbnail deleted for ${symbol}`);
     return NextResponse.json({ success: true });
