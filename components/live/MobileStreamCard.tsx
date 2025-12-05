@@ -38,9 +38,9 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
 
   // Aspect ratios based on size
   const aspectClasses = {
-    featured: 'aspect-[1/2]',   // Extra tall - spans 2 cards height
-    large: 'aspect-[3/4]',      // Tall - for first left card
-    medium: 'aspect-[4/5]',     // Medium height
+    featured: 'aspect-[2/3]',   // Tall - for right column first card
+    large: 'aspect-[3/4]',      // Medium-tall
+    medium: 'aspect-[5/6]',     // Medium height - most cards
     small: 'aspect-[1/1]',      // Square/shorter
   };
 
