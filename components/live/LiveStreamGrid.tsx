@@ -16,7 +16,6 @@ interface LiveStream {
     username: string | null;
     avatar: string | null;
     walletAddress: string | null;
-    isAI?: boolean;
   };
 }
 
@@ -54,12 +53,9 @@ export function LiveStreamGrid() {
     return null;
   }
 
-  // Split streams for mobile layout - AI streamers vs regular
-  const aiStreams = liveStreams.filter(s => s.user.isAI);
-  const regularStreams = liveStreams.filter(s => !s.user.isAI);
-  // If no AI flag, just split evenly for the two-column layout
-  const leftColumn = regularStreams.length > 0 ? regularStreams : liveStreams.slice(0, Math.ceil(liveStreams.length / 2));
-  const rightColumn = aiStreams.length > 0 ? aiStreams : liveStreams.slice(Math.ceil(liveStreams.length / 2));
+  // Split streams evenly between two columns for mobile layout
+  const leftColumn = liveStreams.filter((_, i) => i % 2 === 0);
+  const rightColumn = liveStreams.filter((_, i) => i % 2 === 1);
 
   return (
     <>
@@ -84,7 +80,7 @@ export function LiveStreamGrid() {
 
         {/* Two Column Layout */}
         <div className="flex gap-3 px-3 py-4">
-          {/* Left Column - Trending Live */}
+          {/* Left Column */}
           <div className="flex-1 space-y-3">
             <h3 className="text-lg font-bold text-white">Trending Live</h3>
             {leftColumn.map((stream, index) => (
@@ -96,16 +92,14 @@ export function LiveStreamGrid() {
             ))}
           </div>
 
-          {/* Right Column - AI Streamer Spotlight */}
+          {/* Right Column */}
           <div className="flex-1 space-y-3">
-            <h3 className="text-lg font-bold text-purple-400">AI Streamer Spotlight</h3>
+            <h3 className="text-lg font-bold text-white invisible">Trending</h3>
             {rightColumn.map((stream, index) => (
               <MobileStreamCard
                 key={stream.id}
                 stream={stream}
-                variant="ai"
                 size={index === 0 ? 'featured' : index === 2 ? 'large' : 'medium'}
-                showSpotlightText={index === 0}
               />
             ))}
           </div>

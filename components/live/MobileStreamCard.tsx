@@ -24,12 +24,10 @@ interface UserStream {
 
 interface MobileStreamCardProps {
   stream: UserStream;
-  variant?: 'default' | 'ai';
   size?: 'featured' | 'large' | 'medium' | 'small';
-  showSpotlightText?: boolean;
 }
 
-export function MobileStreamCard({ stream, variant = 'default', size = 'medium', showSpotlightText = false }: MobileStreamCardProps) {
+export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -40,21 +38,11 @@ export function MobileStreamCard({ stream, variant = 'default', size = 'medium',
 
   // Aspect ratios based on size
   const aspectClasses = {
-    featured: 'aspect-[1/2]',   // Extra tall - spans 2 cards height (AI Spotlight first)
+    featured: 'aspect-[1/2]',   // Extra tall - spans 2 cards height
     large: 'aspect-[3/4]',      // Tall - for first left card
     medium: 'aspect-[4/5]',     // Medium height
     small: 'aspect-[1/1]',      // Square/shorter
   };
-
-  // Gradient backgrounds for AI spotlight cards
-  const aiGradients = [
-    'from-purple-600 via-pink-500 to-purple-700',
-    'from-indigo-600 via-purple-500 to-pink-600',
-    'from-fuchsia-600 via-purple-600 to-indigo-600',
-  ];
-  const gradientClass = variant === 'ai'
-    ? aiGradients[Math.abs(stream.id.charCodeAt(0)) % aiGradients.length]
-    : '';
 
   // Try to play video
   const tryPlay = () => {
@@ -140,35 +128,16 @@ export function MobileStreamCard({ stream, variant = 'default', size = 'medium',
     <Link href={`/live/${stream.roomName}`}>
       <div className="group relative rounded-xl overflow-hidden cursor-pointer">
         {/* Card with variable aspect ratio based on size */}
-        <div className={`relative ${aspectClasses[size]} ${variant === 'ai' ? `bg-gradient-to-br ${gradientClass}` : 'bg-gray-900'}`}>
+        <div className={`relative ${aspectClasses[size]} bg-gray-900`}>
           {/* Video or Avatar fallback */}
           {!isConnected && (
-            <div className={`absolute inset-0 flex flex-col items-center justify-center ${
-              variant === 'ai'
-                ? ''
-                : 'bg-gradient-to-br from-gray-800 to-gray-900'
-            }`}>
-              {/* Decorative sparkles for AI cards */}
-              {variant === 'ai' && (
-                <>
-                  <div className="absolute top-4 right-4 text-white/40 text-lg">✦</div>
-                  <div className="absolute top-8 left-6 text-white/30 text-sm">✦</div>
-                  <div className="absolute bottom-12 right-8 text-white/30 text-sm">✦</div>
-                </>
-              )}
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
               <Avatar className="h-20 w-20 ring-4 ring-white/20">
                 <AvatarImage src={stream.user.avatar || undefined} alt={username} />
                 <AvatarFallback className="bg-purple-600 text-2xl">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              {/* Spotlight text for featured AI cards */}
-              {showSpotlightText && (
-                <div className="mt-4 text-center">
-                  <h3 className="text-white text-xl font-bold">AI Streamer</h3>
-                  <h3 className="text-white text-xl font-bold">Spotlight</h3>
-                </div>
-              )}
             </div>
           )}
 
