@@ -2,12 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useTokenStore } from '@/stores/tokenStore';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Creator } from '@/lib/types';
 import {
   Wallet,
   Trophy,
@@ -27,7 +24,6 @@ import {
   Heart,
   UserPlus,
 } from 'lucide-react';
-import { LiveStreamBroadcast } from '@/components/streaming/LiveStreamBroadcast';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
 
@@ -44,7 +40,6 @@ interface UserData {
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { getTokenByCreator, getTokenBySymbol, updateToken, fetchTokens, initialized } = useTokenStore();
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -57,8 +52,6 @@ export default function ProfilePage() {
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const [streamTitle, setStreamTitle] = useState('');
-  const [userToken, setUserToken] = useState<Creator | null>(null);
-  const [tokenLoading, setTokenLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [userLoading, setUserLoading] = useState(true);
   const thumbnailIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -68,6 +61,8 @@ export default function ProfilePage() {
   const [activityEvents, setActivityEvents] = useState<LiveKitActivityEvent[]>([]);
   const activityContainerRef = React.useRef<HTMLDivElement>(null);
   const [chatInput, setChatInput] = useState('');
+  const [viewerCount, setViewerCount] = useState(0);
+  const [followerCount, setFollowerCount] = useState(0);
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -109,54 +104,12 @@ export default function ProfilePage() {
     checkOnboarding();
   }, [status, router]);
 
-  // Fetch tokens from database on mount and find user's token (optional - for token-based features)
-  useEffect(() => {
-    const loadUserToken = async () => {
-      if (!userId) {
-        setTokenLoading(false);
-        return;
-      }
-
-      // Fetch tokens from database if not already initialized
-      if (!initialized) {
-        await fetchTokens();
-      }
-
-      // Look for user's token (optional - streaming works without it now)
-      const token = getTokenByCreator(userId);
-      if (token) {
-        console.log('Found user token:', token.symbol);
-        setUserToken(token);
-      }
-      // No longer falling back to GOTH - token is optional
-      setTokenLoading(false);
-    };
-
-    loadUserToken();
-  }, [userId, initialized, fetchTokens, getTokenByCreator]);
-
-  // Update userToken when tokens change (in case fetchTokens completes)
-  useEffect(() => {
-    if (initialized && userId) {
-      const token = getTokenByCreator(userId);
-      if (token) {
-        console.log('Updated user token from store:', token.symbol);
-        setUserToken(token);
-      }
-    }
-  }, [initialized, userId, getTokenByCreator]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/');
     }
   }, [status, router]);
-
-  useEffect(() => {
-    if (userToken) {
-      setIsLive(userToken.isLive || false);
-    }
-  }, [userToken]);
 
   // Session timer - must be before any returns
   useEffect(() => {
@@ -232,7 +185,7 @@ export default function ProfilePage() {
     }
   }, [activityEvents]);
 
-  if (status === 'loading' || tokenLoading || userLoading) {
+  if (status === 'loading' || userLoading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center py-20">
@@ -377,8 +330,8 @@ export default function ProfilePage() {
       console.log('Stream created:', data);
       setCurrentStreamId(data.stream.id);
 
-      // Use user-based room name from API, or fallback to token symbol if available
-      const roomName = data.roomName || (userToken ? userToken.symbol : `user-${userId}`);
+      // Use user-based room name from API
+      const roomName = data.roomName || `user-${userId}`;
       setCurrentRoomName(roomName);
       currentRoomNameRef.current = roomName; // Also set ref for use in intervals
       console.log('Using room name:', roomName);
@@ -390,11 +343,6 @@ export default function ProfilePage() {
       console.log('Camera started, stream ref:', streamRef.current);
       console.log('Setting isLive to true...');
       setIsLive(true);
-
-      // Update token if user has one (optional)
-      if (userToken) {
-        updateToken(userToken.symbol, { isLive: true });
-      }
 
       // Start LiveKit broadcast with room name
       if (streamRef.current) {
@@ -483,7 +431,7 @@ export default function ProfilePage() {
     console.log('=== STOPPING STREAM ===');
     console.log('currentStreamId:', currentStreamId);
     console.log('currentRoomName:', currentRoomName);
-    console.log('userToken:', userToken?.symbol);
+    console.log('currentRoomName:', currentRoomName);
 
     // Save roomName before clearing state
     const roomNameToDelete = currentRoomNameRef.current;
@@ -498,11 +446,6 @@ export default function ProfilePage() {
       currentRoomNameRef.current = null;
       setChatMessages([]); // Clear chat messages
       setActivityEvents([]); // Clear activity events
-
-      // Update token if user has one (optional)
-      if (userToken) {
-        updateToken(userToken.symbol, { isLive: false });
-      }
 
       // Stop LiveKit broadcast
       if (livekitStreamerRef.current) {
@@ -746,7 +689,7 @@ export default function ProfilePage() {
               {/* Left: Creator info + Live badge */}
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8 border-2 border-red-500">
-                  <AvatarImage src={user.image || userData?.avatar || userToken?.avatar} />
+                  <AvatarImage src={user.image || userData?.avatar} />
                   <AvatarFallback className="bg-purple-600 text-xs">{initials}</AvatarFallback>
                 </Avatar>
                 <div>
@@ -762,11 +705,11 @@ export default function ProfilePage() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 bg-black/50 rounded-full px-2 py-1">
                   <Eye className="h-3 w-3 text-white" />
-                  <span className="text-xs font-medium">{userToken?.viewers || 0}</span>
+                  <span className="text-xs font-medium">{viewerCount}</span>
                 </div>
                 <div className="flex items-center gap-1 bg-black/50 rounded-full px-2 py-1">
                   <Users className="h-3 w-3 text-white" />
-                  <span className="text-xs font-medium">{userToken?.holders || 0}</span>
+                  <span className="text-xs font-medium">{followerCount}</span>
                 </div>
               </div>
             </div>
@@ -912,26 +855,17 @@ export default function ProfilePage() {
               <div className="flex items-center space-x-2">
                 <Eye className="h-5 w-5 text-yellow-400" />
                 <div>
-                  <div className="text-xl font-bold">{userToken?.viewers || 0}</div>
+                  <div className="text-xl font-bold">{viewerCount}</div>
                   <div className="text-xs text-gray-400">Viewers</div>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
                 <Users className="h-5 w-5 text-purple-400" />
                 <div>
-                  <div className="text-xl font-bold">{userToken?.holders || 0}</div>
+                  <div className="text-xl font-bold">{followerCount}</div>
                   <div className="text-xs text-gray-400">Followers</div>
                 </div>
               </div>
-              {userToken && (
-                <div className="flex items-center space-x-2">
-                  <DollarSign className="h-5 w-5 text-green-400" />
-                  <div>
-                    <div className="text-xl font-bold">${userToken.marketCap.toLocaleString()}</div>
-                    <div className="text-xs text-gray-400">Market Cap</div>
-                  </div>
-                </div>
-              )}
               <div className="flex items-center space-x-2">
                 <Wallet className="h-5 w-5 text-orange-400" />
                 <div>
@@ -1068,7 +1002,7 @@ export default function ProfilePage() {
               {/* Stream Info */}
               <div className="flex items-center space-x-3">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={user.image || userData?.avatar || userToken?.avatar} />
+                  <AvatarImage src={user.image || userData?.avatar} />
                   <AvatarFallback className="bg-purple-600">{initials}</AvatarFallback>
                 </Avatar>
                 <div>
