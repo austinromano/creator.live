@@ -98,13 +98,13 @@ export function LiveStreamGrid() {
 
           {/* Right Column - AI Streamer Spotlight */}
           <div className="flex-1 space-y-3">
-            <h3 className="text-lg font-bold text-purple-400 invisible">Spotlight</h3>
+            <h3 className="text-lg font-bold text-purple-400">AI Streamer Spotlight</h3>
             {rightColumn.map((stream, index) => (
               <MobileStreamCard
                 key={stream.id}
                 stream={stream}
                 variant="ai"
-                size={index === 0 ? 'large' : 'medium'}
+                size={index === 0 ? 'featured' : index === 2 ? 'large' : 'medium'}
                 showSpotlightText={index === 0}
               />
             ))}

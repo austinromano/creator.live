@@ -25,7 +25,7 @@ interface UserStream {
 interface MobileStreamCardProps {
   stream: UserStream;
   variant?: 'default' | 'ai';
-  size?: 'large' | 'medium' | 'small';
+  size?: 'featured' | 'large' | 'medium' | 'small';
   showSpotlightText?: boolean;
 }
 
@@ -40,9 +40,10 @@ export function MobileStreamCard({ stream, variant = 'default', size = 'medium',
 
   // Aspect ratios based on size
   const aspectClasses = {
-    large: 'aspect-[3/5]',   // Tallest - for featured/first cards
-    medium: 'aspect-[3/4]',  // Medium height
-    small: 'aspect-[4/3]',   // Shorter
+    featured: 'aspect-[1/2]',   // Extra tall - spans 2 cards height (AI Spotlight first)
+    large: 'aspect-[3/4]',      // Tall - for first left card
+    medium: 'aspect-[4/5]',     // Medium height
+    small: 'aspect-[1/1]',      // Square/shorter
   };
 
   // Gradient backgrounds for AI spotlight cards
