@@ -62,12 +62,12 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Category Tabs */}
-        <div className="flex justify-between items-center px-4 py-4 border-b border-gray-800">
+        <div className="flex justify-between items-center px-4 py-4">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap text-base font-medium pb-1 transition-colors ${
+              className={`whitespace-nowrap text-lg font-medium pb-1 transition-colors ${
                 activeTab === tab
                   ? 'text-purple-500 border-b-2 border-purple-500'
                   : 'text-gray-300 hover:text-white'
@@ -79,9 +79,9 @@ export function LiveStreamGrid() {
         </div>
 
         {/* Two Column Layout */}
-        <div className="flex gap-3 px-3 pt-4">
+        <div className="flex gap-2 px-3 pt-4">
           {/* Left Column */}
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex-1 flex flex-col gap-2">
             {leftColumn.map((stream, index) => (
               <MobileStreamCard
                 key={stream.id}
@@ -92,7 +92,7 @@ export function LiveStreamGrid() {
           </div>
 
           {/* Right Column */}
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex-1 flex flex-col gap-2">
             {rightColumn.map((stream, index) => (
               <MobileStreamCard
                 key={stream.id}

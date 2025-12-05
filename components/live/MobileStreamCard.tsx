@@ -126,12 +126,12 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
 
   return (
     <Link href={`/live/${stream.roomName}`}>
-      <div className="group relative rounded-xl overflow-hidden cursor-pointer">
+      <div className="group relative rounded-2xl overflow-hidden cursor-pointer">
         {/* Card with variable aspect ratio based on size */}
-        <div className={`relative ${aspectClasses[size]} bg-gray-900`}>
+        <div className={`relative ${aspectClasses[size]} bg-gradient-to-br from-[#4a2d5c] via-[#3d2850] to-[#2a1f3d]`}>
           {/* Video or Avatar fallback */}
           {!isConnected && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
               <Avatar className="h-20 w-20 ring-4 ring-white/20">
                 <AvatarImage src={stream.user.avatar || undefined} alt={username} />
                 <AvatarFallback className="bg-purple-600 text-2xl">
@@ -152,15 +152,15 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
           />
 
           {/* LIVE badge */}
-          <div className="absolute top-2 left-2">
-            <Badge className="bg-red-600 text-white text-xs font-bold px-2 py-0.5">
+          <div className="absolute top-3 left-3">
+            <Badge className="bg-[#e94560] text-white text-xs font-bold px-3 py-1 rounded-full">
               LIVE
             </Badge>
           </div>
 
           {/* Viewer count */}
-          <div className="absolute top-2 right-2">
-            <Badge variant="secondary" className="bg-black/60 text-white text-xs">
+          <div className="absolute top-3 right-3">
+            <Badge variant="secondary" className="bg-[#2a2438]/90 text-white text-xs rounded-full px-2.5 py-1">
               <Eye className="h-3 w-3 mr-1" />
               {stream.viewerCount || 0}
             </Badge>
@@ -168,9 +168,9 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
         </div>
 
         {/* Creator info below card */}
-        <div className="bg-gray-900 p-2.5">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 ring-2 ring-purple-500">
+        <div className="bg-[#1e2535] p-3">
+          <div className="flex items-center gap-2.5">
+            <Avatar className="h-9 w-9 ring-2 ring-purple-500">
               <AvatarImage src={stream.user.avatar || undefined} alt={username} />
               <AvatarFallback className="bg-purple-600 text-xs">
                 {initials}
