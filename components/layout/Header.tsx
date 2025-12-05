@@ -16,7 +16,7 @@ export function Header() {
   const isAuthenticated = !!session?.user;
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-[#08050d]/95 backdrop-blur supports-[backdrop-filter]:bg-[#08050d]/60">
+    <header className="sticky top-0 z-50 w-full bg-[#0f0a15]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0f0a15]/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Left Side - Login/User + Mobile Nav */}
@@ -36,10 +36,6 @@ export function Header() {
               <UserMenu />
             )}
 
-            {/* Mobile Navigation */}
-            <div className="md:hidden">
-              <MobileNav />
-            </div>
           </div>
 
           {/* Center - Logo */}

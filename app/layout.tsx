@@ -39,13 +39,13 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#08050d] text-white min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0f0a15] text-white min-h-screen`}
       >
         <SessionProvider>
           <SolanaWalletProvider>
             <AudioUnlockProvider>
               <Header />
-              <main className="min-h-screen bg-[#08050d]">
+              <main className="min-h-screen bg-[#0f0a15]">
                 {children}
               </main>
               <AuthModal />
