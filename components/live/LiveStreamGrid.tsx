@@ -62,12 +62,12 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Category Tabs */}
-        <div className="flex overflow-x-auto scrollbar-hide gap-5 px-4 py-3 border-b border-gray-800 pr-8">
+        <div className="flex justify-between px-3 py-3 border-b border-gray-800">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap text-base font-medium pb-2 transition-colors ${
+              className={`whitespace-nowrap text-sm font-medium pb-2 transition-colors ${
                 activeTab === tab
                   ? 'text-purple-500 border-b-2 border-purple-500'
                   : 'text-gray-400 hover:text-white'
