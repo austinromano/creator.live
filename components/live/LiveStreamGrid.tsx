@@ -62,7 +62,7 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Category Tabs */}
-        <div className="flex overflow-x-auto scrollbar-hide gap-5 px-4 py-3 border-b border-gray-800">
+        <div className="flex overflow-x-auto scrollbar-hide gap-5 px-4 py-3 border-b border-gray-800 pr-8">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
