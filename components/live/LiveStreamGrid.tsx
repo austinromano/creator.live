@@ -79,9 +79,9 @@ export function LiveStreamGrid() {
         </div>
 
         {/* Two Column Layout */}
-        <div className="flex gap-3 px-3 py-4">
+        <div className="flex gap-4 px-3 py-4">
           {/* Left Column */}
-          <div className="flex-1 space-y-3">
+          <div className="flex-1 space-y-4">
             <h3 className="text-lg font-bold text-white">Trending Live</h3>
             {leftColumn.map((stream, index) => (
               <MobileStreamCard
@@ -93,7 +93,7 @@ export function LiveStreamGrid() {
           </div>
 
           {/* Right Column */}
-          <div className="flex-1 space-y-3">
+          <div className="flex-1 space-y-4">
             <h3 className="text-lg font-bold text-white invisible">Trending</h3>
             {rightColumn.map((stream, index) => (
               <MobileStreamCard
