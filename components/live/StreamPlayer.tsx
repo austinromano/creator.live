@@ -204,7 +204,7 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
             <div className="relative w-full h-full">
               <video
                 ref={videoRef}
-                className="w-full h-full object-cover lg:object-contain bg-black"
+                className="w-full h-full object-contain bg-black"
                 autoPlay
                 muted={isMuted}
                 playsInline
