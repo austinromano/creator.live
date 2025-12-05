@@ -212,34 +212,6 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
                 x-webkit-airplay="allow"
                 controls={false}
               />
-              {/* Tap to play overlay for iOS */}
-              {needsUserInteraction && hasStream && (
-                <div
-                  className="absolute inset-0 w-full h-full flex items-center justify-center bg-black/70 cursor-pointer z-30"
-                  onClick={() => {
-                    if (videoRef.current) {
-                      // Must start muted on iOS, user can unmute after
-                      videoRef.current.muted = true;
-                      videoRef.current.play()
-                        .then(() => {
-                          console.log('Video playing after user tap');
-                          setNeedsUserInteraction(false);
-                          setIsPlaying(true);
-                          setIsMuted(true);
-                        })
-                        .catch(err => console.error('Still cannot play:', err));
-                    }
-                  }}
-                >
-                  <div className="text-center space-y-4">
-                    <div className="w-20 h-20 mx-auto bg-white/20 rounded-full flex items-center justify-center">
-                      <Play className="h-10 w-10 text-white ml-1" />
-                    </div>
-                    <p className="text-white text-lg font-semibold">Tap to Play</p>
-                    <p className="text-gray-300 text-sm">Stream is ready</p>
-                  </div>
-                </div>
-              )}
               {!hasStream && (
                 <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
                   <div className="text-center space-y-4">
