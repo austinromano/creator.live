@@ -196,8 +196,8 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
       <div className="flex flex-col lg:flex-row h-full overflow-hidden">
         {/* Video & Stream Info - Shows first on mobile */}
         <div className="flex-shrink-0 lg:flex-1 order-1 lg:order-2 flex flex-col">
-          {/* Video Player - Fixed height on mobile to prevent keyboard resize */}
-          <div className="bg-black w-full h-[45dvh] lg:h-auto lg:aspect-video flex-shrink-0 lg:max-h-[calc(100vh-180px)]">
+          {/* Video Player - Fills available space on mobile */}
+          <div className="bg-black w-full aspect-[9/16] max-h-[50vh] lg:aspect-video lg:max-h-[calc(100vh-180px)]">
             <StreamPlayer
               creator={creator}
               isLive={isLive}
