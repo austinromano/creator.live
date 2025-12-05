@@ -19,7 +19,7 @@ interface LiveStream {
   };
 }
 
-const MOBILE_TABS = ['For You', 'Popular', 'New', 'IRL', 'Gaming', 'Music'];
+const MOBILE_TABS = ['For You', 'Popular', 'New', 'IRL', 'Gaming', 'Music', 'Fitness'];
 
 // Unified streaming model: all streams come from the database
 // Each user = 1 stream room (user-{userId})
@@ -62,12 +62,12 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Category Tabs */}
-        <div className="flex overflow-x-auto scrollbar-hide gap-4 px-4 py-3 border-b border-gray-800">
+        <div className="flex overflow-x-auto scrollbar-hide gap-5 px-4 py-3 border-b border-gray-800">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap text-sm font-medium pb-2 transition-colors ${
+              className={`whitespace-nowrap text-base font-medium pb-2 transition-colors ${
                 activeTab === tab
                   ? 'text-purple-500 border-b-2 border-purple-500'
                   : 'text-gray-400 hover:text-white'
