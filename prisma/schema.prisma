@@ -87,38 +87,3 @@ model Follower {
   @@unique([followerId, followingId])
   @@map("followers")
 }
-
-// Tokens table - creator tokens with bonding curves
-model Token {
-  id              String   @id @default(cuid())
-  name            String
-  symbol          String   @unique
-  description     String?
-  avatar          String?
-  creatorAddress  String   @map("creator_address")
-
-  // Market data
-  price           Float    @default(0.00001)
-  marketCap       Float    @default(0)
-  volume24h       Float    @default(0) @map("volume_24h")
-  priceChange24h  Float    @default(0) @map("price_change_24h")
-  bondingCurve    Float    @default(0) @map("bonding_curve")
-  liquidity       Float    @default(0)
-  holders         Int      @default(1)
-  transactions    Int      @default(0)
-
-  // Status
-  isLive          Boolean  @default(false) @map("is_live")
-  viewers         Int      @default(0)
-
-  // Social links
-  twitter         String?
-  website         String?
-  telegram        String?
-
-  // Timestamps
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  @@map("tokens")
-}
