@@ -53,7 +53,7 @@ export function LiveStreamGrid() {
     <section className="mb-8">
       <div className="flex items-center space-x-3 mb-4">
         <Radio className="h-6 w-6 text-red-500 animate-pulse" />
-        <h2 className="text-2xl font-bold text-white">Live Now</h2>
+        <h2 className="text-2xl font-bold text-white">Trending Now</h2>
         <span className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded">
           {liveStreams.length}
         </span>
