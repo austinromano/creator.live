@@ -1,5 +1,5 @@
 export const PLATFORM_CONFIG = {
-  name: 'creator.fun',
+  name: 'OSHO',
   tagline: 'Where creators launch tokens and fans get rich',
   creationFee: 0.001, // SOL (much lower for testing)
   platformFee: 0.01, // 1%

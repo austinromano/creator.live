@@ -171,7 +171,7 @@ export default function OnboardingPage() {
           <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
             <Sparkles className="h-8 w-8 text-white" />
           </div>
-          <CardTitle className="text-2xl text-white">Welcome to creator.fun!</CardTitle>
+          <CardTitle className="text-2xl text-white">Welcome to OSHO!</CardTitle>
           <CardDescription className="text-gray-400">
             Let's set up your profile so you can start streaming
           </CardDescription>

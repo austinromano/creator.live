@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "creator.fun - Where creators launch tokens and fans get rich",
+  title: "OSHO - Where creators launch tokens and fans get rich",
   description: "The ultimate platform for content creators to launch their own tokens with bonding curves, go live stream, and let fans trade their tokens.",
   keywords: ["creator tokens", "bonding curve", "live streaming", "crypto", "web3"],
 };

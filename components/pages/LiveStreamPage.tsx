@@ -177,7 +177,7 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
       try {
         await navigator.share({
           title: `${creator.name} is LIVE!`,
-          text: `Watch ${creator.name} live streaming on creator.fun`,
+          text: `Watch ${creator.name} live streaming on OSHO`,
           url: window.location.href,
         });
       } catch (error) {

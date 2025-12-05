@@ -46,7 +46,7 @@ export function Header() {
           <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
             <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-purple-500" />
             <span className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-              creator.fun
+              OSHO
             </span>
           </Link>
 

@@ -214,7 +214,7 @@ export function AuthModal() {
       <DialogContent className="sm:max-w-md bg-gray-900 border-gray-800">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-white">
-            Welcome to creator.fun
+            Welcome to OSHO
           </DialogTitle>
           <DialogDescription className="text-gray-400">
             Sign up or login to start creating tokens and going live
