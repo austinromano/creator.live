@@ -2,8 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Admin endpoint to clean up stale streams
-// In production, this should be protected with an admin key
+// Protected with ADMIN_API_KEY environment variable
 export async function POST(req: NextRequest) {
+  // Verify admin API key
+  const authHeader = req.headers.get('authorization');
+  const adminKey = process.env.ADMIN_API_KEY;
+
+  if (!adminKey) {
+    return NextResponse.json(
+      { error: 'Admin API key not configured' },
+      { status: 500 }
+    );
+  }
+
+  if (authHeader !== `Bearer ${adminKey}`) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
   try {
     // Clean up all active streams
     const result = await prisma.stream.updateMany({
