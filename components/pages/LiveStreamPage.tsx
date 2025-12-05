@@ -33,7 +33,7 @@ interface LiveStreamPageProps {
 export function LiveStreamPage({ creator }: LiveStreamPageProps) {
   const { messages, viewers, isLive, setIsLive, addMessage, sendTip } = useLiveStream(creator.symbol);
   const { data: session } = useSession();
-  const [likes, setLikes] = useState(1247);
+  const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [streamer, setStreamer] = useState<LiveKitStreamer | null>(null);
