@@ -97,7 +97,7 @@ export function LiveStreamGrid() {
               <MobileStreamCard
                 key={stream.id}
                 stream={stream}
-                size={index === 0 ? 'xlarge' : index === 2 ? 'xlarge' : 'medium'}
+                size={index === 0 ? 'small' : index === 2 ? 'xlarge' : 'medium'}
               />
             ))}
           </div>
