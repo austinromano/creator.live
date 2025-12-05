@@ -50,56 +50,6 @@ export function Homepage() {
       {/* Live Streams */}
       <LiveStreamGrid />
 
-      {/* Filters */}
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex flex-wrap gap-2">
-            {FILTER_OPTIONS.map((option) => (
-              <Button
-                key={option.id}
-                variant={filter === option.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter(option.value)}
-                className={
-                  filter === option.value
-                    ? "bg-purple-600 hover:bg-purple-700"
-                    : "border-gray-600 text-gray-300 hover:border-purple-500 hover:text-white"
-                }
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshTokens}
-            disabled={loading}
-            className="border-gray-600 text-gray-300 hover:border-purple-500 hover:text-white"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-
-        {/* Results Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white flex items-center space-x-2">
-            <Sparkles className="h-6 w-6 text-purple-500" />
-            <span>
-              {filter === 'all' ? 'All Creators' :
-               filter === 'live' ? 'Live Streaming' :
-               filter === 'new' ? 'Just Launched' :
-               filter === 'trending' ? 'Trending' :
-               'Near Completion'}
-            </span>
-          </h2>
-          <p className="text-gray-400">
-            {loading ? 'Loading...' : `${tokens.length} creators found`}
-          </p>
-        </div>
-      </section>
 
       {/* Token Grid */}
       <TokenGrid creators={tokens} loading={loading} />
