@@ -87,16 +87,26 @@ export function LiveStreamGrid() {
           {/* Left Column - Trending Live */}
           <div className="flex-1 space-y-3">
             <h3 className="text-lg font-bold text-white">Trending Live</h3>
-            {leftColumn.map((stream) => (
-              <MobileStreamCard key={stream.id} stream={stream} />
+            {leftColumn.map((stream, index) => (
+              <MobileStreamCard
+                key={stream.id}
+                stream={stream}
+                size={index === 0 ? 'large' : 'medium'}
+              />
             ))}
           </div>
 
           {/* Right Column - AI Streamer Spotlight */}
           <div className="flex-1 space-y-3">
-            <h3 className="text-lg font-bold text-purple-400">AI Streamer Spotlight</h3>
-            {rightColumn.map((stream) => (
-              <MobileStreamCard key={stream.id} stream={stream} variant="ai" />
+            <h3 className="text-lg font-bold text-purple-400 invisible">Spotlight</h3>
+            {rightColumn.map((stream, index) => (
+              <MobileStreamCard
+                key={stream.id}
+                stream={stream}
+                variant="ai"
+                size={index === 0 ? 'large' : 'medium'}
+                showSpotlightText={index === 0}
+              />
             ))}
           </div>
         </div>

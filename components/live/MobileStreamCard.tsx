@@ -25,9 +25,11 @@ interface UserStream {
 interface MobileStreamCardProps {
   stream: UserStream;
   variant?: 'default' | 'ai';
+  size?: 'large' | 'medium' | 'small';
+  showSpotlightText?: boolean;
 }
 
-export function MobileStreamCard({ stream, variant = 'default' }: MobileStreamCardProps) {
+export function MobileStreamCard({ stream, variant = 'default', size = 'medium', showSpotlightText = false }: MobileStreamCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -35,6 +37,13 @@ export function MobileStreamCard({ stream, variant = 'default' }: MobileStreamCa
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
+
+  // Aspect ratios based on size
+  const aspectClasses = {
+    large: 'aspect-[3/5]',   // Tallest - for featured/first cards
+    medium: 'aspect-[3/4]',  // Medium height
+    small: 'aspect-[4/3]',   // Shorter
+  };
 
   // Gradient backgrounds for AI spotlight cards
   const aiGradients = [
@@ -129,8 +138,8 @@ export function MobileStreamCard({ stream, variant = 'default' }: MobileStreamCa
   return (
     <Link href={`/live/${stream.roomName}`}>
       <div className="group relative rounded-xl overflow-hidden cursor-pointer">
-        {/* Card with taller aspect ratio */}
-        <div className={`relative aspect-[3/4] ${variant === 'ai' ? `bg-gradient-to-br ${gradientClass}` : 'bg-gray-900'}`}>
+        {/* Card with variable aspect ratio based on size */}
+        <div className={`relative ${aspectClasses[size]} ${variant === 'ai' ? `bg-gradient-to-br ${gradientClass}` : 'bg-gray-900'}`}>
           {/* Video or Avatar fallback */}
           {!isConnected && (
             <div className={`absolute inset-0 flex flex-col items-center justify-center ${
@@ -152,6 +161,13 @@ export function MobileStreamCard({ stream, variant = 'default' }: MobileStreamCa
                   {initials}
                 </AvatarFallback>
               </Avatar>
+              {/* Spotlight text for featured AI cards */}
+              {showSpotlightText && (
+                <div className="mt-4 text-center">
+                  <h3 className="text-white text-xl font-bold">AI Streamer</h3>
+                  <h3 className="text-white text-xl font-bold">Spotlight</h3>
+                </div>
+              )}
             </div>
           )}
 
