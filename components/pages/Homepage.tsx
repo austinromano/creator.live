@@ -4,9 +4,16 @@ import { LiveStreamGrid } from '@/components/live/LiveStreamGrid';
 
 export function Homepage() {
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Live Streams */}
-      <LiveStreamGrid />
-    </div>
+    <>
+      {/* Mobile - no container padding */}
+      <div className="lg:hidden">
+        <LiveStreamGrid />
+      </div>
+
+      {/* Desktop - with container */}
+      <div className="hidden lg:block container mx-auto px-4 py-8">
+        <LiveStreamGrid />
+      </div>
+    </>
   );
 }
