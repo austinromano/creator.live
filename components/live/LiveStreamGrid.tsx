@@ -19,7 +19,7 @@ interface LiveStream {
   };
 }
 
-const MOBILE_TABS = ['For You', 'Popular', 'New', 'IRL', 'Gaming', 'Music', 'Fitness'];
+const MOBILE_TABS = ['For You', 'Popular', 'New', 'IRL', 'Gaming', 'Music'];
 
 // Unified streaming model: all streams come from the database
 // Each user = 1 stream room (user-{userId})
