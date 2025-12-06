@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/Header";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { SolanaWalletProvider } from "@/components/providers/WalletProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AuthModal } from "@/components/auth/AuthModal";
@@ -45,9 +46,10 @@ export default function RootLayout({
           <SolanaWalletProvider>
             <AudioUnlockProvider>
               <Header />
-              <main className="min-h-screen bg-[#0f0a15]">
+              <main className="min-h-screen bg-[#0f0a15] pb-20 lg:pb-0">
                 {children}
               </main>
+              <MobileBottomNav />
               <AuthModal />
             </AudioUnlockProvider>
           </SolanaWalletProvider>
