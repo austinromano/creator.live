@@ -152,8 +152,8 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
           />
 
           {/* LIVE badge */}
-          <div className="absolute top-3 left-3">
-            <Badge className="bg-[#e94560] text-white text-xs font-bold px-3 py-1 rounded-full">
+          <div className="absolute top-2 left-2">
+            <Badge className="bg-[#cc0000] text-white text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wider">
               LIVE
             </Badge>
           </div>

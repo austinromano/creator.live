@@ -62,7 +62,7 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Category Tabs */}
-        <div className="flex justify-between items-center px-4 py-4">
+        <div className="flex justify-between items-center px-4 py-2">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
@@ -86,7 +86,7 @@ export function LiveStreamGrid() {
               <MobileStreamCard
                 key={stream.id}
                 stream={stream}
-                size={index === 0 ? 'medium' : index === 1 ? 'small' : 'large'}
+                size={index === 0 ? 'medium' : index === 1 ? 'small' : index === 2 ? 'medium' : 'large'}
               />
             ))}
           </div>
