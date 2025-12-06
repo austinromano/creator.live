@@ -24,7 +24,7 @@ interface UserStream {
 
 interface MobileStreamCardProps {
   stream: UserStream;
-  size?: 'xlarge' | 'large' | 'medium' | 'small';
+  size?: 'xlarge' | 'large' | 'medium' | 'small' | 'xsmall';
 }
 
 export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardProps) {
@@ -41,7 +41,8 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
     xlarge: 'aspect-[1/2]',     // Extra tall - spans ~2 cards (right column first)
     large: 'aspect-[3/4]',      // Tall
     medium: 'aspect-[4/5]',     // Medium height - most cards
-    small: 'aspect-[1/1]',      // Square/shorter
+    small: 'aspect-[1/1]',      // Square
+    xsmall: 'aspect-[6/5]',     // Slightly shorter than square
   };
 
   // Try to play video
