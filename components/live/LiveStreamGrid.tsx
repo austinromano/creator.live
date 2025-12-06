@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { UserStreamCard } from './UserStreamCard';
 import { MobileStreamCard } from './MobileStreamCard';
 import { Radio } from 'lucide-react';
@@ -27,6 +27,40 @@ const MOBILE_TABS = ['For You', 'Popular', 'New', 'IRL', 'Gaming', 'Music'];
 export function LiveStreamGrid() {
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [activeTab, setActiveTab] = useState('For You');
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Swipe handling
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartX.current || !touchEndX.current) return;
+
+    const diff = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(diff) > minSwipeDistance) {
+      const currentIndex = MOBILE_TABS.indexOf(activeTab);
+
+      if (diff > 0 && currentIndex < MOBILE_TABS.length - 1) {
+        // Swipe left - go to next tab
+        setActiveTab(MOBILE_TABS[currentIndex + 1]);
+      } else if (diff < 0 && currentIndex > 0) {
+        // Swipe right - go to previous tab
+        setActiveTab(MOBILE_TABS[currentIndex - 1]);
+      }
+    }
+
+    touchStartX.current = null;
+    touchEndX.current = null;
+  }, [activeTab]);
 
   // Fetch all live streams from database
   useEffect(() => {
@@ -79,7 +113,13 @@ export function LiveStreamGrid() {
         </div>
 
         {/* Two Column Layout */}
-        <div className="flex gap-2 px-3 pt-3">
+        <div
+          ref={contentRef}
+          className="flex gap-2 px-3 pt-3"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           {/* Left Column */}
           <div className="flex-1 flex flex-col gap-2">
             {leftColumn.map((stream, index) => (
