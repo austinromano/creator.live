@@ -38,11 +38,11 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
 
   // Aspect ratios based on size
   const aspectClasses = {
-    xlarge: 'aspect-[1/2]',     // Extra tall - spans ~2 cards (right column first)
-    large: 'aspect-[3/4]',      // Tall
-    medium: 'aspect-[4/5]',     // Medium height - most cards
-    small: 'aspect-[1/1]',      // Square
-    xsmall: 'aspect-[6/5]',     // Slightly shorter than square
+    xlarge: 'aspect-[2/3]',     // Extra tall - spans ~2 cards (right column first)
+    large: 'aspect-[4/5]',      // Tall
+    medium: 'aspect-[5/6]',     // Medium height - most cards
+    small: 'aspect-[6/5]',      // Square-ish
+    xsmall: 'aspect-[7/6]',     // Slightly shorter than square
   };
 
   // Try to play video
