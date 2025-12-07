@@ -23,6 +23,8 @@ import {
   Square,
   Heart,
   UserPlus,
+  Monitor,
+  MonitorOff,
 } from 'lucide-react';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
@@ -47,7 +49,21 @@ export default function ProfilePage() {
   const streamRef = React.useRef<MediaStream | null>(null);
   const livekitStreamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
+  const cameraEnabledRef = React.useRef(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const screenStreamRef = React.useRef<MediaStream | null>(null);
+  const pipVideoRef = React.useRef<HTMLVideoElement>(null);
+  const compositeCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const compositeAnimationRef = React.useRef<number | null>(null);
+
+  // PiP position and size state (for 1080p canvas)
+  const [pipPosition, setPipPosition] = useState({ x: 1440, y: 30 }); // top-right default
+  const [pipSize, setPipSize] = useState({ width: 450, height: 338 });
+  const pipPositionRef = React.useRef({ x: 1440, y: 30 });
+  const pipSizeRef = React.useRef({ width: 450, height: 338 });
+  const [pipControlsVisible, setPipControlsVisible] = useState(true);
+  const pipControlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [streamReady, setStreamReady] = useState(false);
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
@@ -501,6 +517,7 @@ export default function ProfilePage() {
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setCameraEnabled(videoTrack.enabled);
+        cameraEnabledRef.current = videoTrack.enabled;
       }
     }
   };
@@ -511,6 +528,205 @@ export default function ProfilePage() {
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setMicrophoneEnabled(audioTrack.enabled);
+      }
+    }
+  };
+
+  const stopCompositeStream = () => {
+    if (compositeAnimationRef.current) {
+      clearInterval(compositeAnimationRef.current);
+      compositeAnimationRef.current = null;
+    }
+  };
+
+  const startCompositeStream = async (screenStream: MediaStream, cameraStream: MediaStream) => {
+    // Create canvas for compositing (1080p)
+    const canvas = document.createElement('canvas');
+    canvas.width = 1920;
+    canvas.height = 1080;
+    compositeCanvasRef.current = canvas;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // Create video elements to draw from
+    const screenVideo = document.createElement('video');
+    screenVideo.srcObject = screenStream;
+    screenVideo.muted = true;
+    screenVideo.playsInline = true;
+    screenVideo.autoplay = true;
+
+    // For camera, clone the track so it's independent from LiveKit publishing
+    const originalCameraTrack = cameraStream.getVideoTracks()[0];
+    console.log('Original camera track:', originalCameraTrack?.label, 'enabled:', originalCameraTrack?.enabled, 'readyState:', originalCameraTrack?.readyState);
+
+    // Clone the track to avoid conflicts
+    const clonedCameraTrack = originalCameraTrack.clone();
+    console.log('Cloned camera track:', clonedCameraTrack?.label, 'enabled:', clonedCameraTrack?.enabled, 'readyState:', clonedCameraTrack?.readyState);
+
+    const cameraVideo = document.createElement('video');
+    // Create a new stream with the cloned video track
+    const cameraOnlyStream = new MediaStream([clonedCameraTrack]);
+    cameraVideo.srcObject = cameraOnlyStream;
+    cameraVideo.muted = true;
+    cameraVideo.playsInline = true;
+    cameraVideo.autoplay = true;
+
+    // Start playing both videos (ignore AbortError - it's harmless)
+    const playVideo = async (video: HTMLVideoElement, name: string) => {
+      try {
+        await video.play();
+        console.log(`${name} video playing`);
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          console.error(`${name} video play error:`, e);
+        }
+      }
+    };
+
+    await playVideo(screenVideo, 'Screen');
+    await playVideo(cameraVideo, 'Camera');
+
+    // Wait for both videos to have frames
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    console.log('Screen video readyState:', screenVideo.readyState, 'size:', screenVideo.videoWidth, 'x', screenVideo.videoHeight);
+    console.log('Camera video readyState:', cameraVideo.readyState, 'size:', cameraVideo.videoWidth, 'x', cameraVideo.videoHeight);
+
+    // Helper to draw rounded rectangle
+    const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
+    // Use setInterval instead of requestAnimationFrame for consistent frame rate
+    // 15fps is enough for smooth video and much lighter on CPU
+    const frameInterval = setInterval(() => {
+      // Draw screen share as background (full canvas)
+      if (screenVideo.readyState >= 2) {
+        ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Only draw camera PiP if camera is enabled
+      if (cameraEnabledRef.current) {
+        // Get current PiP position and size from refs (updated by drag/resize)
+        const pipX = pipPositionRef.current.x;
+        const pipY = pipPositionRef.current.y;
+        const pipWidth = pipSizeRef.current.width;
+        const pipHeight = pipSizeRef.current.height;
+
+        // Draw rounded border for PiP
+        ctx.fillStyle = '#8b5cf6';
+        roundRect(pipX - 4, pipY - 4, pipWidth + 8, pipHeight + 8, 12);
+        ctx.fill();
+
+        // Draw camera feed with rounded corners (clip)
+        ctx.save();
+        roundRect(pipX, pipY, pipWidth, pipHeight, 8);
+        ctx.clip();
+        if (cameraVideo.readyState >= 2 && cameraVideo.videoWidth > 0) {
+          ctx.drawImage(cameraVideo, pipX, pipY, pipWidth, pipHeight);
+        }
+        ctx.restore();
+      }
+    }, 33); // ~30fps
+
+    // Store interval ID for cleanup
+    compositeAnimationRef.current = frameInterval as unknown as number;
+
+    // Get stream from canvas at 30fps
+    const compositeStream = canvas.captureStream(30);
+    return compositeStream.getVideoTracks()[0];
+  };
+
+  const toggleScreenShare = async () => {
+    if (screenSharing) {
+      // Stop screen sharing
+      stopCompositeStream();
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+      }
+
+      // Switch back to camera in preview
+      if (streamRef.current && desktopVideoRef.current) {
+        desktopVideoRef.current.srcObject = streamRef.current;
+        desktopVideoRef.current.play().catch(err => console.error('Error playing camera:', err));
+      }
+
+      // Switch back to camera in LiveKit broadcast
+      if (livekitStreamerRef.current && streamRef.current) {
+        const cameraTrack = streamRef.current.getVideoTracks()[0];
+        console.log('Switching back to camera track:', cameraTrack?.label, 'enabled:', cameraTrack?.enabled);
+        if (cameraTrack) {
+          // Clone the track to ensure it's fresh
+          const freshCameraTrack = cameraTrack.clone();
+          await livekitStreamerRef.current.replaceVideoTrack(freshCameraTrack);
+        }
+      }
+      setScreenSharing(false);
+    } else {
+      // Start screen sharing
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+        screenStreamRef.current = screenStream;
+
+        // Create composite stream with screen + camera PiP
+        if (streamRef.current) {
+          const compositeTrack = await startCompositeStream(screenStream, streamRef.current);
+
+          if (compositeTrack && livekitStreamerRef.current) {
+            // Send composite to LiveKit broadcast
+            await livekitStreamerRef.current.replaceVideoTrack(compositeTrack);
+
+            // Show composite in preview too
+            const compositeStream = new MediaStream([compositeTrack]);
+            if (desktopVideoRef.current) {
+              desktopVideoRef.current.srcObject = compositeStream;
+            }
+          }
+        }
+
+        // Handle when user stops sharing via browser UI
+        screenStream.getVideoTracks()[0].onended = async () => {
+          stopCompositeStream();
+          if (streamRef.current && desktopVideoRef.current) {
+            desktopVideoRef.current.srcObject = streamRef.current;
+          }
+          // Switch back to camera in LiveKit broadcast
+          if (livekitStreamerRef.current && streamRef.current) {
+            const cameraTrack = streamRef.current.getVideoTracks()[0];
+            if (cameraTrack) {
+              await livekitStreamerRef.current.replaceVideoTrack(cameraTrack);
+            }
+          }
+          screenStreamRef.current = null;
+          setScreenSharing(false);
+        };
+
+        setScreenSharing(true);
+        setPipControlsVisible(true);
+        // Auto-hide controls after 3 seconds
+        pipControlsTimeoutRef.current = setTimeout(() => {
+          setPipControlsVisible(false);
+        }, 3000);
+      } catch (error) {
+        console.error('Error starting screen share:', error);
       }
     }
   };
@@ -937,8 +1153,21 @@ export default function ProfilePage() {
           {/* Center Column - Video Preview */}
           <div className="flex-1 bg-[#0e0e10] flex flex-col h-[calc(100vh-72px)]">
             {/* Video Preview */}
-            <div className="relative bg-black aspect-video overflow-hidden flex-shrink-0">
-              {/* Desktop video */}
+            <div
+              className="relative bg-black aspect-video overflow-hidden flex-shrink-0"
+              onMouseMove={() => {
+                if (screenSharing && !pipControlsVisible) {
+                  setPipControlsVisible(true);
+                  if (pipControlsTimeoutRef.current) {
+                    clearTimeout(pipControlsTimeoutRef.current);
+                  }
+                  pipControlsTimeoutRef.current = setTimeout(() => {
+                    setPipControlsVisible(false);
+                  }, 3000);
+                }
+              }}
+            >
+              {/* Desktop video - shows screen share when active, camera otherwise */}
               <video
                 ref={desktopVideoRef}
                 autoPlay
@@ -946,6 +1175,106 @@ export default function ProfilePage() {
                 muted
                 className={`w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
               />
+              {/* Draggable/Resizable PiP control overlay when screen sharing and camera on */}
+              {isLive && screenSharing && cameraEnabled && (
+                <div
+                  className={`absolute border-2 border-dashed border-purple-400 bg-transparent cursor-move transition-opacity duration-300 ${pipControlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                  style={{
+                    left: `${(pipPosition.x / 1920) * 100}%`,
+                    top: `${(pipPosition.y / 1080) * 100}%`,
+                    width: `${(pipSize.width / 1920) * 100}%`,
+                    height: `${(pipSize.height / 1080) * 100}%`,
+                  }}
+                  onMouseEnter={() => {
+                    if (pipControlsTimeoutRef.current) {
+                      clearTimeout(pipControlsTimeoutRef.current);
+                    }
+                    setPipControlsVisible(true);
+                  }}
+                  onMouseLeave={() => {
+                    pipControlsTimeoutRef.current = setTimeout(() => {
+                      setPipControlsVisible(false);
+                    }, 2000);
+                  }}
+                  onMouseDown={(e) => {
+                    if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
+                    e.preventDefault();
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startPosX = pipPosition.x;
+                    const startPosY = pipPosition.y;
+                    const container = e.currentTarget.parentElement;
+                    const containerRect = container?.getBoundingClientRect();
+
+                    const onMouseMove = (moveEvent: MouseEvent) => {
+                      if (!containerRect) return;
+                      const deltaX = moveEvent.clientX - startX;
+                      const deltaY = moveEvent.clientY - startY;
+                      const scaleX = 1920 / containerRect.width;
+                      const scaleY = 1080 / containerRect.height;
+
+                      const newX = Math.max(0, Math.min(1920 - pipSize.width, startPosX + deltaX * scaleX));
+                      const newY = Math.max(0, Math.min(1080 - pipSize.height, startPosY + deltaY * scaleY));
+
+                      setPipPosition({ x: newX, y: newY });
+                      pipPositionRef.current = { x: newX, y: newY };
+                    };
+
+                    const onMouseUp = () => {
+                      document.removeEventListener('mousemove', onMouseMove);
+                      document.removeEventListener('mouseup', onMouseUp);
+                    };
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                  }}
+                >
+                  {/* Drag hint */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/70 text-xs font-medium pointer-events-none bg-black/50 px-2 py-1 rounded">
+                    Drag to move
+                  </div>
+                  {/* Resize handle - bottom right corner */}
+                  <div
+                    className="resize-handle absolute -bottom-1 -right-1 w-6 h-6 bg-purple-500 cursor-se-resize rounded-sm flex items-center justify-center"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const startX = e.clientX;
+                      const startY = e.clientY;
+                      const startWidth = pipSize.width;
+                      const startHeight = pipSize.height;
+                      const container = e.currentTarget.parentElement?.parentElement;
+                      const containerRect = container?.getBoundingClientRect();
+
+                      const onMouseMove = (moveEvent: MouseEvent) => {
+                        if (!containerRect) return;
+                        const deltaX = moveEvent.clientX - startX;
+                        const scaleX = 1920 / containerRect.width;
+
+                        // Maintain 4:3 aspect ratio
+                        const newWidth = Math.max(240, Math.min(960, startWidth + deltaX * scaleX));
+                        const newHeight = newWidth * 0.75; // 4:3 aspect ratio
+
+                        setPipSize({ width: newWidth, height: newHeight });
+                        pipSizeRef.current = { width: newWidth, height: newHeight };
+                      };
+
+                      const onMouseUp = () => {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                      };
+
+                      document.addEventListener('mousemove', onMouseMove);
+                      document.addEventListener('mouseup', onMouseUp);
+                    }}
+                  >
+                    {/* Resize icon */}
+                    <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="M21 21L12 12M21 21H15M21 21V15" />
+                    </svg>
+                  </div>
+                </div>
+              )}
               {!isLive && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
@@ -985,6 +1314,16 @@ export default function ProfilePage() {
                   >
                     {microphoneEnabled ? <Mic className="h-4 w-4 mr-1" /> : <MicOff className="h-4 w-4 mr-1" />}
                     {microphoneEnabled ? 'Mic On' : 'Mic Off'}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleScreenShare}
+                    className={`${screenSharing ? 'text-purple-400 border-purple-400' : 'text-gray-400 border-gray-400'}`}
+                  >
+                    {screenSharing ? <Monitor className="h-4 w-4 mr-1" /> : <MonitorOff className="h-4 w-4 mr-1" />}
+                    {screenSharing ? 'Sharing' : 'Share Screen'}
                   </Button>
 
                   <Button

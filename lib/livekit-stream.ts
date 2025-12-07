@@ -413,6 +413,36 @@ export class LiveKitStreamer {
     }
   }
 
+  // Replace the video track (for screen sharing)
+  async replaceVideoTrack(newVideoTrack: MediaStreamTrack): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot replace video track: not connected to room');
+      return;
+    }
+
+    // Find the current video track publication
+    const videoPublication = Array.from(this.room.localParticipant.trackPublications.values())
+      .find(pub => pub.track?.kind === 'video');
+
+    if (videoPublication && videoPublication.track) {
+      // Unpublish the old track
+      await this.room.localParticipant.unpublishTrack(videoPublication.track);
+      console.log(`[${this.streamId}] Unpublished old video track`);
+    }
+
+    // Publish the new track with high quality settings
+    const localVideoTrack = new LocalVideoTrack(newVideoTrack);
+    await this.room.localParticipant.publishTrack(localVideoTrack, {
+      name: 'camera',
+      simulcast: true,
+      videoEncoding: {
+        maxBitrate: 3_000_000, // 3 Mbps for 1080p
+        maxFramerate: 30,
+      },
+    });
+    console.log(`[${this.streamId}] Published new video track (high quality)`);
+  }
+
   stopBroadcast(): void {
     if (this.room) {
       this.room.localParticipant.trackPublications.forEach((publication) => {
