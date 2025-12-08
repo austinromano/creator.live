@@ -105,11 +105,12 @@ function AddPostButton({ onClick }: { onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="relative aspect-[3/4] w-full rounded-lg overflow-hidden bg-[#1a1a1d] group focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center justify-center"
+      className="relative aspect-[3/4] w-full rounded-lg overflow-hidden bg-[#1a1a1d] group focus:outline-none focus:ring-2 focus:ring-purple-500 flex flex-col items-center justify-center gap-2"
     >
       <div className="w-14 h-14 rounded-full bg-gray-800/80 flex items-center justify-center">
         <Camera className="h-6 w-6 text-gray-400" />
       </div>
+      <span className="text-gray-400 text-xs">Click to add photo</span>
       {/* Hover effect */}
       <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-200" />
     </button>

@@ -5,12 +5,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { Loader2, Camera } from 'lucide-react';
 import {
-  ProfileHeader,
   ProfileAvatar,
   ProfileActions,
   ProfileStats,
   SubscriptionCard,
   ContentGrid,
+  ContentTabs,
   ContentGridItem,
   CreatePostModal,
   PostDetailModal,
@@ -48,6 +48,7 @@ export default function ProfilePage() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [selectedPost, setSelectedPost] = useState<ContentGridItem | null>(null);
   const [currentUserUsername, setCurrentUserUsername] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'posts' | 'replays' | 'liked'>('posts');
 
   // Fetch current user's username from database
   useEffect(() => {
@@ -148,9 +149,14 @@ export default function ProfilePage() {
     fetchProfile();
   };
 
+  const handleEditProfile = () => {
+    // TODO: Implement edit profile modal
+    console.log('Edit profile clicked');
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0e0e10] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
           <p className="text-gray-400">Loading profile...</p>
@@ -161,7 +167,7 @@ export default function ProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-[#0e0e10] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-400 text-xl">{error || 'Profile not found'}</p>
         </div>
@@ -170,16 +176,16 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0e0e10]">
-      {/* Header */}
-      <ProfileHeader />
-
-      {/* Avatar section */}
+    <div className="min-h-screen bg-[#0f0a15]">
+      {/* Avatar section with cover image */}
       <ProfileAvatar
         avatarUrl={profile.avatar}
         name={profile.displayName || profile.username}
         username={profile.username}
-        greeting={profile.greeting}
+        bio={profile.bio || undefined}
+        isVerified={profile.isVerified}
+        isOwnProfile={isOwnProfile}
+        onEditProfile={handleEditProfile}
       />
 
       {/* Action buttons - hide on own profile */}
@@ -192,7 +198,12 @@ export default function ProfilePage() {
       )}
 
       {/* Stats */}
-      <ProfileStats isSubscriber={false} />
+      <ProfileStats
+        posts={profile.stats.posts}
+        followers={profile.stats.followers}
+        following={profile.stats.following}
+        isSubscriber={false}
+      />
 
       {/* Subscription card - hide on own profile */}
       {!isOwnProfile && (
@@ -202,31 +213,64 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* Content grid */}
-      <ContentGrid
-        items={posts}
-        onItemClick={handleContentClick}
-        isOwnProfile={isOwnProfile}
-        onAddClick={() => setShowCreatePost(true)}
+      {/* Content Tabs */}
+      <ContentTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        postCount={profile.stats.posts}
+        replayCount={0}
+        likedCount={0}
       />
 
-      {/* Empty state text for own profile */}
-      {posts.length === 0 && isOwnProfile && (
-        <div className="text-center py-4 px-4 -mt-4">
-          <p className="text-gray-400 font-medium">No posts yet</p>
+      {/* Content grid */}
+      {activeTab === 'posts' && (
+        <>
+          <ContentGrid
+            items={posts}
+            onItemClick={handleContentClick}
+            isOwnProfile={isOwnProfile}
+            onAddClick={() => setShowCreatePost(true)}
+          />
+
+          {/* Empty state text for own profile */}
+          {posts.length === 0 && isOwnProfile && (
+            <div className="text-center py-4 px-4 -mt-4">
+              <p className="text-gray-400 font-medium">No posts yet</p>
+              <p className="text-gray-600 text-sm mt-1">
+                Tap the camera to share your first photo
+              </p>
+            </div>
+          )}
+
+          {/* Empty state for no posts - only show for other users viewing */}
+          {posts.length === 0 && !isOwnProfile && (
+            <div className="text-center py-12 px-4">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
+                <Camera className="h-8 w-8 text-gray-600" />
+              </div>
+              <p className="text-gray-400 font-medium">No posts yet</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Replays tab - placeholder */}
+      {activeTab === 'replays' && (
+        <div className="text-center py-12 px-4">
+          <p className="text-gray-400 font-medium">No replays yet</p>
           <p className="text-gray-600 text-sm mt-1">
-            Tap the camera to share your first photo
+            Stream replays will appear here
           </p>
         </div>
       )}
 
-      {/* Empty state for no posts - only show for other users viewing */}
-      {posts.length === 0 && !isOwnProfile && (
+      {/* Liked tab - placeholder */}
+      {activeTab === 'liked' && (
         <div className="text-center py-12 px-4">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
-            <Camera className="h-8 w-8 text-gray-600" />
-          </div>
-          <p className="text-gray-400 font-medium">No posts yet</p>
+          <p className="text-gray-400 font-medium">No liked content yet</p>
+          <p className="text-gray-600 text-sm mt-1">
+            Content you like will appear here
+          </p>
         </div>
       )}
 

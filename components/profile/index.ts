@@ -4,6 +4,7 @@ export { ProfileActions } from './ProfileActions';
 export { ProfileStats } from './ProfileStats';
 export { SubscriptionCard } from './SubscriptionCard';
 export { ContentGrid } from './ContentGrid';
+export { ContentTabs } from './ContentTabs';
 export { CreatePostModal } from './CreatePostModal';
 export { PostDetailModal } from './PostDetailModal';
 export type { ContentGridItem } from './ContentGrid';

@@ -1,12 +1,14 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { signInWithPhantom } from '@/lib/phantom-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Mail, ExternalLink, Home } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, User } from 'lucide-react';
 
 // Detect if user is on mobile device (not in Phantom browser)
 function isMobileDevice(): boolean {
@@ -20,7 +22,8 @@ function isPhantomBrowser(): boolean {
   return !!(window as any).phantom?.solana?.isPhantom;
 }
 
-export function Homepage() {
+export default function ProfilePage() {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const { connect, select, publicKey, connected, signMessage, wallets } = useWallet();
 
@@ -39,6 +42,27 @@ export function Homepage() {
     setIsMobile(isMobileDevice());
     setIsInPhantom(isPhantomBrowser());
   }, []);
+
+  // Redirect to user's profile if logged in
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user) {
+      // Fetch their username and redirect
+      const fetchAndRedirect = async () => {
+        try {
+          const response = await fetch('/api/user/me');
+          if (response.ok) {
+            const data = await response.json();
+            if (data.user?.username) {
+              router.replace(`/profile/${data.user.username}`);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user:', error);
+        }
+      };
+      fetchAndRedirect();
+    }
+  }, [status, session, router]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +84,7 @@ export function Homepage() {
         return;
       }
 
+      // Success - reload to update session
       window.location.reload();
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
@@ -67,6 +92,7 @@ export function Homepage() {
     }
   };
 
+  // Open in Phantom's in-app browser for mobile users
   const openInPhantomBrowser = () => {
     localStorage.removeItem('pendingPhantomAuth');
     const currentUrl = window.location.href;
@@ -151,7 +177,7 @@ export function Homepage() {
       setLoading(true);
       setError('');
       await signIn('google', {
-        callbackUrl: window.location.origin,
+        callbackUrl: window.location.origin + '/profile',
       });
     } catch (error: any) {
       setError(error.message || 'Failed to login with Google');
@@ -168,26 +194,18 @@ export function Homepage() {
     );
   }
 
-  // Show empty home page for authenticated users
-  if (status === 'authenticated') {
-    return (
-      <div className="flex-1">
-        {/* Empty home page - content moved to explore */}
-      </div>
-    );
-  }
-
   // Show sign in/sign up for unauthenticated users
   return (
     <div className="min-h-screen bg-[#0f0a15] flex flex-col">
+      {/* Header area with icon */}
       <div className="flex flex-col items-center pt-12 px-6 pb-8">
         <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6">
-          <Home className="h-12 w-12 text-gray-400" />
+          <User className="h-12 w-12 text-gray-400" />
         </div>
 
         <h1 className="text-2xl font-bold text-white mb-2">Welcome to OSHO</h1>
         <p className="text-gray-400 text-center mb-8">
-          Sign in to see your personalized feed
+          Sign in or create an account to view your profile
         </p>
 
         {/* Auth Form */}

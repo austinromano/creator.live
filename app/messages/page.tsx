@@ -1,12 +1,13 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+
+import { useEffect, useState } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { signInWithPhantom } from '@/lib/phantom-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Mail, ExternalLink, Home } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, MessageCircle } from 'lucide-react';
 
 // Detect if user is on mobile device (not in Phantom browser)
 function isMobileDevice(): boolean {
@@ -20,7 +21,7 @@ function isPhantomBrowser(): boolean {
   return !!(window as any).phantom?.solana?.isPhantom;
 }
 
-export function Homepage() {
+export default function MessagesPage() {
   const { data: session, status } = useSession();
   const { connect, select, publicKey, connected, signMessage, wallets } = useWallet();
 
@@ -151,7 +152,7 @@ export function Homepage() {
       setLoading(true);
       setError('');
       await signIn('google', {
-        callbackUrl: window.location.origin,
+        callbackUrl: window.location.origin + '/messages',
       });
     } catch (error: any) {
       setError(error.message || 'Failed to login with Google');
@@ -168,11 +169,15 @@ export function Homepage() {
     );
   }
 
-  // Show empty home page for authenticated users
+  // Show messages page for authenticated users
   if (status === 'authenticated') {
     return (
-      <div className="flex-1">
-        {/* Empty home page - content moved to explore */}
+      <div className="min-h-screen bg-[#0f0a15] flex flex-col items-center justify-center px-6">
+        <MessageCircle className="h-16 w-16 text-gray-600 mb-4" />
+        <h1 className="text-xl font-bold text-white mb-2">No Messages Yet</h1>
+        <p className="text-gray-400 text-center">
+          Start a conversation with your favorite creators
+        </p>
       </div>
     );
   }
@@ -182,12 +187,12 @@ export function Homepage() {
     <div className="min-h-screen bg-[#0f0a15] flex flex-col">
       <div className="flex flex-col items-center pt-12 px-6 pb-8">
         <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6">
-          <Home className="h-12 w-12 text-gray-400" />
+          <MessageCircle className="h-12 w-12 text-gray-400" />
         </div>
 
-        <h1 className="text-2xl font-bold text-white mb-2">Welcome to OSHO</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Messages</h1>
         <p className="text-gray-400 text-center mb-8">
-          Sign in to see your personalized feed
+          Sign in to view your messages
         </p>
 
         {/* Auth Form */}
