@@ -14,6 +14,7 @@ import {
   ContentGridItem,
   CreatePostModal,
   PostDetailModal,
+  EditProfileModal,
 } from '@/components/profile';
 
 interface ProfileData {
@@ -21,9 +22,11 @@ interface ProfileData {
   username: string;
   displayName: string;
   avatar: string;
+  coverImage: string | null;
   bio: string | null;
   greeting: string;
   subscriptionPrice: number;
+  subscriptionsEnabled: boolean;
   isVerified: boolean;
   stats: {
     posts: number;
@@ -49,6 +52,7 @@ export default function ProfilePage() {
   const [selectedPost, setSelectedPost] = useState<ContentGridItem | null>(null);
   const [currentUserUsername, setCurrentUserUsername] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'posts' | 'replays' | 'liked'>('posts');
+  const [showEditProfile, setShowEditProfile] = useState(false);
 
   // Fetch current user's username from database
   useEffect(() => {
@@ -150,8 +154,7 @@ export default function ProfilePage() {
   };
 
   const handleEditProfile = () => {
-    // TODO: Implement edit profile modal
-    console.log('Edit profile clicked');
+    setShowEditProfile(true);
   };
 
   if (loading) {
@@ -180,13 +183,28 @@ export default function ProfilePage() {
       {/* Avatar section with cover image */}
       <ProfileAvatar
         avatarUrl={profile.avatar}
+        coverUrl={profile.coverImage || undefined}
         name={profile.displayName || profile.username}
         username={profile.username}
-        bio={profile.bio || undefined}
         isVerified={profile.isVerified}
         isOwnProfile={isOwnProfile}
         onEditProfile={handleEditProfile}
       />
+
+      {/* Stats - TikTok style: right after username */}
+      <ProfileStats
+        posts={profile.stats.posts}
+        followers={profile.stats.followers}
+        following={profile.stats.following}
+        isSubscriber={false}
+      />
+
+      {/* Bio - TikTok style: centered, below stats */}
+      {profile.bio && (
+        <div className="px-8 pb-3">
+          <p className="text-gray-300 text-sm text-center">{profile.bio}</p>
+        </div>
+      )}
 
       {/* Action buttons - hide on own profile */}
       {!isOwnProfile && (
@@ -197,16 +215,8 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* Stats */}
-      <ProfileStats
-        posts={profile.stats.posts}
-        followers={profile.stats.followers}
-        following={profile.stats.following}
-        isSubscriber={false}
-      />
-
-      {/* Subscription card - hide on own profile */}
-      {!isOwnProfile && (
+      {/* Subscription card - only show if enabled */}
+      {profile.subscriptionsEnabled && (
         <SubscriptionCard
           price={profile.subscriptionPrice}
           onSubscribe={handleSubscribe}
@@ -264,12 +274,12 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Liked tab - placeholder */}
+      {/* Sparked tab - placeholder */}
       {activeTab === 'liked' && (
         <div className="text-center py-12 px-4">
-          <p className="text-gray-400 font-medium">No liked content yet</p>
+          <p className="text-gray-400 font-medium">No sparked content yet</p>
           <p className="text-gray-600 text-sm mt-1">
-            Content you like will appear here
+            Content you spark will appear here
           </p>
         </div>
       )}
@@ -289,6 +299,22 @@ export default function ProfilePage() {
         onDelete={handlePostDeleted}
         isOwnPost={isOwnProfile}
       />
+
+      {/* Edit Profile Modal */}
+      {profile && (
+        <EditProfileModal
+          isOpen={showEditProfile}
+          onClose={() => setShowEditProfile(false)}
+          profile={{
+            displayName: profile.displayName,
+            bio: profile.bio,
+            avatar: profile.avatar,
+            subscriptionPrice: profile.subscriptionPrice,
+            subscriptionsEnabled: profile.subscriptionsEnabled,
+          }}
+          onSave={fetchProfile}
+        />
+      )}
     </div>
   );
 }

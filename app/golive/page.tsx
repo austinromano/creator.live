@@ -25,6 +25,7 @@ import {
   UserPlus,
   Monitor,
   MonitorOff,
+  X,
 } from 'lucide-react';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
@@ -171,7 +172,16 @@ export default function ProfilePage() {
   // Cleanup on unmount - inline the cleanup to avoid hoisting issues
   useEffect(() => {
     return () => {
-      console.log('Stopping camera...');
+      console.log('Cleaning up golive page...');
+
+      // Close LiveKit connection first to free up peer connections
+      if (livekitStreamerRef.current) {
+        console.log('Closing LiveKit connection on unmount');
+        livekitStreamerRef.current.close();
+        livekitStreamerRef.current = null;
+      }
+
+      // Stop camera tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -186,6 +196,16 @@ export default function ProfilePage() {
       if (thumbnailIntervalRef.current) {
         clearInterval(thumbnailIntervalRef.current);
         thumbnailIntervalRef.current = null;
+      }
+      // Clear composite animation interval
+      if (compositeAnimationRef.current) {
+        clearInterval(compositeAnimationRef.current);
+        compositeAnimationRef.current = null;
+      }
+      // Close audio context
+      if (mixedAudioContextRef.current) {
+        mixedAudioContextRef.current.close();
+        mixedAudioContextRef.current = null;
       }
     };
   }, []);
@@ -365,6 +385,13 @@ export default function ProfilePage() {
 
       // Start LiveKit broadcast with room name
       if (streamRef.current) {
+        // Close any existing LiveKit connection first
+        if (livekitStreamerRef.current) {
+          console.log('Closing existing LiveKit connection before starting new one');
+          livekitStreamerRef.current.close();
+          livekitStreamerRef.current = null;
+        }
+
         console.log('Starting LiveKit broadcast...');
         livekitStreamerRef.current = new LiveKitStreamer(roomName);
 
@@ -970,8 +997,14 @@ export default function ProfilePage() {
         {isLive && (
           <div className="absolute top-0 left-0 right-0 z-10 px-3 py-2 pt-safe">
             <div className="flex items-center justify-between">
-              {/* Left: Creator info + Live badge */}
+              {/* Left: X button to exit + Creator info + Live badge */}
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleEndStream}
+                  className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
+                >
+                  <X className="h-5 w-5 text-white" />
+                </button>
                 <Avatar className="h-8 w-8 border-2 border-red-500">
                   <AvatarImage src={user.image || userData?.avatar} />
                   <AvatarFallback className="bg-purple-600 text-xs">{initials}</AvatarFallback>

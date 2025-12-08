@@ -307,8 +307,14 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Disconnected from room`);
     });
 
-    await this.room.connect(livekitUrl, token);
-    console.log(`[${this.streamId}] Connected to LiveKit room as viewer`);
+    try {
+      await this.room.connect(livekitUrl, token);
+      console.log(`[${this.streamId}] Connected to LiveKit room as viewer`);
+    } catch (error: any) {
+      // Suppress expected connection errors (fake streams, network issues during unmount)
+      console.log(`[${this.streamId}] Connection failed or cancelled`);
+      return;
+    }
 
     // Setup data channel for chat
     this.setupDataListener();
@@ -378,8 +384,14 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Disconnected from room`);
     });
 
-    await this.room.connect(livekitUrl, token);
-    console.log(`[${this.streamId}] Connected to LiveKit room as viewer`);
+    try {
+      await this.room.connect(livekitUrl, token);
+      console.log(`[${this.streamId}] Connected to LiveKit room as viewer`);
+    } catch (error: any) {
+      // Suppress expected connection errors (fake streams, network issues during unmount)
+      console.log(`[${this.streamId}] Connection failed or cancelled`);
+      return;
+    }
 
     // Setup data channel for chat
     this.setupDataListener();

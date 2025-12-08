@@ -17,6 +17,7 @@ model User {
   password      String?  // For email/password auth
   walletAddress String?  @unique @map("wallet_address")
   avatar        String?  @default("https://api.dicebear.com/7.x/avataaars/svg")
+  coverImage    String?  @map("cover_image")  // Cover/banner image for profile
   bio           String?
   isAI          Boolean  @default(false) @map("is_ai") // AI streamers that are always live
   hasCompletedOnboarding Boolean @default(false) @map("has_completed_onboarding")
@@ -24,10 +25,11 @@ model User {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Profile fields
-  displayName       String?  @map("display_name")  // Display name (can be different from username)
-  greeting          String?  @default("welcome to my channel")
-  subscriptionPrice Float?   @default(9.99) @map("subscription_price")
-  isVerified        Boolean  @default(false) @map("is_verified")
+  displayName          String?  @map("display_name")  // Display name (can be different from username)
+  greeting             String?  @default("welcome to my channel")
+  subscriptionPrice    Float?   @default(4.99) @map("subscription_price")
+  subscriptionsEnabled Boolean  @default(true) @map("subscriptions_enabled")
+  isVerified           Boolean  @default(false) @map("is_verified")
 
   // Relations
   streams       Stream[]

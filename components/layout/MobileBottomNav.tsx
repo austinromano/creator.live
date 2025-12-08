@@ -53,8 +53,12 @@ export function MobileBottomNav() {
                 href={item.href}
                 className="flex flex-col items-center justify-center -mt-4"
               >
-                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                  <Icon className="h-6 w-6 text-white" />
+                <div className="relative">
+                  {/* Breathing glow effect */}
+                  <div className="absolute inset-0 w-12 h-12 bg-purple-500 rounded-full blur-sm animate-[pulse_1.5s_ease-in-out_infinite] opacity-40" />
+                  <div className="relative w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/30">
+                    <Icon className="h-6 w-6 text-white" />
+                  </div>
                 </div>
                 <span className="text-[10px] text-gray-400 mt-1">{item.label}</span>
               </Link>

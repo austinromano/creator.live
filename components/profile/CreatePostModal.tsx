@@ -261,14 +261,23 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                 <input
                   type="number"
-                  placeholder="0.00"
+                  placeholder="1.00"
                   value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  min="0.01"
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    if (value > 10) {
+                      setPrice('10.00');
+                    } else {
+                      setPrice(e.target.value);
+                    }
+                  }}
+                  min="1.00"
+                  max="10.00"
                   step="0.01"
                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                 />
               </div>
+              <p className="text-xs text-gray-500">$1.00 - $10.00</p>
             </div>
           )}
 

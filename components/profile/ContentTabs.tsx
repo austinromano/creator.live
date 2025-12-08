@@ -1,6 +1,6 @@
 'use client';
 
-import { Grid3X3, PlayCircle, Heart } from 'lucide-react';
+import { Grid3X3, PlayCircle, Sparkles } from 'lucide-react';
 
 interface ContentTabsProps {
   activeTab: 'posts' | 'replays' | 'liked';
@@ -20,7 +20,7 @@ export function ContentTabs({
   const tabs = [
     { id: 'posts' as const, icon: Grid3X3, label: 'Posts', count: postCount },
     { id: 'replays' as const, icon: PlayCircle, label: 'Replays', count: replayCount },
-    { id: 'liked' as const, icon: Heart, label: 'Liked', count: likedCount },
+    { id: 'liked' as const, icon: Sparkles, label: 'Sparked', count: likedCount },
   ];
 
   return (

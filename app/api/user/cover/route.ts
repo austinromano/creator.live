@@ -40,15 +40,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only image files are allowed' }, { status: 400 });
     }
 
-    // Validate file size (5MB max for avatar)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size must be under 5MB' }, { status: 400 });
+    // Validate file size (10MB max for cover)
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be under 10MB' }, { status: 400 });
     }
 
     // Upload to Supabase Storage
     const fileExt = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
     const sanitizedUserId = user.id.replace(/[^a-zA-Z0-9-_]/g, '');
-    const fileName = `avatars/${sanitizedUserId}/${nanoid()}.${fileExt}`;
+    const fileName = `covers/${sanitizedUserId}/${nanoid()}.${fileExt}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -71,18 +71,18 @@ export async function POST(request: NextRequest) {
       .from('posts')
       .getPublicUrl(fileName);
 
-    // Update user's avatar in database
+    // Update user's cover image in database
     await prisma.user.update({
       where: { id: user.id },
-      data: { avatar: publicUrl },
+      data: { coverImage: publicUrl },
     });
 
     return NextResponse.json({
       success: true,
-      avatarUrl: publicUrl,
+      coverUrl: publicUrl,
     });
   } catch (error) {
-    console.error('Error uploading avatar:', error);
+    console.error('Error uploading cover image:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,8 +1,8 @@
 'use client';
 
+import { useState, useRef } from 'react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Camera, Edit2, CheckCircle } from 'lucide-react';
+import { Camera, Edit2, CheckCircle, Loader2 } from 'lucide-react';
 
 interface ProfileAvatarProps {
   avatarUrl?: string;
@@ -14,6 +14,7 @@ interface ProfileAvatarProps {
   isVerified?: boolean;
   isOwnProfile?: boolean;
   onEditProfile?: () => void;
+  onCoverUpdate?: (newCoverUrl: string) => void;
 }
 
 export function ProfileAvatar({
@@ -26,7 +27,64 @@ export function ProfileAvatar({
   isVerified = false,
   isOwnProfile = false,
   onEditProfile,
+  onCoverUpdate,
 }: ProfileAvatarProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [currentCoverUrl, setCurrentCoverUrl] = useState(coverUrl);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverClick = () => {
+    if (isOwnProfile && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be under 10MB');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/user/cover', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload cover image');
+      }
+
+      setCurrentCoverUrl(data.coverUrl);
+      onCoverUpdate?.(data.coverUrl);
+    } catch (error) {
+      console.error('Error uploading cover:', error);
+      alert('Failed to upload cover image. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Reset input so same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -36,76 +94,82 @@ export function ProfileAvatar({
 
   return (
     <div className="flex flex-col">
-      {/* Cover Image */}
-      <div className="relative h-32 w-full bg-gradient-to-br from-purple-900/60 via-purple-800/40 to-pink-900/30">
-        {coverUrl ? (
-          <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/60 via-purple-800/40 to-pink-900/30" />
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* Cover Image - TikTok style (shorter) */}
+      <div className="relative h-24 w-full bg-gradient-to-b from-[#1a1225] to-[#0f0a15]">
+        {currentCoverUrl && (
+          <img src={currentCoverUrl} alt="Cover" className="w-full h-full object-cover opacity-60" />
+        )}
+        {/* Upload overlay while uploading */}
+        {isUploading && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 text-white animate-spin" />
+          </div>
         )}
         {/* Edit cover button for own profile */}
-        {isOwnProfile && (
-          <button className="absolute bottom-2 right-2 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors">
+        {isOwnProfile && !isUploading && (
+          <button
+            onClick={handleCoverClick}
+            className="absolute top-2 right-2 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
+          >
             <Camera className="h-4 w-4 text-white" />
           </button>
         )}
       </div>
 
-      {/* Avatar overlapping cover */}
-      <div className="flex flex-col items-center px-4 -mt-12">
-        {/* Avatar with glow and status indicator */}
-        <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-sm scale-105" />
-          <Avatar className="h-24 w-24 border-4 border-[#0f0a15] relative ring-2 ring-purple-500">
-            <AvatarImage src={avatarUrl} alt={name} />
-            <AvatarFallback className="bg-purple-600 text-white text-2xl">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+      {/* Content below cover - TikTok centered layout */}
+      <div className="relative px-4">
+        {/* Avatar overlapping cover - centered */}
+        <div className="flex flex-col items-center -mt-12">
+          {/* Avatar with ring */}
+          <div className="relative">
+            <Avatar
+              className={`h-24 w-24 border-4 border-[#0f0a15] relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
+              onClick={isOwnProfile ? onEditProfile : undefined}
+            >
+              <AvatarImage src={avatarUrl} alt={name} />
+              <AvatarFallback className="bg-purple-600 text-white text-2xl">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
 
-          {/* Live indicator */}
-          {isLive && (
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-              LIVE
-            </div>
-          )}
+            {/* Edit indicator on avatar for own profile */}
+            {isOwnProfile && (
+              <button
+                onClick={onEditProfile}
+                className="absolute bottom-0 right-0 p-1.5 bg-purple-600 rounded-full border-2 border-[#0f0a15] hover:bg-purple-500 transition-colors"
+              >
+                <Edit2 className="h-3 w-3 text-white" />
+              </button>
+            )}
 
-          {/* Online indicator (when not live) */}
-          {!isLive && (
-            <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-[#0f0a15]" />
-          )}
+            {/* Live indicator */}
+            {isLive && (
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                LIVE
+              </div>
+            )}
+          </div>
+
+          {/* Name with verified badge - TikTok style */}
+          <div className="flex items-center gap-1.5 mt-2">
+            <h1 className="text-lg font-bold text-white">{name}</h1>
+            {isVerified && (
+              <CheckCircle className="h-4 w-4 text-[#20d5ec] fill-[#20d5ec]" />
+            )}
+          </div>
+
+          {/* Username - TikTok style */}
+          <p className="text-gray-400 text-sm -mt-0.5">@{username}</p>
         </div>
-
-        {/* Name with verified badge */}
-        <div className="flex items-center gap-1.5 mt-3">
-          <h1 className="text-xl font-bold text-white">{name}</h1>
-          {isVerified && (
-            <CheckCircle className="h-5 w-5 text-purple-500 fill-purple-500" />
-          )}
-        </div>
-
-        {/* Username */}
-        <p className="text-gray-400 text-sm">@{username}</p>
-
-        {/* Bio */}
-        {bio && (
-          <p className="text-gray-300 text-sm text-center mt-2 px-4 max-w-xs">
-            {bio}
-          </p>
-        )}
-
-        {/* Edit Profile button for own profile */}
-        {isOwnProfile && (
-          <Button
-            onClick={onEditProfile}
-            variant="outline"
-            size="sm"
-            className="mt-3 border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-          >
-            <Edit2 className="h-3.5 w-3.5 mr-1.5" />
-            Edit Profile
-          </Button>
-        )}
       </div>
     </div>
   );

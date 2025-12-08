@@ -26,9 +26,11 @@ export async function GET(
         username: true,
         displayName: true,
         avatar: true,
+        coverImage: true,
         bio: true,
         greeting: true,
         subscriptionPrice: true,
+        subscriptionsEnabled: true,
         isVerified: true,
         createdAt: true,
         _count: {
@@ -65,9 +67,11 @@ export async function GET(
       username: user.username,
       displayName: user.displayName || user.username,
       avatar: user.avatar,
+      coverImage: user.coverImage,
       bio: user.bio,
       greeting: user.greeting,
       subscriptionPrice: user.subscriptionPrice,
+      subscriptionsEnabled: user.subscriptionsEnabled,
       isVerified: user.isVerified,
       createdAt: user.createdAt,
       stats: {

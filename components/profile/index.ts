@@ -7,4 +7,5 @@ export { ContentGrid } from './ContentGrid';
 export { ContentTabs } from './ContentTabs';
 export { CreatePostModal } from './CreatePostModal';
 export { PostDetailModal } from './PostDetailModal';
+export { EditProfileModal } from './EditProfileModal';
 export type { ContentGridItem } from './ContentGrid';
