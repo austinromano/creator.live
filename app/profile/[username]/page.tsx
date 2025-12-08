@@ -36,6 +36,7 @@ interface ProfileData {
   subscriptionPrice: number;
   subscriptionsEnabled: boolean;
   isVerified: boolean;
+  isOnline: boolean;
   isLive: boolean;
   liveStream: LiveStreamInfo | null;
   stats: {
@@ -264,6 +265,7 @@ export default function ProfilePage() {
         coverUrl={profile.coverImage || undefined}
         name={profile.displayName || profile.username}
         username={profile.username}
+        isOnline={profile.isOnline}
         isLive={profile.isLive}
         liveStream={profile.liveStream}
         isVerified={profile.isVerified}

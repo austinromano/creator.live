@@ -32,6 +32,7 @@ export async function GET(
         subscriptionPrice: true,
         subscriptionsEnabled: true,
         isVerified: true,
+        lastSeenAt: true,
         createdAt: true,
         _count: {
           select: {
@@ -78,6 +79,13 @@ export async function GET(
     // Check if user has an active live stream
     const liveStream = user.streams.length > 0 ? user.streams[0] : null;
 
+    // Check if user is online (lastSeenAt within 2 minutes)
+    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    const now = Date.now();
+    const isOnline = user.lastSeenAt
+      ? (now - new Date(user.lastSeenAt).getTime()) < ONLINE_THRESHOLD_MS
+      : false;
+
     // Format response
     const profile = {
       id: user.id,
@@ -91,6 +99,7 @@ export async function GET(
       subscriptionsEnabled: user.subscriptionsEnabled,
       isVerified: user.isVerified,
       createdAt: user.createdAt,
+      isOnline,
       isLive: !!liveStream,
       liveStream: liveStream ? {
         id: liveStream.id,

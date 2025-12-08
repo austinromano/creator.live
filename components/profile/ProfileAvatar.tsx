@@ -19,6 +19,7 @@ interface ProfileAvatarProps {
   name: string;
   username: string;
   bio?: string;
+  isOnline?: boolean;
   isLive?: boolean;
   liveStream?: LiveStreamInfo | null;
   isVerified?: boolean;
@@ -33,6 +34,7 @@ export function ProfileAvatar({
   name,
   username,
   bio,
+  isOnline = false,
   isLive = false,
   liveStream,
   isVerified = false,
@@ -171,15 +173,21 @@ export function ProfileAvatar({
 
       {/* Regular avatar (shows when not live) */}
       {!isLive && (
-        <Avatar
-          className={`h-24 w-24 border-4 border-[#0f0a15] relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
-          onClick={isOwnProfile ? onEditProfile : undefined}
-        >
-          <AvatarImage src={avatarUrl} alt={name} />
-          <AvatarFallback className="bg-purple-600 text-white text-2xl">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        <>
+          {/* Green glow effect when online - breathing animation */}
+          {isOnline && (
+            <div className="absolute inset-0 h-24 w-24 rounded-full bg-green-500 blur-md animate-breathe -z-10" />
+          )}
+          <Avatar
+            className={`h-24 w-24 border-4 ${isOnline ? 'border-green-500' : 'border-[#0f0a15]'} relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
+            onClick={isOwnProfile ? onEditProfile : undefined}
+          >
+            <AvatarImage src={avatarUrl} alt={name} />
+            <AvatarFallback className="bg-purple-600 text-white text-2xl">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </>
       )}
 
       {/* Fallback avatar shown while stream connects */}
@@ -205,6 +213,7 @@ export function ProfileAvatar({
           LIVE
         </div>
       )}
+
     </div>
   );
 

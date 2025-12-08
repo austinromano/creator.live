@@ -211,3 +211,19 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-500;
 }
+
+/* Breathing glow animation for online status */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.08);
+  }
+}
+
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
