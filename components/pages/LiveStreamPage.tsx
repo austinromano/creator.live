@@ -62,6 +62,23 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
     setIsLive(creator.isLive);
   }, [creator.isLive, setIsLive]);
 
+  // Check if already following this creator
+  useEffect(() => {
+    const checkFollowStatus = async () => {
+      if (!session?.user) return;
+      try {
+        const response = await fetch(`/api/user/follow?username=${encodeURIComponent(creator.name)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setIsFollowing(data.isFollowing);
+        }
+      } catch (error) {
+        console.error('Error checking follow status:', error);
+      }
+    };
+    checkFollowStatus();
+  }, [session, creator.name]);
+
   // Handle incoming chat messages from other viewers via LiveKit
   const handleReceiveMessage = useCallback((message: ChatMessage) => {
     // Check if we already have this message (by id) to avoid duplicates
@@ -129,46 +146,71 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
 
   const handleFollow = async () => {
     if (isFollowing) {
-      // Unfollow silently - no notification
-      setIsFollowing(false);
+      // Unfollow - call API
+      try {
+        await fetch('/api/user/follow', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: creator.name }),
+        });
+        setIsFollowing(false);
+      } catch (error) {
+        console.error('Failed to unfollow:', error);
+      }
       return;
     }
 
-    // Follow - notify chat and broadcaster
-    setIsFollowing(true);
+    // Follow - call API and notify chat/broadcaster
+    try {
+      const response = await fetch('/api/user/follow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: creator.name }),
+      });
 
-    // Use actual user name and avatar
-    const displayName = userName || session?.user?.name || 'Someone';
-    const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
-    const wireAvatar = userAvatar?.startsWith('data:')
-      ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
-      : avatar;
+      if (!response.ok) {
+        const data = await response.json();
+        console.error('Failed to follow:', data.error);
+        return;
+      }
 
-    // Add locally for immediate feedback
-    addMessage({
-      user: displayName,
-      message: '🎉 Started following!',
-      avatar,
-    });
+      setIsFollowing(true);
 
-    if (streamer) {
-      // Send as chat message so all viewers see it
-      await streamer.sendChatMessage({
-        id: `follow-${Date.now()}`,
+      // Use actual user name and avatar
+      const displayName = userName || session?.user?.name || 'Someone';
+      const avatar = userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
+      const wireAvatar = userAvatar?.startsWith('data:')
+        ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+        : avatar;
+
+      // Add locally for immediate feedback
+      addMessage({
         user: displayName,
         message: '🎉 Started following!',
-        avatar: wireAvatar,
-        timestamp: Date.now(),
+        avatar,
       });
 
-      // Also send activity event to broadcaster's activity feed
-      await streamer.sendActivityEvent({
-        id: `follow-${Date.now()}`,
-        type: 'follow',
-        user: displayName,
-        avatar: wireAvatar,
-        timestamp: Date.now(),
-      });
+      if (streamer) {
+        // Send as chat message so all viewers see it
+        await streamer.sendChatMessage({
+          id: `follow-${Date.now()}`,
+          user: displayName,
+          message: '🎉 Started following!',
+          avatar: wireAvatar,
+          timestamp: Date.now(),
+        });
+
+        // Also send activity event to broadcaster's activity feed
+        await streamer.sendActivityEvent({
+          id: `follow-${Date.now()}`,
+          type: 'follow',
+          user: displayName,
+          avatar: wireAvatar,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to follow:', error);
     }
   };
 

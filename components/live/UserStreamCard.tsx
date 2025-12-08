@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
@@ -28,6 +29,7 @@ interface UserStreamCardProps {
 }
 
 export function UserStreamCard({ stream }: UserStreamCardProps) {
+  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -35,6 +37,12 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
+
+  const handleProfileClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(`/profile/${username}`);
+  };
 
   // Try to play video - called on connection and on user interaction
   const tryPlay = () => {
@@ -192,29 +200,27 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         {/* Creator info */}
         <div className="p-3">
           <div className="flex items-start space-x-3">
-            <Link
-              href={`/profile/${username}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0"
+            <div
+              onClick={handleProfileClick}
+              className="flex-shrink-0 cursor-pointer"
             >
-              <Avatar className="h-9 w-9 ring-2 ring-purple-500 hover:ring-purple-400 transition-all cursor-pointer">
+              <Avatar className="h-9 w-9 ring-2 ring-purple-500 hover:ring-purple-400 transition-all">
                 <AvatarImage src={stream.user.avatar || undefined} alt={username} />
                 <AvatarFallback className="bg-purple-600 text-xs">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-            </Link>
+            </div>
 
             <div className="flex-1 min-w-0">
-              <Link
-                href={`/profile/${username}`}
-                onClick={(e) => e.stopPropagation()}
-                className="hover:underline"
+              <div
+                onClick={handleProfileClick}
+                className="hover:underline cursor-pointer"
               >
                 <h3 className="text-white font-semibold text-sm truncate">
                   {username}
                 </h3>
-              </Link>
+              </div>
               <p className="text-gray-400 text-xs truncate">
                 {stream.title}
               </p>

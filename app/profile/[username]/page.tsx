@@ -125,10 +125,78 @@ export default function ProfilePage() {
     }
   }, [username, fetchProfile]);
 
+  // Check if following this user
+  useEffect(() => {
+    const checkFollowStatus = async () => {
+      if (!session?.user || !username) return;
+      try {
+        const response = await fetch(`/api/user/follow?username=${encodeURIComponent(username)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setIsFollowing(data.isFollowing);
+        }
+      } catch (error) {
+        console.error('Error checking follow status:', error);
+      }
+    };
+    checkFollowStatus();
+  }, [session, username]);
+
   const handleFollow = async () => {
-    // TODO: Implement follow functionality
-    setIsFollowing(!isFollowing);
-    console.log('Follow clicked');
+    if (!session?.user) {
+      // User not logged in - could redirect to login
+      return;
+    }
+
+    if (isFollowing) {
+      // Unfollow
+      try {
+        const response = await fetch('/api/user/follow', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        if (response.ok) {
+          setIsFollowing(false);
+          // Update follower count locally
+          if (profile) {
+            setProfile({
+              ...profile,
+              stats: {
+                ...profile.stats,
+                followers: Math.max(0, profile.stats.followers - 1),
+              },
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to unfollow:', error);
+      }
+    } else {
+      // Follow
+      try {
+        const response = await fetch('/api/user/follow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        if (response.ok) {
+          setIsFollowing(true);
+          // Update follower count locally
+          if (profile) {
+            setProfile({
+              ...profile,
+              stats: {
+                ...profile.stats,
+                followers: profile.stats.followers + 1,
+              },
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to follow:', error);
+      }
+    }
   };
 
   const handleTip = () => {

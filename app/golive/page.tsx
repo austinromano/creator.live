@@ -27,8 +27,26 @@ import {
   MonitorOff,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
+
+// Friend data from /api/user/friends
+interface Friend {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatar: string | null;
+  isVerified: boolean;
+  isLive: boolean;
+  liveStream: {
+    id: string;
+    roomName: string;
+    title: string | null;
+    viewerCount: number;
+  } | null;
+  followedAt: string;
+}
 
 // User data from /api/user/me
 interface UserData {
@@ -83,6 +101,8 @@ export default function ProfilePage() {
   const [chatInput, setChatInput] = useState('');
   const [viewerCount, setViewerCount] = useState(0);
   const [followerCount, setFollowerCount] = useState(0);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -130,6 +150,30 @@ export default function ProfilePage() {
       router.push('/');
     }
   }, [status, router]);
+
+  // Fetch friends list
+  useEffect(() => {
+    const fetchFriends = async () => {
+      if (status !== 'authenticated') return;
+
+      try {
+        const response = await fetch('/api/user/friends');
+        if (response.ok) {
+          const data = await response.json();
+          setFriends(data.friends || []);
+        }
+      } catch (error) {
+        console.error('Error fetching friends:', error);
+      } finally {
+        setFriendsLoading(false);
+      }
+    };
+
+    fetchFriends();
+    // Refresh friends list every 30 seconds to catch live status changes
+    const interval = setInterval(fetchFriends, 30000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // Session timer - must be before any returns
   useEffect(() => {
@@ -1203,8 +1247,75 @@ export default function ProfilePage() {
 
         {/* Main 3-Column Layout */}
         <div className="flex max-w-[1920px] mx-auto">
-          {/* Left Column - Activity Feed */}
+          {/* Left Column - Friends List + Activity Feed */}
           <div className="bg-[#18181b] border-r border-gray-800 flex flex-col h-[calc(100vh-72px)] w-[280px] flex-shrink-0">
+            {/* Friends List Section - At Top */}
+            <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h2 className="text-sm font-semibold">Friends</h2>
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              </div>
+            </div>
+
+            <div className="p-3 max-h-[200px] overflow-y-auto border-b border-gray-800">
+              {friendsLoading ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-6 w-6 mx-auto mb-2 text-gray-600 animate-spin" />
+                  <p className="text-xs text-gray-400">Loading friends...</p>
+                </div>
+              ) : friends.length === 0 ? (
+                <div className="text-center py-4">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+                  <p className="text-xs text-gray-400">No friends yet</p>
+                  <p className="text-xs text-gray-500 mt-1">Follow creators to see them here</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {friends.map((friend) => (
+                    <Link
+                      key={friend.id}
+                      href={friend.isLive ? `/live/${friend.liveStream?.roomName}` : `/profile/${friend.username}`}
+                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-[#0e0e10] transition-colors"
+                    >
+                      <div className="relative">
+                        <Avatar className={`h-8 w-8 ${friend.isLive ? 'ring-2 ring-red-500' : ''}`}>
+                          <AvatarImage src={friend.avatar || undefined} />
+                          <AvatarFallback className="text-xs bg-gray-700">
+                            {(friend.username || 'U').charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        {friend.isLive && (
+                          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b]" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-medium truncate">{friend.displayName || friend.username}</span>
+                          {friend.isVerified && (
+                            <svg className="h-3 w-3 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          )}
+                        </div>
+                        {friend.isLive ? (
+                          <p className="text-xs text-red-400">Live now</p>
+                        ) : (
+                          <p className="text-xs text-gray-500">Offline</p>
+                        )}
+                      </div>
+                      {friend.isLive && friend.liveStream && (
+                        <div className="flex items-center gap-1 text-xs text-gray-400">
+                          <Eye className="h-3 w-3" />
+                          {friend.liveStream.viewerCount}
+                        </div>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Activity Feed Section */}
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">Activity Feed</h2>
@@ -1212,11 +1323,11 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div ref={activityContainerRef} className="p-4 flex-1 overflow-y-auto">
+            <div ref={activityContainerRef} className="p-4 flex-1 overflow-y-auto min-h-0">
               {activityEvents.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-2xl font-bold mb-2">It&apos;s quiet. Too quiet...</div>
-                  <p className="text-sm text-gray-400">
+                <div className="text-center py-8">
+                  <div className="text-lg font-bold mb-2">It&apos;s quiet. Too quiet...</div>
+                  <p className="text-xs text-gray-400">
                     We&apos;ll show your new follows, tips, and activity here.
                   </p>
                 </div>
