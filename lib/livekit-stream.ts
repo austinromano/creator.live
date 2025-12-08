@@ -245,7 +245,7 @@ export class LiveKitStreamer {
 
     // Create and connect to room
     this.room = new Room({
-      adaptiveStream: true,
+      adaptiveStream: false, // Disable adaptive - always request full quality
       dynacast: true,
     });
 
@@ -254,6 +254,11 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Subscribed to track: ${track.kind} from ${participant.identity}`);
 
       if (track.kind === 'video' && this.onVideoElement) {
+        // Request highest quality layer
+        if ('setVideoQuality' in publication) {
+          (publication as any).setVideoQuality(2); // 2 = high quality
+        }
+
         // Use LiveKit's attach method - this is the proper way
         track.attach(this.onVideoElement);
         console.log(`[${this.streamId}] Attached video track to element`);
@@ -436,11 +441,36 @@ export class LiveKitStreamer {
       name: 'camera',
       simulcast: true,
       videoEncoding: {
-        maxBitrate: 3_000_000, // 3 Mbps for 1080p
+        maxBitrate: 4_500_000, // 4.5 Mbps for 1080p (Twitch standard)
         maxFramerate: 30,
       },
     });
     console.log(`[${this.streamId}] Published new video track (high quality)`);
+  }
+
+  // Replace or add an audio track (for screen share audio mixing)
+  async replaceAudioTrack(newAudioTrack: MediaStreamTrack): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot replace audio track: not connected to room');
+      return;
+    }
+
+    // Find the current audio track publication
+    const audioPublication = Array.from(this.room.localParticipant.trackPublications.values())
+      .find(pub => pub.track?.kind === 'audio');
+
+    if (audioPublication && audioPublication.track) {
+      // Unpublish the old track
+      await this.room.localParticipant.unpublishTrack(audioPublication.track);
+      console.log(`[${this.streamId}] Unpublished old audio track`);
+    }
+
+    // Publish the new track
+    const localAudioTrack = new LocalAudioTrack(newAudioTrack);
+    await this.room.localParticipant.publishTrack(localAudioTrack, {
+      name: 'microphone',
+    });
+    console.log(`[${this.streamId}] Published new audio track`);
   }
 
   stopBroadcast(): void {

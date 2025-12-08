@@ -56,6 +56,9 @@ export default function ProfilePage() {
   const pipVideoRef = React.useRef<HTMLVideoElement>(null);
   const compositeCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const compositeAnimationRef = React.useRef<number | null>(null);
+  const mixedAudioContextRef = React.useRef<AudioContext | null>(null);
+  const mixedAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
+  const originalMicTrackRef = React.useRef<MediaStreamTrack | null>(null);
 
   // PiP position and size state (for 1080p canvas)
   const [pipPosition, setPipPosition] = useState({ x: 1440, y: 30 }); // top-right default
@@ -656,6 +659,18 @@ export default function ProfilePage() {
         screenStreamRef.current = null;
       }
 
+      // Clean up audio mixing
+      if (mixedAudioContextRef.current) {
+        mixedAudioContextRef.current.close();
+        mixedAudioContextRef.current = null;
+      }
+
+      // Restore original microphone audio
+      if (originalMicTrackRef.current && livekitStreamerRef.current) {
+        await livekitStreamerRef.current.replaceAudioTrack(originalMicTrackRef.current);
+        console.log('Restored original microphone track');
+      }
+
       // Switch back to camera in preview
       if (streamRef.current && desktopVideoRef.current) {
         desktopVideoRef.current.srcObject = streamRef.current;
@@ -682,9 +697,49 @@ export default function ProfilePage() {
             height: { ideal: 1080 },
             frameRate: { ideal: 30 }
           },
-          audio: false
+          audio: true // Capture system audio
         });
         screenStreamRef.current = screenStream;
+
+        // Mix system audio with microphone audio
+        const screenAudioTrack = screenStream.getAudioTracks()[0];
+        const micAudioTrack = streamRef.current?.getAudioTracks()[0];
+
+        if (screenAudioTrack || micAudioTrack) {
+          // Save original mic track for restoration later
+          if (micAudioTrack) {
+            originalMicTrackRef.current = micAudioTrack;
+          }
+
+          // Create audio context for mixing
+          const audioContext = new AudioContext();
+          mixedAudioContextRef.current = audioContext;
+          const destination = audioContext.createMediaStreamDestination();
+          mixedAudioDestinationRef.current = destination;
+
+          // Add system audio if available
+          if (screenAudioTrack) {
+            const screenAudioStream = new MediaStream([screenAudioTrack]);
+            const screenSource = audioContext.createMediaStreamSource(screenAudioStream);
+            screenSource.connect(destination);
+            console.log('Added system audio to mix');
+          }
+
+          // Add microphone audio if available and enabled
+          if (micAudioTrack && microphoneEnabled) {
+            const micStream = new MediaStream([micAudioTrack]);
+            const micSource = audioContext.createMediaStreamSource(micStream);
+            micSource.connect(destination);
+            console.log('Added microphone to mix');
+          }
+
+          // Replace audio track in LiveKit with mixed audio
+          const mixedAudioTrack = destination.stream.getAudioTracks()[0];
+          if (mixedAudioTrack && livekitStreamerRef.current) {
+            await livekitStreamerRef.current.replaceAudioTrack(mixedAudioTrack);
+            console.log('Published mixed audio track');
+          }
+        }
 
         // Create composite stream with screen + camera PiP
         if (streamRef.current) {
@@ -705,6 +760,19 @@ export default function ProfilePage() {
         // Handle when user stops sharing via browser UI
         screenStream.getVideoTracks()[0].onended = async () => {
           stopCompositeStream();
+
+          // Clean up audio mixing
+          if (mixedAudioContextRef.current) {
+            mixedAudioContextRef.current.close();
+            mixedAudioContextRef.current = null;
+          }
+
+          // Restore original microphone audio
+          if (originalMicTrackRef.current && livekitStreamerRef.current) {
+            await livekitStreamerRef.current.replaceAudioTrack(originalMicTrackRef.current);
+            console.log('Restored original microphone track');
+          }
+
           if (streamRef.current && desktopVideoRef.current) {
             desktopVideoRef.current.srcObject = streamRef.current;
           }
