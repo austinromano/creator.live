@@ -24,7 +24,8 @@ import {
   Wallet,
   Send,
   ExternalLink,
-  CheckCircle
+  CheckCircle,
+  Sparkles
 } from 'lucide-react';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
 
@@ -207,10 +208,10 @@ export function TipButton({ creator, onTip, className = '', userName, userAvatar
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
-          className={`${className} bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-semibold`}
+          className={`${className} w-10 h-10 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white`}
+          size="icon"
         >
-          <span className="text-lg -mr-0.5">🪙</span>
-          Tip Creator
+          <Sparkles className="h-5 w-5" />
         </Button>
       </DialogTrigger>
       

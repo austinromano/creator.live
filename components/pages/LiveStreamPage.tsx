@@ -208,8 +208,8 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
           </div>
 
           {/* Stream Info Below Video - Shows on both mobile and desktop */}
-          <div className="bg-[#18181b] p-3 lg:p-4 flex-shrink-0">
-            <div className="flex items-start justify-between mb-3">
+          <div className="bg-[#18181b] px-3 py-2 lg:px-4 lg:py-2 flex-shrink-0">
+            <div className="flex items-start justify-between">
               <Link
                 href={`/profile/${creator.name}`}
                 className="flex items-center space-x-3 hover:opacity-80 transition-opacity"

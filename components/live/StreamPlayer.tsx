@@ -165,40 +165,6 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
     <div className={`${className} bg-black overflow-hidden relative group`}>
       {/* Video Player Area */}
       <div className="w-full h-full bg-black relative">
-          {/* Stream Status Overlay */}
-          <div className="absolute top-4 left-4 z-20 flex items-center space-x-3">
-            <Badge 
-              variant={isLive ? "destructive" : "secondary"}
-              className={isLive ? "bg-red-600 hover:bg-red-700 animate-pulse" : "bg-gray-600"}
-            >
-              <Radio className="h-3 w-3 mr-1" />
-              {isLive ? 'LIVE' : 'OFFLINE'}
-            </Badge>
-            
-            {isLive && (
-              <Badge variant="outline" className="bg-black/50 border-white/20 text-white">
-                <Eye className="h-3 w-3 mr-1" />
-                {formatViewers(viewers)}
-              </Badge>
-            )}
-            
-            <Badge 
-              variant="outline" 
-              className={`bg-black/50 border-white/20 ${
-                connectionStatus === 'connected' ? 'text-green-400' :
-                connectionStatus === 'buffering' ? 'text-yellow-400' :
-                'text-red-400'
-              }`}
-            >
-              {connectionStatus === 'connected' ? (
-                <Wifi className="h-3 w-3 mr-1" />
-              ) : (
-                <WifiOff className="h-3 w-3 mr-1" />
-              )}
-              {connectionStatus}
-            </Badge>
-          </div>
-
           {/* Stream Content */}
           {isLive ? (
             <div className="relative w-full h-full">
