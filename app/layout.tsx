@@ -7,6 +7,7 @@ import { SolanaWalletProvider } from "@/components/providers/WalletProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { AudioUnlockProvider } from "@/components/providers/AudioUnlockProvider";
+import { HeartbeatProvider } from "@/components/HeartbeatProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,12 +46,14 @@ export default function RootLayout({
         <SessionProvider>
           <SolanaWalletProvider>
             <AudioUnlockProvider>
-              <Header />
-              <main className="min-h-screen bg-[#0f0a15] pb-20 lg:pb-0">
-                {children}
-              </main>
-              <MobileBottomNav />
-              <AuthModal />
+              <HeartbeatProvider>
+                <Header />
+                <main className="min-h-screen bg-[#0f0a15] pb-20 lg:pb-0">
+                  {children}
+                </main>
+                <MobileBottomNav />
+                <AuthModal />
+              </HeartbeatProvider>
             </AudioUnlockProvider>
           </SolanaWalletProvider>
         </SessionProvider>

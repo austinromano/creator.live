@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
             avatar: true,
             displayName: true,
             isVerified: true,
+            lastSeenAt: true,
             streams: {
               where: {
                 isLive: true,
@@ -46,10 +47,19 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Consider user online if lastSeenAt is within the last 2 minutes
+    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    const now = Date.now();
+
+    console.log('Found following records:', following.length);
+
     // Transform the data to a cleaner format
     const friends = following.map((f) => {
       const user = f.following;
-      const liveStream = user.streams[0] || null;
+      const liveStream = user.streams?.[0] || null;
+      const isOnline = user.lastSeenAt
+        ? (now - new Date(user.lastSeenAt).getTime()) < ONLINE_THRESHOLD_MS
+        : false;
 
       return {
         id: user.id,
@@ -57,6 +67,7 @@ export async function GET(request: NextRequest) {
         displayName: user.displayName || user.username,
         avatar: user.avatar,
         isVerified: user.isVerified,
+        isOnline,
         isLive: !!liveStream,
         liveStream: liveStream
           ? {
@@ -70,10 +81,12 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Sort: live users first, then by follow date
+    // Sort: live users first, then online users, then by follow date
     friends.sort((a, b) => {
       if (a.isLive && !b.isLive) return -1;
       if (!a.isLive && b.isLive) return 1;
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
       return new Date(b.followedAt).getTime() - new Date(a.followedAt).getTime();
     });
 

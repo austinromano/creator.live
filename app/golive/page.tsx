@@ -38,6 +38,7 @@ interface Friend {
   displayName: string | null;
   avatar: string | null;
   isVerified: boolean;
+  isOnline: boolean;
   isLive: boolean;
   liveStream: {
     id: string;
@@ -157,10 +158,16 @@ export default function ProfilePage() {
       if (status !== 'authenticated') return;
 
       try {
+        console.log('Fetching friends...');
         const response = await fetch('/api/user/friends');
+        console.log('Friends response status:', response.status);
         if (response.ok) {
           const data = await response.json();
+          console.log('Friends data:', data);
           setFriends(data.friends || []);
+        } else {
+          const errorData = await response.json();
+          console.error('Friends API error:', errorData);
         }
       } catch (error) {
         console.error('Error fetching friends:', error);
@@ -1278,15 +1285,17 @@ export default function ProfilePage() {
                       className="flex items-center gap-2 p-2 rounded-lg hover:bg-[#0e0e10] transition-colors"
                     >
                       <div className="relative">
-                        <Avatar className={`h-8 w-8 ${friend.isLive ? 'ring-2 ring-red-500' : ''}`}>
+                        <Avatar className={`h-8 w-8 ${friend.isLive ? 'ring-2 ring-red-500' : friend.isOnline ? 'ring-2 ring-green-500' : ''}`}>
                           <AvatarImage src={friend.avatar || undefined} />
                           <AvatarFallback className="text-xs bg-gray-700">
                             {(friend.username || 'U').charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                        {friend.isLive && (
+                        {friend.isLive ? (
                           <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b]" />
-                        )}
+                        ) : friend.isOnline ? (
+                          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#18181b]" />
+                        ) : null}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
@@ -1299,6 +1308,8 @@ export default function ProfilePage() {
                         </div>
                         {friend.isLive ? (
                           <p className="text-xs text-red-400">Live now</p>
+                        ) : friend.isOnline ? (
+                          <p className="text-xs text-green-400">Online</p>
                         ) : (
                           <p className="text-xs text-gray-500">Offline</p>
                         )}

@@ -21,6 +21,7 @@ model User {
   bio           String?
   isAI          Boolean  @default(false) @map("is_ai") // AI streamers that are always live
   hasCompletedOnboarding Boolean @default(false) @map("has_completed_onboarding")
+  lastSeenAt    DateTime? @map("last_seen_at")  // Track when user was last active
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
