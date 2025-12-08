@@ -81,7 +81,7 @@ export function UserMenu() {
 
         <DropdownMenuSeparator className="bg-gray-800" />
 
-        <Link href="/profile">
+        <Link href={`/profile/${userName || user.name || 'user'}`}>
           <DropdownMenuItem className="cursor-pointer text-gray-300 hover:text-white hover:bg-gray-800">
             <User className="mr-2 h-4 w-4" />
             <span>My Profile</span>

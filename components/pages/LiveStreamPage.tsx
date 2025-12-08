@@ -191,13 +191,13 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
   const isPositive = creator.priceChange24h > 0;
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-[#0e0e10] overflow-hidden">
+    <div className="h-screen lg:h-[calc(100vh-64px)] bg-[#0e0e10] overflow-hidden">
       {/* Main Layout - Responsive: stacked on mobile, side-by-side on desktop */}
       <div className="flex flex-col lg:flex-row h-full overflow-hidden">
         {/* Video & Stream Info - Shows first on mobile */}
         <div className="lg:flex-1 order-1 lg:order-2 flex flex-col min-h-0">
-          {/* Video Player - Fixed aspect on mobile, fills space on desktop */}
-          <div className="bg-black w-full flex-1 min-h-0">
+          {/* Video Player - Full width on mobile with 16:9 aspect, fills space on desktop */}
+          <div className="bg-black w-full aspect-video lg:aspect-auto lg:flex-1 min-h-0">
             <StreamPlayer
               creator={creator}
               isLive={isLive}

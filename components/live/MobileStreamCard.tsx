@@ -152,36 +152,32 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
             webkit-playsinline="true"
           />
 
-          {/* LIVE badge */}
-          <div className="absolute top-2 left-2">
-            <Badge className="bg-[#cc0000] text-white text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wider">
+          {/* Top badges row */}
+          <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
+            <Badge className="bg-[#cc0000] text-white text-[9px] font-bold px-2 py-0.5 rounded-full tracking-wider">
               LIVE
             </Badge>
-          </div>
-
-          {/* Viewer count */}
-          <div className="absolute top-3 right-3">
-            <Badge variant="secondary" className="bg-[#2a2438]/90 text-white text-xs rounded-full px-2.5 py-1">
-              <Eye className="h-3 w-3 mr-1" />
+            <Badge variant="secondary" className="bg-[#2a2438]/90 text-white text-[9px] rounded-full px-2 py-0.5">
+              <Eye className="h-3 w-3 mr-0.5" />
               {stream.viewerCount || 0}
             </Badge>
           </div>
         </div>
 
         {/* Creator info below card */}
-        <div className="bg-[#1e2535] p-3">
-          <div className="flex items-center gap-2.5">
-            <Avatar className="h-9 w-9 ring-2 ring-purple-500">
+        <div className="bg-[#1e2535] p-2.5">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-7 w-7 ring-1 ring-purple-500">
               <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-              <AvatarFallback className="bg-purple-600 text-xs">
+              <AvatarFallback className="bg-purple-600 text-[9px]">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h3 className="text-white font-semibold text-sm truncate">
+              <h3 className="text-white font-semibold text-[11px] truncate">
                 {username}
               </h3>
-              <p className="text-gray-400 text-xs truncate">
+              <p className="text-gray-400 text-[9px] truncate">
                 {stream.title}
               </p>
             </div>

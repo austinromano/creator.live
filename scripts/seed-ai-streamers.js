@@ -43,6 +43,41 @@ const AI_STREAMERS = [
     bio: 'Dark aesthetic AI streamer',
     streamTitle: 'Midnight Vibes',
   },
+  {
+    id: 'ai-tech-wizard',
+    username: 'Tech Wizard',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=wizard&backgroundColor=c1f0c1',
+    bio: 'AI tech streamer coding live',
+    streamTitle: 'Code & Chill',
+  },
+  {
+    id: 'ai-art-master',
+    username: 'Art Master',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=artist&backgroundColor=ffd6e0',
+    bio: 'AI digital artist creating live',
+    streamTitle: 'Digital Art Studio',
+  },
+  {
+    id: 'ai-chef-sara',
+    username: 'Chef Sara',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=chef&backgroundColor=ffe4c4',
+    bio: 'AI cooking streamer',
+    streamTitle: 'Kitchen Live',
+  },
+  {
+    id: 'ai-dj-nova',
+    username: 'DJ Nova',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=djnova&backgroundColor=e0c4ff',
+    bio: 'AI music mixer',
+    streamTitle: 'Beat Drop Sessions',
+  },
+  {
+    id: 'ai-yoga-zen',
+    username: 'Yoga Zen',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=yogazen&backgroundColor=c4ffe0',
+    bio: 'AI wellness instructor',
+    streamTitle: 'Peaceful Flow',
+  },
 ];
 
 async function seedAIStreamers() {

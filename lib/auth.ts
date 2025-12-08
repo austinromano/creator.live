@@ -77,10 +77,13 @@ export const authOptions: NextAuthOptions = {
 
           if (!user) {
             console.log('Creating new user...');
+            // Generate unique temp username - will be replaced during onboarding
+            const tempId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
             user = await prisma.user.create({
               data: {
-                username: credentials.username || `phantom_${credentials.publicKey.slice(0, 6)}`,
+                username: `user_${tempId}`,
                 walletAddress: credentials.publicKey,
+                hasCompletedOnboarding: false,
               },
             });
             console.log('User created:', user.id);

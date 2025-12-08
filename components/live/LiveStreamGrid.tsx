@@ -110,10 +110,6 @@ export function LiveStreamGrid() {
     return null;
   }
 
-  // Split streams evenly between two columns for mobile layout
-  const leftColumn = liveStreams.filter((_, i) => i % 2 === 0);
-  const rightColumn = liveStreams.filter((_, i) => i % 2 === 1);
-
   return (
     <>
       {/* ========== MOBILE VIEW (< lg) ========== */}
@@ -135,10 +131,10 @@ export function LiveStreamGrid() {
           ))}
         </div>
 
-        {/* Two Column Layout */}
+        {/* Three Column Grid Layout */}
         <div
           ref={contentRef}
-          className="flex gap-2 px-3 pt-3 transition-transform"
+          className="grid grid-cols-3 gap-1 px-2 pt-2 pb-24 transition-transform"
           style={{
             transform: `translateX(${swipeOffset}px)`,
             transitionDuration: isTransitioning ? '200ms' : '0ms',
@@ -147,27 +143,13 @@ export function LiveStreamGrid() {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Left Column */}
-          <div className="flex-1 flex flex-col gap-2">
-            {leftColumn.map((stream, index) => (
-              <MobileStreamCard
-                key={stream.id}
-                stream={stream}
-                size={index === 0 ? 'medium' : index === 1 ? 'small' : index === 2 ? 'medium' : 'large'}
-              />
-            ))}
-          </div>
-
-          {/* Right Column */}
-          <div className="flex-1 flex flex-col gap-2">
-            {rightColumn.map((stream, index) => (
-              <MobileStreamCard
-                key={stream.id}
-                stream={stream}
-                size={index === 0 ? 'small' : index === 1 ? 'medium' : index === 2 ? 'xlarge' : 'medium'}
-              />
-            ))}
-          </div>
+          {liveStreams.map((stream) => (
+            <MobileStreamCard
+              key={stream.id}
+              stream={stream}
+              size="small"
+            />
+          ))}
         </div>
       </section>
 

@@ -86,8 +86,9 @@ export default function OnboardingPage() {
         return;
       }
 
-      // Success - redirect to golive
-      router.push('/golive');
+      // Success - redirect to user's profile page
+      const profileUsername = data.user?.username || username.trim();
+      router.push(`/profile/${profileUsername}`);
     } catch (error) {
       console.error('Error completing onboarding:', error);
       setError('Something went wrong. Please try again.');

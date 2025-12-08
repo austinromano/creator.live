@@ -1,18 +1,42 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Home, Search, Plus, MessageCircle, User } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUsername = async () => {
+      if (!session?.user) return;
+      try {
+        const response = await fetch('/api/user/me');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user?.username) {
+            setUsername(data.user.username);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching username:', error);
+      }
+    };
+    fetchUsername();
+  }, [session]);
+
+  const user = session?.user as any;
+  const profileHref = username || user?.name ? `/profile/${username || user?.name}` : '/profile';
 
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
     { href: '/explore', icon: Search, label: 'Explore' },
     { href: '/golive', icon: Plus, label: 'Go Live', isCenter: true },
     { href: '/messages', icon: MessageCircle, label: 'Messages' },
-    { href: '/profile', icon: User, label: 'Profile' },
+    { href: profileHref, icon: User, label: 'Profile' },
   ];
 
   return (
