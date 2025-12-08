@@ -192,17 +192,29 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
         {/* Creator info */}
         <div className="p-3">
           <div className="flex items-start space-x-3">
-            <Avatar className="h-9 w-9 ring-2 ring-purple-500">
-              <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-              <AvatarFallback className="bg-purple-600 text-xs">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <Link
+              href={`/profile/${username}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0"
+            >
+              <Avatar className="h-9 w-9 ring-2 ring-purple-500 hover:ring-purple-400 transition-all cursor-pointer">
+                <AvatarImage src={stream.user.avatar || undefined} alt={username} />
+                <AvatarFallback className="bg-purple-600 text-xs">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
 
             <div className="flex-1 min-w-0">
-              <h3 className="text-white font-semibold text-sm truncate">
-                {username}
-              </h3>
+              <Link
+                href={`/profile/${username}`}
+                onClick={(e) => e.stopPropagation()}
+                className="hover:underline"
+              >
+                <h3 className="text-white font-semibold text-sm truncate">
+                  {username}
+                </h3>
+              </Link>
               <p className="text-gray-400 text-xs truncate">
                 {stream.title}
               </p>

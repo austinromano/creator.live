@@ -155,17 +155,29 @@ export function LiveStreamCard({ creator }: LiveStreamCardProps) {
         {/* Creator info */}
         <div className="p-3">
           <div className="flex items-start space-x-3">
-            <Avatar className="h-9 w-9 ring-2 ring-purple-500">
-              <AvatarImage src={creator.avatar} alt={creator.name} />
-              <AvatarFallback className="bg-purple-600 text-xs">
-                {creator.name.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <Link
+              href={`/profile/${creator.name}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0"
+            >
+              <Avatar className="h-9 w-9 ring-2 ring-purple-500 hover:ring-purple-400 transition-all cursor-pointer">
+                <AvatarImage src={creator.avatar} alt={creator.name} />
+                <AvatarFallback className="bg-purple-600 text-xs">
+                  {creator.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
 
             <div className="flex-1 min-w-0">
-              <h3 className="text-white font-semibold text-sm truncate">
-                {creator.name}
-              </h3>
+              <Link
+                href={`/profile/${creator.name}`}
+                onClick={(e) => e.stopPropagation()}
+                className="hover:underline"
+              >
+                <h3 className="text-white font-semibold text-sm truncate">
+                  {creator.name}
+                </h3>
+              </Link>
               <p className="text-gray-400 text-xs truncate">
                 ${creator.symbol}
               </p>

@@ -167,16 +167,28 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
         {/* Creator info below card */}
         <div className="bg-[#1e2535] p-2.5">
           <div className="flex items-center gap-2">
-            <Avatar className="h-7 w-7 ring-1 ring-purple-500">
-              <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-              <AvatarFallback className="bg-purple-600 text-[9px]">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <Link
+              href={`/profile/${username}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0"
+            >
+              <Avatar className="h-7 w-7 ring-1 ring-purple-500 hover:ring-2 transition-all cursor-pointer">
+                <AvatarImage src={stream.user.avatar || undefined} alt={username} />
+                <AvatarFallback className="bg-purple-600 text-[9px]">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
             <div className="flex-1 min-w-0">
-              <h3 className="text-white font-semibold text-[11px] truncate">
-                {username}
-              </h3>
+              <Link
+                href={`/profile/${username}`}
+                onClick={(e) => e.stopPropagation()}
+                className="hover:underline"
+              >
+                <h3 className="text-white font-semibold text-[11px] truncate">
+                  {username}
+                </h3>
+              </Link>
               <p className="text-gray-400 text-[9px] truncate">
                 {stream.title}
               </p>

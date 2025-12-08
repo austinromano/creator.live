@@ -41,6 +41,20 @@ export async function GET(
             streams: true,
           },
         },
+        // Get active live stream if any
+        streams: {
+          where: {
+            isLive: true,
+          },
+          select: {
+            id: true,
+            streamKey: true,
+            title: true,
+            viewerCount: true,
+            startedAt: true,
+          },
+          take: 1,
+        },
       },
     });
 
@@ -61,6 +75,9 @@ export async function GET(
       },
     });
 
+    // Check if user has an active live stream
+    const liveStream = user.streams.length > 0 ? user.streams[0] : null;
+
     // Format response
     const profile = {
       id: user.id,
@@ -74,6 +91,14 @@ export async function GET(
       subscriptionsEnabled: user.subscriptionsEnabled,
       isVerified: user.isVerified,
       createdAt: user.createdAt,
+      isLive: !!liveStream,
+      liveStream: liveStream ? {
+        id: liveStream.id,
+        roomName: `user-${user.id}`,
+        title: liveStream.title,
+        viewerCount: liveStream.viewerCount,
+        startedAt: liveStream.startedAt,
+      } : null,
       stats: {
         posts: user._count.posts,
         followers: user._count.followers,

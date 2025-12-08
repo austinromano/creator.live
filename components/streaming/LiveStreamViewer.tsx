@@ -1,5 +1,6 @@
 'use client';
 import React, { useRef, useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,17 +93,20 @@ export function LiveStreamViewer({
       <CardContent className="p-0">
         {/* Stream Header */}
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <Link
+            href={`/profile/${creator.name}`}
+            className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+          >
             <img
               src={creator.avatar}
               alt={creator.name}
-              className="w-10 h-10 rounded-full"
+              className="w-10 h-10 rounded-full ring-2 ring-purple-500/50 cursor-pointer"
             />
             <div>
               <h3 className="text-white font-semibold">{creator.name}</h3>
               <p className="text-gray-400 text-sm">{creator.symbol}</p>
             </div>
-          </div>
+          </Link>
           
           <div className="flex items-center space-x-2">
             <Badge variant="destructive" className="bg-red-600">

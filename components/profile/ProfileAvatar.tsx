@@ -1,8 +1,17 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Camera, Edit2, CheckCircle, Loader2 } from 'lucide-react';
+import { LiveKitStreamer } from '@/lib/livekit-stream';
+
+interface LiveStreamInfo {
+  id: string;
+  roomName: string;
+  title?: string;
+  viewerCount?: number;
+}
 
 interface ProfileAvatarProps {
   avatarUrl?: string;
@@ -11,6 +20,7 @@ interface ProfileAvatarProps {
   username: string;
   bio?: string;
   isLive?: boolean;
+  liveStream?: LiveStreamInfo | null;
   isVerified?: boolean;
   isOwnProfile?: boolean;
   onEditProfile?: () => void;
@@ -24,6 +34,7 @@ export function ProfileAvatar({
   username,
   bio,
   isLive = false,
+  liveStream,
   isVerified = false,
   isOwnProfile = false,
   onEditProfile,
@@ -31,7 +42,50 @@ export function ProfileAvatar({
 }: ProfileAvatarProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [currentCoverUrl, setCurrentCoverUrl] = useState(coverUrl);
+  const [isStreamConnected, setIsStreamConnected] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamerRef = useRef<LiveKitStreamer | null>(null);
+
+  // Connect to live stream when user is live
+  useEffect(() => {
+    if (!isLive || !liveStream?.roomName || !videoRef.current) {
+      if (streamerRef.current) {
+        streamerRef.current.close();
+        streamerRef.current = null;
+        setIsStreamConnected(false);
+      }
+      return;
+    }
+
+    const connectToStream = async () => {
+      if (streamerRef.current) return;
+
+      streamerRef.current = new LiveKitStreamer(liveStream.roomName);
+
+      try {
+        await streamerRef.current.startViewingWithElement(
+          videoRef.current!,
+          () => {
+            setIsStreamConnected(true);
+          },
+          undefined,
+          { muteAudio: true }
+        );
+      } catch (error) {
+        console.error('Failed to connect to profile stream:', error);
+      }
+    };
+
+    connectToStream();
+
+    return () => {
+      if (streamerRef.current) {
+        streamerRef.current.close();
+        streamerRef.current = null;
+      }
+    };
+  }, [isLive, liveStream?.roomName]);
 
   const handleCoverClick = () => {
     if (isOwnProfile && fileInputRef.current) {
@@ -85,12 +139,74 @@ export function ProfileAvatar({
       }
     }
   };
+
   const initials = name
     .split(' ')
     .map((n) => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  // Wrap avatar in Link when live, otherwise handle normally
+  const avatarContent = (
+    <div className="relative h-24 w-24">
+      {/* Live stream video in avatar circle - always render when live */}
+      {isLive && liveStream && (
+        <>
+          {/* Video container - circular clip */}
+          <div className="absolute inset-0 h-24 w-24 rounded-full overflow-hidden border-4 border-red-500 z-10 bg-black">
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              autoPlay
+              muted
+              playsInline
+              webkit-playsinline="true"
+            />
+          </div>
+          {/* Pulsing glow effect behind */}
+          <div className="absolute inset-0 h-24 w-24 rounded-full bg-red-500/30 blur-md animate-pulse -z-10" />
+        </>
+      )}
+
+      {/* Regular avatar (shows when not live) */}
+      {!isLive && (
+        <Avatar
+          className={`h-24 w-24 border-4 border-[#0f0a15] relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
+          onClick={isOwnProfile ? onEditProfile : undefined}
+        >
+          <AvatarImage src={avatarUrl} alt={name} />
+          <AvatarFallback className="bg-purple-600 text-white text-2xl">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+      )}
+
+      {/* Fallback avatar shown while stream connects */}
+      {isLive && !isStreamConnected && (
+        <div className="absolute inset-0 h-24 w-24 rounded-full overflow-hidden border-4 border-red-500 z-5 flex items-center justify-center bg-purple-600">
+          <span className="text-white text-2xl font-bold">{initials}</span>
+        </div>
+      )}
+
+      {/* Edit indicator on avatar for own profile (only when not live) */}
+      {isOwnProfile && !isLive && (
+        <button
+          onClick={onEditProfile}
+          className="absolute bottom-0 right-0 p-1.5 bg-purple-600 rounded-full border-2 border-[#0f0a15] hover:bg-purple-500 transition-colors z-20"
+        >
+          <Edit2 className="h-3 w-3 text-white" />
+        </button>
+      )}
+
+      {/* Live indicator badge */}
+      {isLive && (
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse z-20">
+          LIVE
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col">
@@ -129,35 +245,14 @@ export function ProfileAvatar({
       <div className="relative px-4">
         {/* Avatar overlapping cover - centered */}
         <div className="flex flex-col items-center -mt-12">
-          {/* Avatar with ring */}
-          <div className="relative">
-            <Avatar
-              className={`h-24 w-24 border-4 border-[#0f0a15] relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
-              onClick={isOwnProfile ? onEditProfile : undefined}
-            >
-              <AvatarImage src={avatarUrl} alt={name} />
-              <AvatarFallback className="bg-purple-600 text-white text-2xl">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-
-            {/* Edit indicator on avatar for own profile */}
-            {isOwnProfile && (
-              <button
-                onClick={onEditProfile}
-                className="absolute bottom-0 right-0 p-1.5 bg-purple-600 rounded-full border-2 border-[#0f0a15] hover:bg-purple-500 transition-colors"
-              >
-                <Edit2 className="h-3 w-3 text-white" />
-              </button>
-            )}
-
-            {/* Live indicator */}
-            {isLive && (
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                LIVE
-              </div>
-            )}
-          </div>
+          {/* Avatar - wrapped in Link when live to go to stream */}
+          {isLive && liveStream ? (
+            <Link href={`/live/${liveStream.roomName}`} className="cursor-pointer">
+              {avatarContent}
+            </Link>
+          ) : (
+            avatarContent
+          )}
 
           {/* Name with verified badge - TikTok style */}
           <div className="flex items-center gap-1.5 mt-2">

@@ -210,8 +210,11 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
           {/* Stream Info Below Video - Shows on both mobile and desktop */}
           <div className="bg-[#18181b] p-3 lg:p-4 flex-shrink-0">
             <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center space-x-3">
-                <Avatar className="h-12 w-12">
+              <Link
+                href={`/profile/${creator.name}`}
+                className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+              >
+                <Avatar className="h-12 w-12 ring-2 ring-purple-500/50 cursor-pointer">
                   <AvatarImage src={creator.avatar} alt={creator.name} />
                   <AvatarFallback className="bg-purple-600">
                     {creator.name.split(' ').map(n => n[0]).join('')}
@@ -224,7 +227,7 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
                     {formatNumber(likes)} likes
                   </span>
                 </div>
-              </div>
+              </Link>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleLike}

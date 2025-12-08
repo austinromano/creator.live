@@ -17,6 +17,14 @@ import {
   EditProfileModal,
 } from '@/components/profile';
 
+interface LiveStreamInfo {
+  id: string;
+  roomName: string;
+  title?: string;
+  viewerCount?: number;
+  startedAt?: string;
+}
+
 interface ProfileData {
   id: string;
   username: string;
@@ -28,6 +36,8 @@ interface ProfileData {
   subscriptionPrice: number;
   subscriptionsEnabled: boolean;
   isVerified: boolean;
+  isLive: boolean;
+  liveStream: LiveStreamInfo | null;
   stats: {
     posts: number;
     followers: number;
@@ -186,6 +196,8 @@ export default function ProfilePage() {
         coverUrl={profile.coverImage || undefined}
         name={profile.displayName || profile.username}
         username={profile.username}
+        isLive={profile.isLive}
+        liveStream={profile.liveStream}
         isVerified={profile.isVerified}
         isOwnProfile={isOwnProfile}
         onEditProfile={handleEditProfile}
