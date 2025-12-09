@@ -35,6 +35,16 @@ export interface LiveKitActivityEvent {
   timestamp: number;
 }
 
+export interface LiveKitInviteEvent {
+  id: string;
+  type: 'invite' | 'invite_accepted' | 'invite_declined' | 'guest_joined' | 'guest_left';
+  fromUser: string;
+  toUser: string;
+  roomName: string;
+  avatar?: string;
+  timestamp: number;
+}
+
 export class LiveKitStreamer {
   private room: Room | null = null;
   private streamId: string;
@@ -45,6 +55,7 @@ export class LiveKitStreamer {
   private viewerStream: MediaStream = new MediaStream(); // Persistent stream for viewer
   private onChatMessageCallback?: (message: LiveKitChatMessage) => void;
   private onActivityEventCallback?: (event: LiveKitActivityEvent) => void;
+  private onInviteEventCallback?: (event: LiveKitInviteEvent) => void;
 
   constructor(streamId: string) {
     this.streamId = streamId;
@@ -65,6 +76,12 @@ export class LiveKitStreamer {
   onActivityEvent(callback: (event: LiveKitActivityEvent) => void): void {
     console.log(`[${this.streamId}] onActivityEvent callback registered`);
     this.onActivityEventCallback = callback;
+  }
+
+  // Set callback for receiving invite events (guest PiP invitations)
+  onInviteEvent(callback: (event: LiveKitInviteEvent) => void): void {
+    console.log(`[${this.streamId}] onInviteEvent callback registered`);
+    this.onInviteEventCallback = callback;
   }
 
   // Send an activity event via data channel
@@ -101,6 +118,23 @@ export class LiveKitStreamer {
     console.log(`[${this.streamId}] Sent chat message:`, message.message);
   }
 
+  // Send an invite event via data channel (for guest PiP)
+  async sendInviteEvent(event: LiveKitInviteEvent): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot send invite event: not connected to room');
+      return;
+    }
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(JSON.stringify({
+      type: 'invite',
+      payload: event,
+    }));
+
+    await this.room.localParticipant.publishData(data, { reliable: true });
+    console.log(`[${this.streamId}] Sent invite event:`, event.type, event.toUser);
+  }
+
   // Setup data channel listener
   private setupDataListener(): void {
     if (!this.room) return;
@@ -130,6 +164,14 @@ export class LiveKitStreamer {
             this.onActivityEventCallback(data.payload as LiveKitActivityEvent);
           } else {
             console.log(`[${this.streamId}] WARNING: No onActivityEventCallback registered!`);
+          }
+        } else if (data.type === 'invite') {
+          console.log(`[${this.streamId}] Invite event received:`, data.payload);
+          if (this.onInviteEventCallback) {
+            console.log(`[${this.streamId}] Calling onInviteEventCallback`);
+            this.onInviteEventCallback(data.payload as LiveKitInviteEvent);
+          } else {
+            console.log(`[${this.streamId}] WARNING: No onInviteEventCallback registered!`);
           }
         }
       } catch (error) {

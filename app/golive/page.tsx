@@ -1209,53 +1209,10 @@ export default function ProfilePage() {
 
       {/* ===== DESKTOP LAYOUT (>= lg) - Traditional 3-column layout ===== */}
       <div className="hidden lg:block">
-        {/* Top Stats Bar */}
-        <div className="bg-[#18181b] border-b border-gray-800 px-4 py-2">
-          <div className="flex items-center justify-center max-w-[1920px] mx-auto">
-            <div className="flex items-center space-x-8 text-sm">
-              <div className="flex items-center space-x-2">
-                <Clock className="h-5 w-5 text-blue-400" />
-                <div>
-                  <div className="text-xl font-bold">{formatTime(sessionTime)}</div>
-                  <div className="text-xs text-gray-400">Session</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Eye className="h-5 w-5 text-yellow-400" />
-                <div>
-                  <div className="text-xl font-bold">{viewerCount}</div>
-                  <div className="text-xs text-gray-400">Viewers</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-purple-400" />
-                <div>
-                  <div className="text-xl font-bold">{followerCount}</div>
-                  <div className="text-xs text-gray-400">Followers</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Wallet className="h-5 w-5 text-orange-400" />
-                <div>
-                  <div className="text-xl font-bold">0.00</div>
-                  <div className="text-xs text-gray-400">SOL</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Trophy className="h-5 w-5 text-yellow-500" />
-                <div>
-                  <div className="text-xl font-bold">-</div>
-                  <div className="text-xs text-gray-400">Rank</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Main 3-Column Layout */}
         <div className="flex max-w-[1920px] mx-auto">
           {/* Left Column - Friends List + Activity Feed */}
-          <div className="bg-[#18181b] border-r border-gray-800 flex flex-col h-[calc(100vh-72px)] w-[280px] flex-shrink-0">
+          <div className="bg-[#18181b] border-r border-gray-800 flex flex-col h-screen w-[280px] flex-shrink-0">
             {/* Friends List Section - At Top */}
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -1374,7 +1331,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Center Column - Video Preview */}
-          <div className="flex-1 bg-[#0e0e10] flex flex-col h-[calc(100vh-72px)]">
+          <div className="flex-1 bg-[#0e0e10] flex flex-col h-screen">
             {/* Video Preview */}
             <div
               className="relative bg-black aspect-video overflow-hidden flex-shrink-0"
@@ -1561,24 +1518,74 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* Stream Info */}
-              <div className="flex items-center space-x-3">
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src={user.image || userData?.avatar} />
-                  <AvatarFallback className="bg-purple-600">{initials}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="font-semibold">{username}</div>
-                  <Badge className={isLive ? "bg-red-600" : "bg-gray-600"}>
-                    {isLive ? "LIVE" : "OFFLINE"}
-                  </Badge>
+              {/* Profile Card + Stats Bar */}
+              <div className="flex items-center justify-center gap-6">
+                {/* Profile Card */}
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={user.image || userData?.avatar} />
+                    <AvatarFallback className="bg-purple-600">{initials}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="font-semibold">{username}</div>
+                    <Badge className={isLive ? "bg-red-600" : "bg-gray-600"}>
+                      {isLive ? "LIVE" : "OFFLINE"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="h-10 w-px bg-gray-700" />
+
+                {/* Stats Bar - Order: Session > Viewers > Followers > SOL > Rank */}
+                <div className="flex items-center space-x-6 text-sm">
+                  {/* Session - How long streaming */}
+                  <div className="flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-blue-400" />
+                    <div>
+                      <div className="text-lg font-bold">{formatTime(sessionTime)}</div>
+                      <div className="text-xs text-gray-400">Session</div>
+                    </div>
+                  </div>
+                  {/* Viewers - Current engagement */}
+                  <div className="flex items-center space-x-2">
+                    <Eye className="h-4 w-4 text-yellow-400" />
+                    <div>
+                      <div className="text-lg font-bold">{viewerCount}</div>
+                      <div className="text-xs text-gray-400">Viewers</div>
+                    </div>
+                  </div>
+                  {/* Followers - Community growth */}
+                  <div className="flex items-center space-x-2">
+                    <Users className="h-4 w-4 text-purple-400" />
+                    <div>
+                      <div className="text-lg font-bold">{followerCount}</div>
+                      <div className="text-xs text-gray-400">Followers</div>
+                    </div>
+                  </div>
+                  {/* Tips - Earnings */}
+                  <div className="flex items-center space-x-2">
+                    <Wallet className="h-4 w-4 text-green-400" />
+                    <div>
+                      <div className="text-lg font-bold">0.00</div>
+                      <div className="text-xs text-gray-400">Tips</div>
+                    </div>
+                  </div>
+                  {/* Rank - Competitive standing */}
+                  <div className="flex items-center space-x-2">
+                    <Trophy className="h-4 w-4 text-yellow-500" />
+                    <div>
+                      <div className="text-lg font-bold">-</div>
+                      <div className="text-xs text-gray-400">Rank</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Right Column - Chat */}
-          <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-[calc(100vh-72px)] w-[300px] flex-shrink-0">
+          <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-screen w-[300px] flex-shrink-0">
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">My Chat</h2>
