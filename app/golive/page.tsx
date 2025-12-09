@@ -1824,19 +1824,19 @@ export default function ProfilePage() {
                     >
                       <Link
                         href={friend.isLive ? `/live/${friend.liveStream?.roomName}` : `/profile/${friend.username}`}
-                        className="flex items-center gap-2 flex-1 min-w-0"
+                        className="flex items-center gap-3 flex-1 min-w-0"
                       >
                         <div className="relative">
-                          <Avatar className={`h-8 w-8 ${friend.isLive ? 'ring-2 ring-red-500' : friend.isOnline ? 'ring-2 ring-green-500' : ''}`}>
+                          <Avatar className={`h-10 w-10 ${friend.isLive ? 'ring-2 ring-red-500' : friend.isOnline ? 'ring-2 ring-green-500' : ''}`}>
                             <AvatarImage src={friend.avatar || undefined} />
-                            <AvatarFallback className="text-xs bg-gray-700">
+                            <AvatarFallback className="text-sm bg-gray-700">
                               {(friend.username || 'U').charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           {friend.isLive ? (
-                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b]" />
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-[#18181b]" />
                           ) : friend.isOnline ? (
-                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#18181b]" />
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#18181b]" />
                           ) : null}
                         </div>
                         <div className="flex-1 min-w-0">
