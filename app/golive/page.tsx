@@ -126,6 +126,18 @@ export default function ProfilePage() {
   const guestAudioContextRef = React.useRef<AudioContext | null>(null);
   const guestAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
 
+  // Incoming invite notification state
+  interface IncomingInvite {
+    fromUsername: string;
+    fromRoomName: string;
+    fromAvatar?: string;
+    timestamp: number;
+  }
+  const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
+  const [pendingInvite, setPendingInvite] = useState<{ toUsername: string; toRoomName: string } | null>(null);
+  const inviteTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const invitePollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
   const user = session?.user as any;
   const userId = user?.id;
   const username = userData?.username || user?.name || 'User';
@@ -295,6 +307,46 @@ export default function ProfilePage() {
       activityContainerRef.current.scrollTop = activityContainerRef.current.scrollHeight;
     }
   }, [activityEvents]);
+
+  // Poll for incoming invites via API (when live)
+  useEffect(() => {
+    if (isLive && userData?.username) {
+      console.log('🔔 Starting invite polling for:', userData.username);
+
+      // Poll for incoming invites every 2 seconds
+      invitePollIntervalRef.current = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/stream/invite?username=${userData.username}`);
+          const data = await response.json();
+
+          if (data.hasInvite && data.invite) {
+            console.log('📨 Found pending invite from:', data.invite.fromUsername);
+
+            // Only show if we don't already have this invite displayed
+            setIncomingInvite((prev) => {
+              if (!prev || prev.fromUsername !== data.invite.fromUsername) {
+                return {
+                  fromUsername: data.invite.fromUsername,
+                  fromRoomName: data.invite.fromRoomName,
+                  fromAvatar: data.invite.fromAvatar,
+                  timestamp: data.invite.timestamp,
+                };
+              }
+              return prev;
+            });
+          }
+        } catch (error) {
+          console.error('Error polling for invites:', error);
+        }
+      }, 2000);
+
+      return () => {
+        if (invitePollIntervalRef.current) {
+          clearInterval(invitePollIntervalRef.current);
+        }
+      };
+    }
+  }, [isLive, userData?.username]);
 
   if (status === 'loading' || userLoading) {
     return (
@@ -528,6 +580,9 @@ export default function ProfilePage() {
           console.log('Adding event to activityEvents state:', activityEvent);
           setActivityEvents(prev => [...prev, activityEvent]);
         });
+
+        // Note: Invite system now uses API polling instead of LiveKit data channel
+        // This is more reliable across different network conditions
 
         await livekitStreamerRef.current.startBroadcast(streamRef.current);
         console.log('LiveKit broadcast started for room:', roomName);
@@ -1076,17 +1131,94 @@ export default function ProfilePage() {
     }
   };
 
-  // Invite a friend to appear as guest PiP on stream
+  // Send invite request to a friend via API (more reliable than LiveKit data channel)
   const handleInviteFriend = async (friend: Friend) => {
     if (!friend.isLive || !friend.liveStream?.roomName) {
       console.error('Friend is not live');
       return;
     }
 
-    console.log('Inviting friend to stream:', friend.username, friend.liveStream.roomName);
+    if (!currentRoomName || !livekitStreamerRef.current) {
+      console.error('Not currently streaming');
+      return;
+    }
+
+    console.log('📨 Sending invite request to:', friend.username);
+
+    try {
+      // Send invite via API
+      const response = await fetch('/api/stream/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toUsername: friend.username,
+          fromUsername: username,
+          fromRoomName: currentRoomName,
+          fromAvatar: userData?.avatar,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send invite');
+      }
+
+      console.log('✅ Invite sent to:', friend.username);
+
+      // Track pending invite
+      setPendingInvite({ toUsername: friend.username!, toRoomName: friend.liveStream!.roomName });
+
+      // Start polling for acceptance
+      const pollForAcceptance = async () => {
+        const checkResponse = await fetch(
+          `/api/stream/invite?checkAcceptance=${friend.username}&fromUsername=${username}`
+        );
+        const data = await checkResponse.json();
+
+        if (data.accepted) {
+          console.log('🎉 Invite accepted by:', friend.username);
+          // Connect to their stream
+          const accepterRoomName = data.invite.accepterRoomName || friend.liveStream!.roomName;
+          connectToGuestStream(accepterRoomName, friend.username!);
+          setPendingInvite(null);
+          return true;
+        }
+        return false;
+      };
+
+      // Poll every 2 seconds for 30 seconds
+      let pollCount = 0;
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        const accepted = await pollForAcceptance();
+        if (accepted || pollCount >= 15) {
+          clearInterval(pollInterval);
+          if (pollCount >= 15) {
+            console.log('Invite expired');
+            setPendingInvite(null);
+          }
+        }
+      }, 2000);
+
+      // Store interval ref for cleanup
+      if (inviteTimeoutRef.current) {
+        clearTimeout(inviteTimeoutRef.current);
+      }
+      inviteTimeoutRef.current = setTimeout(() => {
+        clearInterval(pollInterval);
+        setPendingInvite(null);
+      }, 30000);
+
+    } catch (error) {
+      console.error('Failed to send invite:', error);
+    }
+  };
+
+  // Connect to guest stream after they accept the invite
+  const connectToGuestStream = async (guestRoomNameParam: string, guestUsernameParam: string) => {
+    console.log('🎬 Connecting to guest stream:', guestUsernameParam, guestRoomNameParam);
 
     // Connect to the friend's stream to pull their video
-    const guestStreamer = new LiveKitStreamer(friend.liveStream.roomName);
+    const guestStreamer = new LiveKitStreamer(guestRoomNameParam);
     guestLivekitRef.current = guestStreamer;
 
     // Create a hidden video element to receive the guest's stream (for canvas composite)
@@ -1100,12 +1232,12 @@ export default function ProfilePage() {
       await guestStreamer.startViewingWithElement(
         guestVideo,
         async () => {
-          console.log('✅ Connected to guest stream:', friend.username);
+          console.log('✅ Connected to guest stream:', guestUsernameParam);
 
           // Set state first to render the video element
           setGuestActive(true);
-          setGuestUsername(friend.username);
-          setGuestRoomName(friend.liveStream!.roomName);
+          setGuestUsername(guestUsernameParam);
+          setGuestRoomName(guestRoomNameParam);
           setGuestPipControlsVisible(true);
           setGuestAudioMuted(false);
 
@@ -1129,7 +1261,7 @@ export default function ProfilePage() {
             // Wait a bit for video to stabilize
             // Pass roomName and username directly to avoid async state issues
             setTimeout(async () => {
-              await startGuestComposite(friend.liveStream!.roomName, friend.username);
+              await startGuestComposite(guestRoomNameParam, guestUsernameParam);
             }, 500);
           }
 
@@ -1137,6 +1269,12 @@ export default function ProfilePage() {
           guestPipControlsTimeoutRef.current = setTimeout(() => {
             setGuestPipControlsVisible(false);
           }, 3000);
+
+          // Clear pending invite
+          setPendingInvite(null);
+          if (inviteTimeoutRef.current) {
+            clearTimeout(inviteTimeoutRef.current);
+          }
         },
         undefined,
         { muteAudio: false } // Don't mute - we need audio
@@ -1146,6 +1284,56 @@ export default function ProfilePage() {
       guestLivekitRef.current = null;
       guestVideoRef.current = null;
     }
+  };
+
+  // Accept the invite via API
+  const acceptInvite = async () => {
+    if (!incomingInvite || !currentRoomName) return;
+
+    console.log('✅ Accepting invite from:', incomingInvite.fromUsername);
+
+    try {
+      const response = await fetch('/api/stream/invite', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: userData?.username,
+          action: 'accept',
+          accepterRoomName: currentRoomName,
+        }),
+      });
+
+      if (response.ok) {
+        console.log('✅ Invite acceptance sent');
+      }
+    } catch (error) {
+      console.error('Failed to accept invite:', error);
+    }
+
+    // Clear the notification
+    setIncomingInvite(null);
+  };
+
+  // Decline the invite via API
+  const declineInvite = async () => {
+    if (!incomingInvite) return;
+
+    console.log('❌ Declining invite from:', incomingInvite.fromUsername);
+
+    try {
+      await fetch('/api/stream/invite', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: userData?.username,
+          action: 'decline',
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to decline invite:', error);
+    }
+
+    setIncomingInvite(null);
   };
 
   // Mix guest audio into the broadcast stream for viewers
@@ -1341,6 +1529,68 @@ export default function ProfilePage() {
   // Desktop keeps traditional 3-column layout
   return (
     <div className="min-h-screen bg-[#0e0e10] text-white">
+      {/* ===== INCOMING INVITE NOTIFICATION ===== */}
+      {incomingInvite && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#18181b] border border-purple-500/50 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl shadow-purple-500/20 animate-in fade-in zoom-in duration-300">
+            {/* Header with pulsing live indicator */}
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <div className="relative">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+              </div>
+              <span className="text-sm font-medium text-red-400">LIVE INVITE</span>
+            </div>
+
+            {/* Avatar and message */}
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-0.5 mb-3">
+                <div className="w-full h-full rounded-full overflow-hidden bg-[#0e0e10]">
+                  {incomingInvite.fromAvatar ? (
+                    <img
+                      src={incomingInvite.fromAvatar}
+                      alt={incomingInvite.fromUsername}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xl font-bold text-white">
+                      {incomingInvite.fromUsername.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-1">
+                {incomingInvite.fromUsername}
+              </h3>
+              <p className="text-gray-400 text-sm">
+                invites you to join their broadcast
+              </p>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={declineInvite}
+                className="flex-1 py-3 px-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
+              >
+                Decline
+              </button>
+              <button
+                onClick={acceptInvite}
+                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-medium transition-all shadow-lg shadow-purple-500/30"
+              >
+                Accept
+              </button>
+            </div>
+
+            {/* Auto-dismiss timer */}
+            <div className="mt-4 text-center">
+              <p className="text-xs text-gray-500">Auto-dismisses in 15 seconds</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== MOBILE LAYOUT (< lg) - Full screen video with overlays ===== */}
       <div className="lg:hidden fixed inset-0 bg-black z-[60]">
         {/* Full-screen Video Background - Mobile only */}
@@ -1609,16 +1859,22 @@ export default function ProfilePage() {
                       </Link>
                       {/* Invite button for live friends when broadcaster is also live */}
                       {isLive && friend.isLive && friend.liveStream && !guestActive && (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleInviteFriend(friend);
-                          }}
-                          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded text-white"
-                        >
-                          Invite
-                        </button>
+                        pendingInvite?.toRoomName === friend.liveStream.roomName ? (
+                          <span className="flex-shrink-0 px-2 py-1 text-xs bg-yellow-600/50 rounded text-yellow-300 animate-pulse">
+                            Pending...
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleInviteFriend(friend);
+                            }}
+                            className="flex-shrink-0 px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded text-white"
+                          >
+                            Invite
+                          </button>
+                        )
                       )}
                       {/* Show "On Stream" badge and mute button if this friend is the current guest */}
                       {guestActive && guestRoomName === friend.liveStream?.roomName && (

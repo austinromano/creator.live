@@ -146,7 +146,8 @@ export class LiveKitStreamer {
   private setupDataListener(): void {
     if (!this.room) return;
 
-    console.log(`[${this.streamId}] Setting up data channel listener`);
+    console.log(`🔊 [${this.streamId}] Setting up data channel listener`);
+    console.log(`🔊 [${this.streamId}] Room state: ${this.room.state}, Local participant: ${this.room.localParticipant?.identity}`);
 
     this.room.on(RoomEvent.DataReceived, (payload, participant) => {
       console.log(`📨 [${this.streamId}] DataReceived event from participant:`, participant?.identity);
