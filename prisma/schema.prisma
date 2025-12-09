@@ -39,6 +39,8 @@ model User {
   followers     Follower[] @relation("Following")
   following     Follower[] @relation("Followers")
   posts         Post[]
+  receivedNotifications Notification[] @relation("ReceivedNotifications")
+  sentNotifications     Notification[] @relation("SentNotifications")
 
   @@map("users")
 }
@@ -134,4 +136,24 @@ model StreamInvite {
   @@index([toUsername, status])
   @@index([fromUsername, toUsername])
   @@map("stream_invites")
+}
+
+// Notifications table - stores user notifications (sparks, follows, etc.)
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")      // User who receives the notification
+  fromUserId  String   @map("from_user_id") // User who triggered the notification
+  type        String   // spark, follow, comment, tip, etc.
+  postId      String?  @map("post_id")      // Related post (for sparks, comments)
+  message     String?                        // Optional message
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user     User @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  fromUser User @relation("SentNotifications", fields: [fromUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

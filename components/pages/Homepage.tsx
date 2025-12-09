@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Mail, ExternalLink, Home } from 'lucide-react';
+import { HomeFeed } from '@/components/feed/HomeFeed';
 
 // Detect if user is on mobile device (not in Phantom browser)
 function isMobileDevice(): boolean {
@@ -168,11 +169,11 @@ export function Homepage() {
     );
   }
 
-  // Show empty home page for authenticated users
+  // Show feed for authenticated users
   if (status === 'authenticated') {
     return (
       <div className="flex-1">
-        {/* Empty home page - content moved to explore */}
+        <HomeFeed />
       </div>
     );
   }
