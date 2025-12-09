@@ -118,3 +118,20 @@ model Follower {
   @@unique([followerId, followingId])
   @@map("followers")
 }
+
+// Stream invites - for live collaboration invitations
+model StreamInvite {
+  id              String   @id @default(cuid())
+  fromUsername    String   @map("from_username")
+  fromRoomName    String   @map("from_room_name")
+  fromAvatar      String?  @map("from_avatar")
+  toUsername      String   @map("to_username")
+  status          String   @default("pending") // pending, accepted, declined, expired
+  accepterRoomName String? @map("accepter_room_name")
+  createdAt       DateTime @default(now()) @map("created_at")
+  expiresAt       DateTime @map("expires_at")
+
+  @@index([toUsername, status])
+  @@index([fromUsername, toUsername])
+  @@map("stream_invites")
+}
