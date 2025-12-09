@@ -61,7 +61,8 @@ model Post {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[]
 
   @@map("posts")
 }
@@ -150,8 +151,9 @@ model Notification {
   createdAt   DateTime @default(now()) @map("created_at")
 
   // Relations
-  user     User @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
-  fromUser User @relation("SentNotifications", fields: [fromUserId], references: [id], onDelete: Cascade)
+  user     User  @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  fromUser User  @relation("SentNotifications", fields: [fromUserId], references: [id], onDelete: Cascade)
+  post     Post? @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([userId, createdAt])

@@ -31,6 +31,13 @@ export async function GET(request: NextRequest) {
             isVerified: true,
           },
         },
+        post: {
+          select: {
+            id: true,
+            title: true,
+            thumbnailUrl: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',

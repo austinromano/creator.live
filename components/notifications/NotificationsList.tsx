@@ -1,0 +1,239 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Loader2, Bell } from 'lucide-react';
+
+interface NotificationData {
+  id: string;
+  type: string;
+  message: string | null;
+  isRead: boolean;
+  createdAt: string;
+  fromUser: {
+    id: string;
+    username: string | null;
+    displayName: string | null;
+    avatar: string | null;
+  };
+  post?: {
+    id: string;
+    title: string | null;
+    thumbnailUrl: string | null;
+  } | null;
+}
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  return `${Math.floor(diffInSeconds / 604800)}w ago`;
+}
+
+function getNotificationText(notification: NotificationData): string {
+  switch (notification.type) {
+    case 'spark':
+      return 'sparked your post';
+    case 'follow':
+      return 'started following you';
+    case 'comment':
+      return 'commented on your post';
+    case 'tip':
+      return 'sent you a tip';
+    case 'live':
+      return 'went live';
+    default:
+      return notification.message || 'interacted with you';
+  }
+}
+
+function getNotificationIcon(type: string): React.ReactNode {
+  switch (type) {
+    case 'spark':
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4 text-purple-400"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <path
+            d="M12 3L13.5 9.5L20 11L13.5 12.5L12 19L10.5 12.5L4 11L10.5 9.5L12 3Z"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case 'follow':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 text-blue-400" fill="currentColor">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" y1="8" x2="19" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <line x1="16" y1="11" x2="22" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case 'tip':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 text-green-400" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      );
+    case 'live':
+      return (
+        <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+          <div className="w-2 h-2 bg-white rounded-full" />
+        </div>
+      );
+    default:
+      return <Bell className="h-4 w-4 text-gray-400" />;
+  }
+}
+
+export function NotificationsList() {
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await fetch('/api/notifications');
+      if (!response.ok) throw new Error('Failed to fetch notifications');
+      const data = await response.json();
+      setNotifications(data.notifications || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setError('Failed to load notifications');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, isRead: true }))
+      );
+    } catch (err) {
+      console.error('Error marking notifications as read:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Mark all as read when component mounts
+  useEffect(() => {
+    if (notifications.length > 0 && notifications.some((n) => !n.isRead)) {
+      markAllAsRead();
+    }
+  }, [notifications.length > 0]); // Only run once when notifications are first loaded
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-red-400">{error}</p>
+      </div>
+    );
+  }
+
+  if (notifications.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-4">
+        <Bell className="h-16 w-16 text-gray-600 mb-4" />
+        <h2 className="text-xl font-bold text-white mb-2">No Notifications Yet</h2>
+        <p className="text-gray-400 text-center">
+          When someone interacts with your content, you&apos;ll see it here
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-gray-800">
+      {notifications.map((notification) => (
+        <Link
+          key={notification.id}
+          href={
+            notification.type === 'follow'
+              ? `/profile/${notification.fromUser.username}`
+              : notification.post
+              ? `/post/${notification.post.id}`
+              : `/profile/${notification.fromUser.username}`
+          }
+          className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-900/50 transition-colors ${
+            !notification.isRead ? 'bg-purple-900/10' : ''
+          }`}
+        >
+          {/* Avatar with notification type icon */}
+          <div className="relative flex-shrink-0">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={notification.fromUser.avatar || undefined} />
+              <AvatarFallback className="bg-gray-700 text-white">
+                {notification.fromUser.username?.[0]?.toUpperCase() || '?'}
+              </AvatarFallback>
+            </Avatar>
+            {/* Notification type badge */}
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gray-900 rounded-full flex items-center justify-center ring-2 ring-[#0f0a15]">
+              {getNotificationIcon(notification.type)}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-white">
+              <span className="font-semibold">
+                {notification.fromUser.displayName || notification.fromUser.username}
+              </span>{' '}
+              <span className="text-gray-400">
+                {getNotificationText(notification)}
+              </span>
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formatTimeAgo(notification.createdAt)}
+            </p>
+          </div>
+
+          {/* Post thumbnail if applicable */}
+          {notification.post?.thumbnailUrl && (
+            <div className="flex-shrink-0">
+              <img
+                src={notification.post.thumbnailUrl}
+                alt=""
+                className="w-12 h-12 object-cover rounded"
+              />
+            </div>
+          )}
+
+          {/* Unread indicator */}
+          {!notification.isRead && (
+            <div className="flex-shrink-0">
+              <div className="w-2 h-2 bg-purple-500 rounded-full" />
+            </div>
+          )}
+        </Link>
+      ))}
+    </div>
+  );
+}

@@ -7,7 +7,8 @@ import { signInWithPhantom } from '@/lib/phantom-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Mail, ExternalLink, MessageCircle } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, MessageCircle, Bell } from 'lucide-react';
+import { NotificationsList } from '@/components/notifications/NotificationsList';
 
 // Detect if user is on mobile device (not in Phantom browser)
 function isMobileDevice(): boolean {
@@ -169,15 +170,20 @@ export default function MessagesPage() {
     );
   }
 
-  // Show messages page for authenticated users
+  // Show notifications page for authenticated users
   if (status === 'authenticated') {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex flex-col items-center justify-center px-6">
-        <MessageCircle className="h-16 w-16 text-gray-600 mb-4" />
-        <h1 className="text-xl font-bold text-white mb-2">No Messages Yet</h1>
-        <p className="text-gray-400 text-center">
-          Start a conversation with your favorite creators
-        </p>
+      <div className="min-h-screen bg-[#0f0a15] pb-20">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[#0f0a15]/95 backdrop-blur-sm border-b border-gray-800">
+          <div className="flex items-center gap-3 px-4 py-4">
+            <Bell className="h-6 w-6 text-white" />
+            <h1 className="text-xl font-bold text-white">Notifications</h1>
+          </div>
+        </div>
+
+        {/* Notifications List */}
+        <NotificationsList />
       </div>
     );
   }
