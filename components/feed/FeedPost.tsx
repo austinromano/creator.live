@@ -14,7 +14,8 @@ export interface FeedPostData {
   thumbnailUrl: string | null;
   contentUrl: string | null;
   price: number | null;
-  viewerCount: number;
+  sparkCount: number;
+  sparked: boolean;
   createdAt: string;
   user: {
     id: string;
@@ -47,69 +48,91 @@ function isVideoUrl(url: string | null): boolean {
 }
 
 export function FeedPost({ post }: FeedPostProps) {
-  const [sparked, setSparked] = useState(false);
-  const [sparkCount, setSparkCount] = useState(post.viewerCount || 0);
+  const [sparked, setSparked] = useState(post.sparked || false);
+  const [sparkCount, setSparkCount] = useState(post.sparkCount || 0);
   const [saved, setSaved] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSpark = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    const previousSparked = sparked;
+    const previousCount = sparkCount;
+
+    // Optimistic update
     if (sparked) {
-      setSparkCount((prev) => prev - 1);
       setSparked(false);
-
-      // Remove notification when unsparking
-      try {
-        await fetch('/api/notifications', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toUserId: post.user.id,
-            type: 'spark',
-            postId: post.id,
-          }),
-        });
-      } catch (error) {
-        console.error('Failed to remove spark notification:', error);
-      }
+      setSparkCount((prev) => Math.max(0, prev - 1));
     } else {
-      setSparkCount((prev) => prev + 1);
       setSparked(true);
+      setSparkCount((prev) => prev + 1);
+    }
 
-      // Send notification to post owner
-      try {
-        await fetch('/api/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toUserId: post.user.id,
-            type: 'spark',
-            postId: post.id,
-          }),
-        });
-      } catch (error) {
-        console.error('Failed to send spark notification:', error);
+    try {
+      const response = await fetch('/api/sparks', {
+        method: previousSparked ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        // If already sparked, keep sparked state (sync with server)
+        if (data.error === 'Already sparked') {
+          setSparked(true);
+        } else {
+          // Revert on other errors
+          setSparked(previousSparked);
+          setSparkCount(previousCount);
+        }
       }
+    } catch (error) {
+      // Revert on error
+      setSparked(previousSparked);
+      setSparkCount(previousCount);
+      console.error('Failed to update spark:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDoubleTap = async () => {
-    if (!sparked) {
+    if (!sparked && !isLoading) {
+      setIsLoading(true);
+
+      // Optimistic update
       setSparked(true);
       setSparkCount((prev) => prev + 1);
 
-      // Send notification to post owner
       try {
-        await fetch('/api/notifications', {
+        const response = await fetch('/api/sparks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toUserId: post.user.id,
-            type: 'spark',
-            postId: post.id,
-          }),
+          body: JSON.stringify({ postId: post.id }),
         });
+
+        if (!response.ok) {
+          const data = await response.json();
+          // If already sparked, keep sparked state (sync with server)
+          if (data.error === 'Already sparked') {
+            setSparked(true);
+            // Revert count since server already has it
+            setSparkCount((prev) => Math.max(0, prev - 1));
+          } else {
+            // Revert on other errors
+            setSparked(false);
+            setSparkCount((prev) => Math.max(0, prev - 1));
+          }
+        }
       } catch (error) {
-        console.error('Failed to send spark notification:', error);
+        // Revert on error
+        setSparked(false);
+        setSparkCount((prev) => Math.max(0, prev - 1));
+        console.error('Failed to spark post:', error);
+      } finally {
+        setIsLoading(false);
       }
     }
   };

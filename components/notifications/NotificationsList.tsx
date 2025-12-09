@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, Bell } from 'lucide-react';
@@ -97,6 +98,7 @@ function getNotificationIcon(type: string): React.ReactNode {
 }
 
 export function NotificationsList() {
+  const { data: session, status } = useSession();
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +106,12 @@ export function NotificationsList() {
   const fetchNotifications = useCallback(async () => {
     try {
       const response = await fetch('/api/notifications');
+      if (response.status === 401) {
+        // Not authenticated, just show empty state
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
       if (!response.ok) throw new Error('Failed to fetch notifications');
       const data = await response.json();
       setNotifications(data.notifications || []);
@@ -132,15 +140,20 @@ export function NotificationsList() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    // Only fetch when session is ready and authenticated
+    if (status === 'authenticated') {
+      fetchNotifications();
+    } else if (status === 'unauthenticated') {
+      setLoading(false);
+    }
+  }, [status, fetchNotifications]);
 
-  // Mark all as read when component mounts
+  // Mark all as read when notifications are loaded
   useEffect(() => {
     if (notifications.length > 0 && notifications.some((n) => !n.isRead)) {
       markAllAsRead();
     }
-  }, [notifications.length > 0]); // Only run once when notifications are first loaded
+  }, [notifications.length > 0, markAllAsRead]);
 
   if (loading) {
     return (

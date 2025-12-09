@@ -51,6 +51,19 @@ export async function GET(request: NextRequest) {
             isVerified: true,
           },
         },
+        sparks: {
+          where: {
+            userId: currentUserId,
+          },
+          select: {
+            id: true,
+          },
+        },
+        _count: {
+          select: {
+            sparks: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -67,7 +80,8 @@ export async function GET(request: NextRequest) {
       thumbnailUrl: post.thumbnailUrl,
       contentUrl: post.contentUrl,
       price: post.price,
-      viewerCount: post.viewerCount,
+      sparkCount: post._count.sparks,
+      sparked: post.sparks.length > 0, // Current user has sparked this post
       createdAt: post.createdAt,
       user: {
         id: post.user.id,

@@ -41,6 +41,7 @@ model User {
   posts         Post[]
   receivedNotifications Notification[] @relation("ReceivedNotifications")
   sentNotifications     Notification[] @relation("SentNotifications")
+  sparks                Spark[]
 
   @@map("users")
 }
@@ -63,6 +64,7 @@ model Post {
   // Relations
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[]
+  sparks        Spark[]
 
   @@map("posts")
 }
@@ -158,4 +160,20 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// Sparks table - tracks likes/sparks on posts
+model Spark {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // User can only spark a post once
+  @@index([postId])
+  @@map("sparks")
 }
