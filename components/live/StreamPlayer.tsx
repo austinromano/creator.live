@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,13 @@ import {
   WifiOff
 } from 'lucide-react';
 
+interface GuestPipInfo {
+  guestRoomName: string;
+  guestUsername: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+}
+
 interface StreamPlayerProps {
   creator: Creator;
   isLive: boolean;
@@ -28,7 +35,9 @@ interface StreamPlayerProps {
 
 export function StreamPlayer({ creator, isLive, viewers, className = '', onStreamerReady }: StreamPlayerProps) {
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const guestVideoRef = React.useRef<HTMLVideoElement>(null);
   const streamerRef = React.useRef<LiveKitStreamer | null>(null);
+  const guestStreamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false); // Start unmuted by default
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -38,12 +47,109 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
   const [needsUserInteraction, setNeedsUserInteraction] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
+  // Guest PiP state
+  const [guestPip, setGuestPip] = useState<GuestPipInfo | null>(null);
+  const [guestConnected, setGuestConnected] = useState(false);
+
   // Detect iOS
   useEffect(() => {
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     setIsIOS(iOS);
     console.log('iOS detected:', iOS);
+  }, []);
+
+  // Track current guest room to avoid reconnecting
+  const currentGuestRoomRef = React.useRef<string | null>(null);
+
+  // Handle guest PiP data messages
+  const handleGuestPipMessage = useCallback(async (data: any) => {
+    console.log('🎬 Guest PiP message received:', data);
+
+    if (data.action === 'start') {
+      // Check if we're already connected to this guest - just update position/size
+      if (currentGuestRoomRef.current === data.guestRoomName && guestStreamerRef.current) {
+        console.log('🎬 Already connected to guest, updating position only');
+        // Make sure guestConnected is true (in case it wasn't set)
+        setGuestConnected(true);
+        setGuestPip(prev => prev ? {
+          ...prev,
+          position: data.position,
+          size: data.size,
+        } : {
+          guestRoomName: data.guestRoomName,
+          guestUsername: data.guestUsername,
+          position: data.position,
+          size: data.size,
+        });
+        return;
+      }
+
+      console.log('🎬 Starting guest PiP overlay for:', data.guestUsername);
+      currentGuestRoomRef.current = data.guestRoomName;
+
+      // Start showing guest PiP - connect to guest's stream
+      setGuestPip({
+        guestRoomName: data.guestRoomName,
+        guestUsername: data.guestUsername,
+        position: data.position,
+        size: data.size,
+      });
+
+      // Connect to guest's LiveKit stream
+      if (guestStreamerRef.current) {
+        guestStreamerRef.current.close();
+      }
+
+      guestStreamerRef.current = new LiveKitStreamer(data.guestRoomName);
+
+      // Wait for video element to be rendered
+      setTimeout(async () => {
+        if (guestVideoRef.current && guestStreamerRef.current) {
+          try {
+            await guestStreamerRef.current.startViewingWithElement(
+              guestVideoRef.current,
+              () => {
+                console.log('Guest PiP stream connected');
+                setGuestConnected(true);
+              },
+              undefined,
+              { muteAudio: false } // Play guest audio
+            );
+          } catch (error) {
+            console.error('Failed to connect to guest stream:', error);
+          }
+        }
+      }, 100);
+
+    } else if (data.action === 'update') {
+      // Update guest position/size
+      setGuestPip(prev => prev ? {
+        ...prev,
+        position: data.position,
+        size: data.size,
+      } : null);
+
+    } else if (data.action === 'stop') {
+      // Stop showing guest PiP
+      currentGuestRoomRef.current = null;
+      if (guestStreamerRef.current) {
+        guestStreamerRef.current.close();
+        guestStreamerRef.current = null;
+      }
+      setGuestPip(null);
+      setGuestConnected(false);
+    }
+  }, []);
+
+  // Cleanup guest stream on unmount
+  useEffect(() => {
+    return () => {
+      if (guestStreamerRef.current) {
+        guestStreamerRef.current.close();
+        guestStreamerRef.current = null;
+      }
+    };
   }, []);
 
   // Connect to LiveKit stream when live
@@ -68,6 +174,10 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
       }
 
       streamerRef.current = new LiveKitStreamer(creator.symbol);
+
+      // Register guest PiP callback BEFORE connecting so we don't miss any messages
+      console.log('🎬 Pre-registering guest PiP callback');
+      streamerRef.current.onGuestPip(handleGuestPipMessage);
 
       try {
         if (videoRef.current) {
@@ -113,7 +223,7 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
         streamerRef.current = null;
       }
     };
-  }, [isLive, creator.symbol]);
+  }, [isLive, creator.symbol, handleGuestPipMessage]);
 
   // Format viewer count for display
   const formatViewers = (count: number) => {
@@ -163,30 +273,73 @@ export function StreamPlayer({ creator, isLive, viewers, className = '', onStrea
 
   return (
     <div className={`${className} bg-black overflow-hidden relative group`}>
-      {/* Video Player Area */}
-      <div className="w-full h-full bg-black relative">
+      {/* Video Player Area - Fixed 16:9 aspect ratio container */}
+      <div className="w-full h-full bg-black relative flex items-center justify-center">
           {/* Stream Content */}
           {isLive ? (
-            <div className="relative w-full h-full">
-              <video
-                ref={videoRef}
-                className="w-full h-full object-contain bg-black"
-                autoPlay
-                muted={isMuted}
-                playsInline
-                webkit-playsinline="true"
-                x-webkit-airplay="allow"
-                controls={false}
-              />
-              {!hasStream && (
-                <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
-                  <div className="text-center space-y-4">
-                    <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
-                    <p className="text-white text-lg">Connecting to live stream...</p>
-                    <p className="text-gray-400 text-sm">Waiting for broadcaster</p>
+            <div className="relative w-full h-full flex items-center justify-center">
+              {/* 16:9 aspect ratio wrapper - this maintains consistent proportions */}
+              <div className="relative w-full" style={{ maxHeight: '100%', aspectRatio: '16/9' }}>
+                <video
+                  ref={videoRef}
+                  className="absolute inset-0 w-full h-full object-contain bg-black"
+                  autoPlay
+                  muted={isMuted}
+                  playsInline
+                  webkit-playsinline="true"
+                  x-webkit-airplay="allow"
+                  controls={false}
+                />
+
+                {/* Guest PiP Overlay - positioned relative to 16:9 container */}
+                {guestPip && (
+                  <div
+                    className="absolute transition-all duration-300 ease-out"
+                    style={{
+                      // Convert from broadcast canvas coordinates (1920x1080) to percentage
+                      left: `${(guestPip.position.x / 1920) * 100}%`,
+                      top: `${(guestPip.position.y / 1080) * 100}%`,
+                      width: `${(guestPip.size.width / 1920) * 100}%`,
+                      height: `${(guestPip.size.height / 1080) * 100}%`,
+                    }}
+                  >
+                    {/* Green border */}
+                    <div className="absolute inset-0 rounded-lg border-4 border-green-500 -m-1" />
+
+                    {/* Guest video */}
+                    <video
+                      ref={guestVideoRef}
+                      className="w-full h-full object-cover rounded-lg bg-black"
+                      autoPlay
+                      playsInline
+                      muted={false}
+                      onPlaying={() => setGuestConnected(true)}
+                    />
+
+                    {/* Guest username label */}
+                    <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-1 rounded text-white text-sm">
+                      {guestPip.guestUsername}
+                    </div>
+
+                    {/* Loading state */}
+                    {!guestConnected && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )}
+                {/* Loading overlay - inside aspect ratio container */}
+                {!hasStream && (
+                  <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+                    <div className="text-center space-y-4">
+                      <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+                      <p className="text-white text-lg">Connecting to live stream...</p>
+                      <p className="text-gray-400 text-sm">Waiting for broadcaster</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-900">

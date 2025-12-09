@@ -56,6 +56,7 @@ export class LiveKitStreamer {
   private onChatMessageCallback?: (message: LiveKitChatMessage) => void;
   private onActivityEventCallback?: (event: LiveKitActivityEvent) => void;
   private onInviteEventCallback?: (event: LiveKitInviteEvent) => void;
+  private onGuestPipCallback?: (data: any) => void;
 
   constructor(streamId: string) {
     this.streamId = streamId;
@@ -82,6 +83,12 @@ export class LiveKitStreamer {
   onInviteEvent(callback: (event: LiveKitInviteEvent) => void): void {
     console.log(`[${this.streamId}] onInviteEvent callback registered`);
     this.onInviteEventCallback = callback;
+  }
+
+  // Set callback for receiving guest PiP data (for viewers)
+  onGuestPip(callback: (data: any) => void): void {
+    console.log(`[${this.streamId}] onGuestPip callback registered`);
+    this.onGuestPipCallback = callback;
   }
 
   // Send an activity event via data channel
@@ -142,12 +149,13 @@ export class LiveKitStreamer {
     console.log(`[${this.streamId}] Setting up data channel listener`);
 
     this.room.on(RoomEvent.DataReceived, (payload, participant) => {
-      console.log(`[${this.streamId}] DataReceived event from participant:`, participant?.identity);
+      console.log(`📨 [${this.streamId}] DataReceived event from participant:`, participant?.identity);
       try {
         const decoder = new TextDecoder();
         const jsonString = decoder.decode(payload);
-        console.log(`[${this.streamId}] Received data:`, jsonString);
+        console.log(`📨 [${this.streamId}] Received data:`, jsonString);
         const data = JSON.parse(jsonString);
+        console.log(`📨 [${this.streamId}] Parsed data type:`, data.type);
 
         if (data.type === 'chat') {
           console.log(`[${this.streamId}] Chat message received:`, data.payload);
@@ -172,6 +180,15 @@ export class LiveKitStreamer {
             this.onInviteEventCallback(data.payload as LiveKitInviteEvent);
           } else {
             console.log(`[${this.streamId}] WARNING: No onInviteEventCallback registered!`);
+          }
+        } else if (data.type === 'guest_pip') {
+          console.log(`🎬 [${this.streamId}] Guest PiP event received:`, data);
+          console.log(`🎬 [${this.streamId}] onGuestPipCallback is:`, this.onGuestPipCallback ? 'SET' : 'NOT SET');
+          if (this.onGuestPipCallback) {
+            console.log(`🎬 [${this.streamId}] Calling onGuestPipCallback with data:`, data);
+            this.onGuestPipCallback(data);
+          } else {
+            console.log(`🎬 [${this.streamId}] WARNING: No onGuestPipCallback registered!`);
           }
         }
       } catch (error) {
@@ -285,10 +302,13 @@ export class LiveKitStreamer {
     // Get viewer token
     const token = await this.getToken(`viewer-${Date.now()}`, false);
 
-    // Create and connect to room
+    // Create and connect to room with optimized settings for viewing
     this.room = new Room({
       adaptiveStream: false, // Disable adaptive - always request full quality
-      dynacast: true,
+      dynacast: false, // Disable dynacast for viewers - receive everything
+      videoCaptureDefaults: {
+        resolution: VideoPresets.h720.resolution,
+      },
     });
 
     // Handle track subscriptions - use LiveKit's attach method
@@ -296,9 +316,13 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Subscribed to track: ${track.kind} from ${participant.identity}`);
 
       if (track.kind === 'video' && this.onVideoElement) {
-        // Request highest quality layer
+        // Request highest quality layer immediately
         if ('setVideoQuality' in publication) {
           (publication as any).setVideoQuality(2); // 2 = high quality
+        }
+        // Also try setting video dimensions preference
+        if ('setVideoDimensions' in publication) {
+          (publication as any).setVideoDimensions({ width: 1280, height: 720 });
         }
 
         // Use LiveKit's attach method - this is the proper way
@@ -472,7 +496,7 @@ export class LiveKitStreamer {
     }
   }
 
-  // Replace the video track (for screen sharing)
+  // Replace the video track (for screen sharing or composite)
   async replaceVideoTrack(newVideoTrack: MediaStreamTrack): Promise<void> {
     if (!this.room || !this.room.localParticipant) {
       console.error('Cannot replace video track: not connected to room');
@@ -489,17 +513,18 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Unpublished old video track`);
     }
 
-    // Publish the new track with high quality settings
+    // Publish the new track with optimized settings for composite streams
+    // Disable simulcast for composite - it causes quality issues with canvas streams
     const localVideoTrack = new LocalVideoTrack(newVideoTrack);
     await this.room.localParticipant.publishTrack(localVideoTrack, {
       name: 'camera',
-      simulcast: true,
+      simulcast: false, // Disable simulcast for composite streams - single high quality layer
       videoEncoding: {
-        maxBitrate: 4_500_000, // 4.5 Mbps for 1080p (Twitch standard)
+        maxBitrate: 2_500_000, // 2.5 Mbps for 720p - good balance of quality and bandwidth
         maxFramerate: 30,
       },
     });
-    console.log(`[${this.streamId}] Published new video track (high quality)`);
+    console.log(`[${this.streamId}] Published new video track (720p optimized, no simulcast)`);
   }
 
   // Replace or add an audio track (for screen share audio mixing)

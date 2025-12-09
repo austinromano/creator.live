@@ -26,6 +26,8 @@ import {
   Monitor,
   MonitorOff,
   X,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import Link from 'next/link';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
@@ -104,6 +106,25 @@ export default function ProfilePage() {
   const [followerCount, setFollowerCount] = useState(0);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
+
+  // Guest PiP state for inviting friends to stream
+  const [guestActive, setGuestActive] = useState(false);
+  const [guestUsername, setGuestUsername] = useState<string | null>(null);
+  const [guestRoomName, setGuestRoomName] = useState<string | null>(null);
+  const guestVideoRef = React.useRef<HTMLVideoElement | null>(null); // Hidden video for canvas composite
+  const guestDisplayVideoRef = React.useRef<HTMLVideoElement | null>(null); // Visible video for UI overlay
+  const guestLivekitRef = React.useRef<LiveKitStreamer | null>(null);
+  const [guestPipPosition, setGuestPipPosition] = useState({ x: 30, y: 30 }); // top-left default
+  const [guestPipSize, setGuestPipSize] = useState({ width: 253, height: 450 }); // portrait 9:16
+  const guestPipPositionRef = React.useRef({ x: 30, y: 30 });
+  const guestPipSizeRef = React.useRef({ width: 253, height: 450 });
+  const [guestPipControlsVisible, setGuestPipControlsVisible] = useState(true);
+  const guestPipControlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const guestCompositeCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const guestCompositeIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [guestAudioMuted, setGuestAudioMuted] = useState(false);
+  const guestAudioContextRef = React.useRef<AudioContext | null>(null);
+  const guestAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
 
   const user = session?.user as any;
   const userId = user?.id;
@@ -534,6 +555,22 @@ export default function ProfilePage() {
     const roomNameToDelete = currentRoomNameRef.current;
 
     try {
+      // Stop guest composite and clean up guest
+      if (guestActive) {
+        await stopGuestComposite();
+        if (guestLivekitRef.current) {
+          guestLivekitRef.current.close();
+          guestLivekitRef.current = null;
+        }
+        if (guestVideoRef.current) {
+          guestVideoRef.current.srcObject = null;
+          guestVideoRef.current = null;
+        }
+        setGuestActive(false);
+        setGuestUsername(null);
+        setGuestRoomName(null);
+      }
+
       // Stop camera and UI regardless of stream ID
       stopCamera();
       setIsLive(false);
@@ -689,11 +726,36 @@ export default function ProfilePage() {
     };
 
     // Use setInterval instead of requestAnimationFrame for consistent frame rate
-    // 15fps is enough for smooth video and much lighter on CPU
+    // 30fps for smooth video
     const frameInterval = setInterval(() => {
+      // Clear canvas first to prevent artifacts
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       // Draw screen share as background (full canvas)
-      if (screenVideo.readyState >= 2) {
+      if (screenVideo.readyState >= 2 && screenVideo.videoWidth > 0) {
         ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Draw guest PiP if active (draw first so camera PiP appears on top)
+      const guestVideo = guestVideoRef.current;
+      if (guestVideo && guestVideo.readyState >= 2 && guestVideo.videoWidth > 0) {
+        const guestX = guestPipPositionRef.current.x;
+        const guestY = guestPipPositionRef.current.y;
+        const guestWidth = guestPipSizeRef.current.width;
+        const guestHeight = guestPipSizeRef.current.height;
+
+        // Draw rounded border for guest PiP (green)
+        ctx.fillStyle = '#22c55e';
+        roundRect(guestX - 4, guestY - 4, guestWidth + 8, guestHeight + 8, 12);
+        ctx.fill();
+
+        // Draw guest feed with rounded corners (clip)
+        ctx.save();
+        roundRect(guestX, guestY, guestWidth, guestHeight, 8);
+        ctx.clip();
+        ctx.drawImage(guestVideo, guestX, guestY, guestWidth, guestHeight);
+        ctx.restore();
       }
 
       // Only draw camera PiP if camera is enabled
@@ -922,6 +984,276 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Failed to send broadcaster message:', error);
     }
+  };
+
+  // Start guest composite stream (camera + guest PiP) for broadcast
+  // Instead of canvas compositing (CPU intensive), we send guest info via data channel
+  // and let viewers composite using CSS overlays (GPU accelerated)
+  const startGuestComposite = async (roomName: string, username: string) => {
+    if (!streamRef.current || !guestVideoRef.current) {
+      console.log('Cannot start guest composite - missing streams');
+      return;
+    }
+
+    console.log('Starting guest stream - using data channel approach for smooth playback');
+    console.log('Guest room:', roomName, 'username:', username);
+
+    // Send guest stream info to viewers via LiveKit data channel
+    // Viewers will connect to the guest's stream separately and overlay it
+    if (livekitStreamerRef.current && roomName) {
+      const guestInfo = {
+        type: 'guest_pip',
+        action: 'start',
+        guestRoomName: roomName,
+        guestUsername: username,
+        position: guestPipPositionRef.current,
+        size: guestPipSizeRef.current,
+      };
+
+      // Send via data channel
+      const encoder = new TextEncoder();
+      const data = encoder.encode(JSON.stringify(guestInfo));
+      const room = livekitStreamerRef.current.getRoom();
+      if (room?.localParticipant) {
+        await room.localParticipant.publishData(data, { reliable: true });
+        console.log('✅ Guest PiP info sent to viewers:', guestInfo);
+      }
+    }
+
+    // Mark composite as active (for cleanup purposes)
+    // Also periodically resend the full guest info for viewers who join late
+    console.log('📡 Setting up periodic guest PiP broadcast with:', roomName, username);
+
+    guestCompositeIntervalRef.current = setInterval(() => {
+      // Periodically send full guest info to viewers (including late joiners)
+      if (livekitStreamerRef.current && roomName) {
+        const guestInfo = {
+          type: 'guest_pip',
+          action: 'start', // Always send 'start' so late joiners get full info
+          guestRoomName: roomName,
+          guestUsername: username,
+          position: guestPipPositionRef.current,
+          size: guestPipSizeRef.current,
+        };
+        const encoder = new TextEncoder();
+        const data = encoder.encode(JSON.stringify(guestInfo));
+        const room = livekitStreamerRef.current.getRoom();
+        if (room?.localParticipant) {
+          room.localParticipant.publishData(data, { reliable: true }); // Use reliable for better delivery
+          console.log('📡 Sent guest PiP update to viewers:', guestInfo);
+        } else {
+          console.log('📡 Cannot send - no local participant');
+        }
+      } else {
+        console.log('📡 Cannot send - missing refs:', !!livekitStreamerRef.current, roomName);
+      }
+    }, 2000) as NodeJS.Timeout; // Send guest info every 2 seconds
+  };
+
+  // Stop guest composite and notify viewers
+  const stopGuestComposite = async () => {
+    console.log('Stopping guest stream...');
+
+    // Stop the position update interval
+    if (guestCompositeIntervalRef.current) {
+      clearInterval(guestCompositeIntervalRef.current);
+      guestCompositeIntervalRef.current = null;
+    }
+
+    // Notify viewers to remove guest PiP
+    if (livekitStreamerRef.current) {
+      const guestInfo = {
+        type: 'guest_pip',
+        action: 'stop',
+      };
+      const encoder = new TextEncoder();
+      const data = encoder.encode(JSON.stringify(guestInfo));
+      const room = livekitStreamerRef.current.getRoom();
+      if (room?.localParticipant) {
+        await room.localParticipant.publishData(data, { reliable: true });
+        console.log('✅ Guest PiP stop sent to viewers');
+      }
+    }
+  };
+
+  // Invite a friend to appear as guest PiP on stream
+  const handleInviteFriend = async (friend: Friend) => {
+    if (!friend.isLive || !friend.liveStream?.roomName) {
+      console.error('Friend is not live');
+      return;
+    }
+
+    console.log('Inviting friend to stream:', friend.username, friend.liveStream.roomName);
+
+    // Connect to the friend's stream to pull their video
+    const guestStreamer = new LiveKitStreamer(friend.liveStream.roomName);
+    guestLivekitRef.current = guestStreamer;
+
+    // Create a hidden video element to receive the guest's stream (for canvas composite)
+    const guestVideo = document.createElement('video');
+    guestVideo.autoplay = true;
+    guestVideo.playsInline = true;
+    guestVideo.muted = false; // Don't mute - we want audio for dashboard preview
+    guestVideoRef.current = guestVideo;
+
+    try {
+      await guestStreamer.startViewingWithElement(
+        guestVideo,
+        async () => {
+          console.log('✅ Connected to guest stream:', friend.username);
+
+          // Set state first to render the video element
+          setGuestActive(true);
+          setGuestUsername(friend.username);
+          setGuestRoomName(friend.liveStream!.roomName);
+          setGuestPipControlsVisible(true);
+          setGuestAudioMuted(false);
+
+          // Then set the display video srcObject after a small delay for React to render
+          setTimeout(() => {
+            if (guestDisplayVideoRef.current && guestVideo.srcObject) {
+              guestDisplayVideoRef.current.srcObject = guestVideo.srcObject;
+              guestDisplayVideoRef.current.muted = false; // Audio plays on dashboard
+              guestDisplayVideoRef.current.play().catch(err => console.log('Display video play error:', err));
+            }
+          }, 100);
+
+          // Mix guest audio into the broadcast for viewers
+          setTimeout(async () => {
+            await mixGuestAudioIntoBroadcast();
+          }, 300);
+
+          // Start guest composite for broadcast (only if not screen sharing)
+          // Screen share already handles guest PiP in its own composite
+          if (!screenSharing) {
+            // Wait a bit for video to stabilize
+            // Pass roomName and username directly to avoid async state issues
+            setTimeout(async () => {
+              await startGuestComposite(friend.liveStream!.roomName, friend.username);
+            }, 500);
+          }
+
+          // Auto-hide controls after 3 seconds
+          guestPipControlsTimeoutRef.current = setTimeout(() => {
+            setGuestPipControlsVisible(false);
+          }, 3000);
+        },
+        undefined,
+        { muteAudio: false } // Don't mute - we need audio
+      );
+    } catch (error) {
+      console.error('Failed to connect to guest stream:', error);
+      guestLivekitRef.current = null;
+      guestVideoRef.current = null;
+    }
+  };
+
+  // Mix guest audio into the broadcast stream for viewers
+  const mixGuestAudioIntoBroadcast = async () => {
+    if (!guestVideoRef.current || !streamRef.current || !livekitStreamerRef.current) {
+      console.log('Cannot mix guest audio - missing refs');
+      return;
+    }
+
+    const guestStream = guestVideoRef.current.srcObject as MediaStream;
+    if (!guestStream) {
+      console.log('No guest stream available for audio mixing');
+      return;
+    }
+
+    const guestAudioTrack = guestStream.getAudioTracks()[0];
+    const micAudioTrack = streamRef.current.getAudioTracks()[0];
+
+    if (!guestAudioTrack) {
+      console.log('Guest stream has no audio track');
+      return;
+    }
+
+    console.log('Mixing guest audio into broadcast...');
+    console.log('Guest audio track:', guestAudioTrack.label, 'enabled:', guestAudioTrack.enabled);
+    console.log('Mic audio track:', micAudioTrack?.label, 'enabled:', micAudioTrack?.enabled);
+
+    // Create audio context for mixing
+    const audioContext = new AudioContext();
+    guestAudioContextRef.current = audioContext;
+    const destination = audioContext.createMediaStreamDestination();
+    guestAudioDestinationRef.current = destination;
+
+    // Add guest audio
+    const guestAudioStream = new MediaStream([guestAudioTrack]);
+    const guestSource = audioContext.createMediaStreamSource(guestAudioStream);
+    guestSource.connect(destination);
+    console.log('Added guest audio to mix');
+
+    // Add broadcaster's microphone audio if available
+    if (micAudioTrack) {
+      const micStream = new MediaStream([micAudioTrack]);
+      const micSource = audioContext.createMediaStreamSource(micStream);
+      micSource.connect(destination);
+      console.log('Added broadcaster mic to mix');
+    }
+
+    // Replace audio track in LiveKit with mixed audio
+    const mixedAudioTrack = destination.stream.getAudioTracks()[0];
+    if (mixedAudioTrack) {
+      await livekitStreamerRef.current.replaceAudioTrack(mixedAudioTrack);
+      console.log('✅ Mixed audio (broadcaster + guest) published to LiveKit');
+    }
+  };
+
+  // Toggle guest audio mute (for dashboard preview only)
+  const toggleGuestAudioMute = () => {
+    if (guestDisplayVideoRef.current) {
+      const newMuted = !guestAudioMuted;
+      guestDisplayVideoRef.current.muted = newMuted;
+      setGuestAudioMuted(newMuted);
+      console.log('Guest audio muted:', newMuted);
+    }
+  };
+
+  // Remove guest PiP from stream
+  const handleRemoveGuest = async () => {
+    console.log('Removing guest from stream');
+
+    // Stop guest composite and revert to camera (only if not screen sharing)
+    if (!screenSharing) {
+      await stopGuestComposite();
+    }
+
+    // Clean up audio mixing and restore original mic audio
+    if (guestAudioContextRef.current) {
+      guestAudioContextRef.current.close();
+      guestAudioContextRef.current = null;
+    }
+    guestAudioDestinationRef.current = null;
+
+    // Restore original microphone audio to LiveKit
+    if (livekitStreamerRef.current && streamRef.current) {
+      const micAudioTrack = streamRef.current.getAudioTracks()[0];
+      if (micAudioTrack) {
+        await livekitStreamerRef.current.replaceAudioTrack(micAudioTrack);
+        console.log('✅ Restored original mic audio');
+      }
+    }
+
+    if (guestLivekitRef.current) {
+      guestLivekitRef.current.close();
+      guestLivekitRef.current = null;
+    }
+
+    if (guestVideoRef.current) {
+      guestVideoRef.current.srcObject = null;
+      guestVideoRef.current = null;
+    }
+
+    if (guestDisplayVideoRef.current) {
+      guestDisplayVideoRef.current.srcObject = null;
+    }
+
+    setGuestActive(false);
+    setGuestUsername(null);
+    setGuestRoomName(null);
+    setGuestAudioMuted(false);
   };
 
   // Capture and upload thumbnail from video element
@@ -1236,48 +1568,88 @@ export default function ProfilePage() {
               ) : (
                 <div className="space-y-2">
                   {friends.map((friend) => (
-                    <Link
+                    <div
                       key={friend.id}
-                      href={friend.isLive ? `/live/${friend.liveStream?.roomName}` : `/profile/${friend.username}`}
                       className="flex items-center gap-2 p-2 rounded-lg hover:bg-[#0e0e10] transition-colors"
                     >
-                      <div className="relative">
-                        <Avatar className={`h-8 w-8 ${friend.isLive ? 'ring-2 ring-red-500' : friend.isOnline ? 'ring-2 ring-green-500' : ''}`}>
-                          <AvatarImage src={friend.avatar || undefined} />
-                          <AvatarFallback className="text-xs bg-gray-700">
-                            {(friend.username || 'U').charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        {friend.isLive ? (
-                          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b]" />
-                        ) : friend.isOnline ? (
-                          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#18181b]" />
-                        ) : null}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm font-medium truncate">{friend.displayName || friend.username}</span>
-                          {friend.isVerified && (
-                            <svg className="h-3 w-3 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                      <Link
+                        href={friend.isLive ? `/live/${friend.liveStream?.roomName}` : `/profile/${friend.username}`}
+                        className="flex items-center gap-2 flex-1 min-w-0"
+                      >
+                        <div className="relative">
+                          <Avatar className={`h-8 w-8 ${friend.isLive ? 'ring-2 ring-red-500' : friend.isOnline ? 'ring-2 ring-green-500' : ''}`}>
+                            <AvatarImage src={friend.avatar || undefined} />
+                            <AvatarFallback className="text-xs bg-gray-700">
+                              {(friend.username || 'U').charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          {friend.isLive ? (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b]" />
+                          ) : friend.isOnline ? (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#18181b]" />
+                          ) : null}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-medium truncate">{friend.displayName || friend.username}</span>
+                            {friend.isVerified && (
+                              <svg className="h-3 w-3 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            )}
+                          </div>
+                          {friend.isLive ? (
+                            <p className="text-xs text-red-400">Live now</p>
+                          ) : friend.isOnline ? (
+                            <p className="text-xs text-green-400">Online</p>
+                          ) : (
+                            <p className="text-xs text-gray-500">Offline</p>
                           )}
                         </div>
-                        {friend.isLive ? (
-                          <p className="text-xs text-red-400">Live now</p>
-                        ) : friend.isOnline ? (
-                          <p className="text-xs text-green-400">Online</p>
-                        ) : (
-                          <p className="text-xs text-gray-500">Offline</p>
-                        )}
-                      </div>
-                      {friend.isLive && friend.liveStream && (
+                      </Link>
+                      {/* Invite button for live friends when broadcaster is also live */}
+                      {isLive && friend.isLive && friend.liveStream && !guestActive && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleInviteFriend(friend);
+                          }}
+                          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded text-white"
+                        >
+                          Invite
+                        </button>
+                      )}
+                      {/* Show "On Stream" badge and mute button if this friend is the current guest */}
+                      {guestActive && guestRoomName === friend.liveStream?.roomName && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="px-2 py-1 text-xs bg-green-600 rounded text-white">
+                            On Stream
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleGuestAudioMute();
+                            }}
+                            className={`p-1 rounded ${guestAudioMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600 hover:bg-gray-700'}`}
+                            title={guestAudioMuted ? 'Unmute guest audio' : 'Mute guest audio'}
+                          >
+                            {guestAudioMuted ? (
+                              <VolumeX className="h-3.5 w-3.5 text-white" />
+                            ) : (
+                              <Volume2 className="h-3.5 w-3.5 text-white" />
+                            )}
+                          </button>
+                        </div>
+                      )}
+                      {friend.isLive && friend.liveStream && !guestActive && !isLive && (
                         <div className="flex items-center gap-1 text-xs text-gray-400">
                           <Eye className="h-3 w-3" />
                           {friend.liveStream.viewerCount}
                         </div>
                       )}
-                    </Link>
+                    </div>
                   ))}
                 </div>
               )}
@@ -1455,6 +1827,121 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+              {/* Guest PiP Overlay - shows when a guest is on stream */}
+              {isLive && guestActive && guestVideoRef.current && (
+                <div
+                  className={`absolute border-2 border-dashed border-green-400 bg-black/50 cursor-move transition-opacity duration-300 overflow-hidden rounded-lg ${guestPipControlsVisible ? 'opacity-100' : 'opacity-80'}`}
+                  style={{
+                    left: `${(guestPipPosition.x / 1920) * 100}%`,
+                    top: `${(guestPipPosition.y / 1080) * 100}%`,
+                    width: `${(guestPipSize.width / 1920) * 100}%`,
+                    height: `${(guestPipSize.height / 1080) * 100}%`,
+                  }}
+                  onMouseEnter={() => {
+                    if (guestPipControlsTimeoutRef.current) {
+                      clearTimeout(guestPipControlsTimeoutRef.current);
+                    }
+                    setGuestPipControlsVisible(true);
+                  }}
+                  onMouseLeave={() => {
+                    guestPipControlsTimeoutRef.current = setTimeout(() => {
+                      setGuestPipControlsVisible(false);
+                    }, 2000);
+                  }}
+                  onMouseDown={(e) => {
+                    if ((e.target as HTMLElement).classList.contains('resize-handle') || (e.target as HTMLElement).classList.contains('remove-btn')) return;
+                    e.preventDefault();
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startPosX = guestPipPosition.x;
+                    const startPosY = guestPipPosition.y;
+                    const container = e.currentTarget.parentElement;
+                    const containerRect = container?.getBoundingClientRect();
+
+                    const onMouseMove = (moveEvent: MouseEvent) => {
+                      if (!containerRect) return;
+                      const deltaX = moveEvent.clientX - startX;
+                      const deltaY = moveEvent.clientY - startY;
+                      const scaleX = 1920 / containerRect.width;
+                      const scaleY = 1080 / containerRect.height;
+
+                      const newX = Math.max(0, Math.min(1920 - guestPipSize.width, startPosX + deltaX * scaleX));
+                      const newY = Math.max(0, Math.min(1080 - guestPipSize.height, startPosY + deltaY * scaleY));
+
+                      setGuestPipPosition({ x: newX, y: newY });
+                      guestPipPositionRef.current = { x: newX, y: newY };
+                    };
+
+                    const onMouseUp = () => {
+                      document.removeEventListener('mousemove', onMouseMove);
+                      document.removeEventListener('mouseup', onMouseUp);
+                    };
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                  }}
+                >
+                  {/* Guest video stream */}
+                  <video
+                    ref={guestDisplayVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Guest username label */}
+                  <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-1 rounded text-xs text-white">
+                    {guestUsername}
+                  </div>
+                  {/* Remove guest button */}
+                  <button
+                    className={`remove-btn absolute top-2 right-2 w-6 h-6 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center transition-opacity ${guestPipControlsVisible ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveGuest();
+                    }}
+                  >
+                    <X className="h-4 w-4 text-white" />
+                  </button>
+                  {/* Resize handle - bottom right corner */}
+                  <div
+                    className={`resize-handle absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 cursor-se-resize rounded-sm flex items-center justify-center transition-opacity ${guestPipControlsVisible ? 'opacity-100' : 'opacity-0'}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const startX = e.clientX;
+                      const startWidth = guestPipSize.width;
+                      const container = e.currentTarget.parentElement?.parentElement;
+                      const containerRect = container?.getBoundingClientRect();
+
+                      const onMouseMove = (moveEvent: MouseEvent) => {
+                        if (!containerRect) return;
+                        const deltaX = moveEvent.clientX - startX;
+                        const scaleX = 1920 / containerRect.width;
+
+                        // Maintain 9:16 portrait aspect ratio
+                        const newWidth = Math.max(150, Math.min(500, startWidth + deltaX * scaleX));
+                        const newHeight = newWidth * (16 / 9); // 9:16 portrait
+
+                        setGuestPipSize({ width: newWidth, height: newHeight });
+                        guestPipSizeRef.current = { width: newWidth, height: newHeight };
+                      };
+
+                      const onMouseUp = () => {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                      };
+
+                      document.addEventListener('mousemove', onMouseMove);
+                      document.addEventListener('mouseup', onMouseUp);
+                    }}
+                  >
+                    <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="M21 21L12 12M21 21H15M21 21V15" />
+                    </svg>
+                  </div>
+                </div>
+              )}
               {!isLive && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
@@ -1475,7 +1962,7 @@ export default function ProfilePage() {
             <div className="p-4 bg-[#18181b] flex-1 overflow-y-auto">
               {/* Stream Controls */}
               {isLive && (
-                <div className="mb-4 flex items-center gap-3">
+                <div className="mb-4 flex items-center justify-center gap-3">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1510,7 +1997,7 @@ export default function ProfilePage() {
                     onClick={handleEndStream}
                     variant="destructive"
                     size="sm"
-                    className="bg-red-600 hover:bg-red-700 ml-auto"
+                    className="bg-red-600 hover:bg-red-700"
                   >
                     <Square className="h-4 w-4 mr-1" />
                     Stop Stream
