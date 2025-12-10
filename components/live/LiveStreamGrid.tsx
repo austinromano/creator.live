@@ -131,10 +131,10 @@ export function LiveStreamGrid() {
           ))}
         </div>
 
-        {/* Three Column Grid Layout */}
+        {/* Two Column Grid Layout */}
         <div
           ref={contentRef}
-          className="grid grid-cols-3 gap-1 px-2 pt-2 pb-24 transition-transform"
+          className="grid grid-cols-2 gap-3 px-3 pt-3 pb-24 transition-transform"
           style={{
             transform: `translateX(${swipeOffset}px)`,
             transitionDuration: isTransitioning ? '200ms' : '0ms',
@@ -147,7 +147,7 @@ export function LiveStreamGrid() {
             <MobileStreamCard
               key={stream.id}
               stream={stream}
-              size="small"
+              size="medium"
             />
           ))}
         </div>

@@ -135,15 +135,15 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
 
   return (
     <Link href={`/live/${stream.roomName}`}>
-      <div className="group relative rounded-2xl overflow-hidden cursor-pointer">
+      <div className="group relative overflow-hidden cursor-pointer rounded-2xl">
         {/* Card with variable aspect ratio based on size */}
-        <div className={`relative ${aspectClasses[size]} bg-gradient-to-br from-[#4a2d5c] via-[#3d2850] to-[#2a1f3d]`}>
+        <div className={`relative ${aspectClasses[size]} bg-gradient-to-br from-[#4a2d5c] via-[#3d2850] to-[#2a1f3d] rounded-2xl overflow-hidden`}>
           {/* Video or Avatar fallback */}
           {!isConnected && (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <Avatar className="h-20 w-20 ring-4 ring-white/20">
+              <Avatar className="h-24 w-24 ring-4 ring-white/20">
                 <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-                <AvatarFallback className="bg-purple-600 text-2xl">
+                <AvatarFallback className="bg-purple-600 text-3xl">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -162,42 +162,37 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
 
           {/* Top badges row */}
           <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
-            <Badge className="bg-[#cc0000] text-white text-[9px] font-bold px-2 py-0.5 rounded-full tracking-wider">
+            <Badge className="bg-[#cc0000] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider">
               LIVE
             </Badge>
-            <Badge variant="secondary" className="bg-[#2a2438]/90 text-white text-[9px] rounded-full px-2 py-0.5">
-              <Eye className="h-3 w-3 mr-0.5" />
-              {stream.viewerCount || 0}
+            <Badge variant="secondary" className="bg-black/50 text-white text-[10px] rounded px-1.5 py-0.5 flex items-center gap-1">
+              <Eye className="h-3 w-3" />
+              {stream.viewerCount >= 1000 ? `${(stream.viewerCount / 1000).toFixed(1)}k` : stream.viewerCount || 0}
             </Badge>
           </div>
-        </div>
 
-        {/* Creator info below card */}
-        <div className="bg-[#1e2535] p-2.5">
-          <div className="flex items-center gap-2">
-            <div
-              onClick={handleProfileClick}
-              className="flex-shrink-0 cursor-pointer"
-            >
-              <Avatar className="h-7 w-7 ring-1 ring-purple-500 hover:ring-2 transition-all">
-                <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-                <AvatarFallback className="bg-purple-600 text-[9px]">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-            <div className="flex-1 min-w-0">
+          {/* Creator info overlay at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-3 pt-8">
+            <div className="flex items-center gap-2">
               <div
                 onClick={handleProfileClick}
-                className="hover:underline cursor-pointer"
+                className="flex-shrink-0 cursor-pointer"
               >
-                <h3 className="text-white font-semibold text-[11px] truncate">
+                <Avatar className="h-8 w-8 ring-2 ring-purple-500/50 hover:ring-purple-500 transition-all">
+                  <AvatarImage src={stream.user.avatar || undefined} alt={username} />
+                  <AvatarFallback className="bg-purple-600 text-xs">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white font-semibold text-sm truncate">
                   {username}
                 </h3>
+                <p className="text-gray-300 text-xs truncate">
+                  {stream.title}
+                </p>
               </div>
-              <p className="text-gray-400 text-[9px] truncate">
-                {stream.title}
-              </p>
             </div>
           </div>
         </div>
