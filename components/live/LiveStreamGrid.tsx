@@ -1,37 +1,17 @@
 'use client';
+
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { UserStreamCard } from './UserStreamCard';
 import { MobileStreamCard } from './MobileStreamCard';
 import { Radio } from 'lucide-react';
-
-interface LiveStream {
-  id: string;
-  roomName: string;
-  title: string;
-  category: string | null;
-  isLive: boolean;
-  viewerCount: number;
-  startedAt: string | null;
-  user: {
-    id: string;
-    username: string | null;
-    displayName: string | null;
-    avatar: string | null;
-    walletAddress: string | null;
-    isOnline: boolean;
-    age: number | null;
-    location: string | null;
-    lookingFor: string | null;
-  };
-}
-
-const MOBILE_TABS = ['For You', 'Popular', 'IRL', 'Gaming', 'Music'];
+import { TIME, MOBILE_TABS } from '@/lib/constants';
+import type { Stream } from '@/lib/types/stream';
 
 // Unified streaming model: all streams come from the database
 // Each user = 1 stream room (user-{userId})
 // This includes both real users and AI streamers
 export function LiveStreamGrid() {
-  const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
+  const [liveStreams, setLiveStreams] = useState<Stream[]>([]);
   const [activeTab, setActiveTab] = useState('For You');
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -59,7 +39,7 @@ export function LiveStreamGrid() {
     const minSwipeDistance = 50;
 
     if (Math.abs(swipeOffset) > minSwipeDistance * 0.3) {
-      const currentIndex = MOBILE_TABS.indexOf(activeTab);
+      const currentIndex = MOBILE_TABS.indexOf(activeTab as typeof MOBILE_TABS[number]);
 
       if (swipeOffset < 0 && currentIndex < MOBILE_TABS.length - 1) {
         // Swipe left - go to next tab
@@ -107,8 +87,8 @@ export function LiveStreamGrid() {
 
     fetchLiveStreams();
 
-    // Refresh every 5 seconds for quicker stream discovery
-    const interval = setInterval(fetchLiveStreams, 5000);
+    // Refresh periodically for quicker stream discovery
+    const interval = setInterval(fetchLiveStreams, TIME.STREAM_POLLING_INTERVAL);
     return () => clearInterval(interval);
   }, []);
 

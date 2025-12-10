@@ -1,39 +1,27 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
+
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { LiveKitStreamer } from '@/lib/livekit-stream';
 import { Eye } from 'lucide-react';
-import { isAudioUnlocked, onAudioUnlock } from '@/lib/audio-unlock';
-
-interface UserStream {
-  id: string;
-  roomName: string;
-  title: string;
-  isLive: boolean;
-  viewerCount: number;
-  startedAt: string | null;
-  thumbnail?: string | null;
-  user: {
-    id: string;
-    username: string | null;
-    avatar: string | null;
-    walletAddress: string | null;
-  };
-}
+import { useStreamConnection } from '@/hooks/useStreamConnection';
+import type { Stream } from '@/lib/types/stream';
 
 interface UserStreamCardProps {
-  stream: UserStream;
+  stream: Stream;
 }
 
 export function UserStreamCard({ stream }: UserStreamCardProps) {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamerRef = useRef<LiveKitStreamer | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const hasTriedPlay = useRef(false);
+
+  const { videoRef, isConnected } = useStreamConnection({
+    roomName: stream.roomName,
+    isLive: stream.isLive,
+    muteAudio: true,
+    autoConnect: true,
+  });
 
   const username = stream.user.username || 'Anonymous';
   const initials = username.slice(0, 2).toUpperCase();
@@ -43,112 +31,6 @@ export function UserStreamCard({ stream }: UserStreamCardProps) {
     e.stopPropagation();
     router.push(`/profile/${username}`);
   };
-
-  // Try to play video - called on connection and on user interaction
-  const tryPlay = () => {
-    if (!videoRef.current) return;
-
-    videoRef.current.muted = true;
-    videoRef.current.play()
-      .then(() => {
-        setIsConnected(true);
-        hasTriedPlay.current = true;
-      })
-      .catch(() => {});
-  };
-
-  // Auto-connect to live stream immediately on mount
-  useEffect(() => {
-    if (!stream.isLive || !videoRef.current) {
-      if (streamerRef.current) {
-        streamerRef.current.close();
-        streamerRef.current = null;
-        setIsConnected(false);
-        hasTriedPlay.current = false;
-      }
-      return;
-    }
-
-    // Prevent duplicate connections
-    if (streamerRef.current) {
-      return;
-    }
-
-    // Connect to LiveKit stream
-    const connectToStream = async () => {
-      streamerRef.current = new LiveKitStreamer(stream.roomName);
-
-      try {
-        await streamerRef.current.startViewingWithElement(
-          videoRef.current!,
-          () => {
-            tryPlay();
-          },
-          undefined,
-          { muteAudio: true } // Don't attach audio on homepage previews
-        );
-      } catch (error) {
-        console.error('Failed to connect to stream preview:', error);
-      }
-    };
-
-    connectToStream();
-
-    return () => {
-      if (streamerRef.current) {
-        streamerRef.current.close();
-        streamerRef.current = null;
-      }
-    };
-  }, [stream.isLive, stream.roomName]);
-
-  // Listen for ANY user interaction on the page to trigger play (iOS Safari)
-  useEffect(() => {
-    if (isConnected) return;
-
-    const handleInteraction = () => {
-      if (videoRef.current?.srcObject && !isConnected) {
-        tryPlay();
-      }
-    };
-
-    // Listen on document for any interaction
-    const events = ['touchstart', 'touchend', 'click', 'scroll'];
-    events.forEach(event => {
-      document.addEventListener(event, handleInteraction, { passive: true, capture: true });
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, handleInteraction, true);
-      });
-    };
-  }, [isConnected]);
-
-  // Register callback for when audio unlocks (user interacts)
-  useEffect(() => {
-    if (isConnected) return;
-
-    // When audio unlocks, try to play all pending videos
-    onAudioUnlock(() => {
-      if (videoRef.current?.srcObject) {
-        tryPlay();
-      }
-    });
-  }, [isConnected]);
-
-  // Also poll to catch when srcObject becomes available
-  useEffect(() => {
-    if (isConnected) return;
-
-    const interval = setInterval(() => {
-      if (videoRef.current?.srcObject && isAudioUnlocked()) {
-        tryPlay();
-      }
-    }, 300);
-
-    return () => clearInterval(interval);
-  }, [isConnected]);
 
   return (
     <Link href={`/live/${stream.roomName}`}>

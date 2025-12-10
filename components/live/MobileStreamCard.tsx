@@ -1,126 +1,28 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
-import { LiveKitStreamer } from '@/lib/livekit-stream';
-import { onAudioUnlock } from '@/lib/audio-unlock';
-
-interface UserStream {
-  id: string;
-  roomName: string;
-  title: string;
-  category: string | null;
-  isLive: boolean;
-  viewerCount: number;
-  startedAt: string | null;
-  user: {
-    id: string;
-    username: string | null;
-    displayName: string | null;
-    avatar: string | null;
-    walletAddress: string | null;
-    isOnline: boolean;
-    age: number | null;
-    location: string | null;
-    lookingFor: string | null;
-  };
-}
+import { useStreamConnection } from '@/hooks/useStreamConnection';
+import type { Stream } from '@/lib/types/stream';
 
 interface MobileStreamCardProps {
-  stream: UserStream;
+  stream: Stream;
   size?: 'xlarge' | 'large' | 'medium' | 'small' | 'xsmall';
 }
 
 export function MobileStreamCard({ stream }: MobileStreamCardProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamerRef = useRef<LiveKitStreamer | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const hasTriedPlay = useRef(false);
+
+  const { videoRef, isConnected } = useStreamConnection({
+    roomName: stream.roomName,
+    isLive: stream.isLive,
+    muteAudio: true,
+    autoConnect: true,
+  });
 
   const username = stream.user.username || 'Anonymous';
   const displayName = stream.user.displayName || username;
-
-  // Try to play video
-  const tryPlay = () => {
-    if (!videoRef.current) return;
-    videoRef.current.muted = true;
-    videoRef.current.play()
-      .then(() => {
-        setIsConnected(true);
-        hasTriedPlay.current = true;
-      })
-      .catch(() => {});
-  };
-
-  // Auto-connect to live stream
-  useEffect(() => {
-    if (!stream.isLive || !videoRef.current) {
-      if (streamerRef.current) {
-        streamerRef.current.close();
-        streamerRef.current = null;
-        setIsConnected(false);
-        hasTriedPlay.current = false;
-      }
-      return;
-    }
-
-    if (streamerRef.current) return;
-
-    const connectToStream = async () => {
-      streamerRef.current = new LiveKitStreamer(stream.roomName);
-      try {
-        await streamerRef.current.startViewingWithElement(
-          videoRef.current!,
-          () => tryPlay(),
-          undefined,
-          { muteAudio: true }
-        );
-      } catch (error) {
-        console.error('Failed to connect to stream preview:', error);
-      }
-    };
-
-    connectToStream();
-
-    return () => {
-      if (streamerRef.current) {
-        streamerRef.current.close();
-        streamerRef.current = null;
-      }
-    };
-  }, [stream.isLive, stream.roomName]);
-
-  // Listen for user interaction to trigger play
-  useEffect(() => {
-    if (isConnected) return;
-
-    const handleInteraction = () => {
-      if (videoRef.current?.srcObject && !isConnected) {
-        tryPlay();
-      }
-    };
-
-    const events = ['touchstart', 'touchend', 'click', 'scroll'];
-    events.forEach(event => {
-      document.addEventListener(event, handleInteraction, { passive: true, capture: true });
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, handleInteraction, true);
-      });
-    };
-  }, [isConnected]);
-
-  // Register callback for audio unlock
-  useEffect(() => {
-    if (isConnected) return;
-    onAudioUnlock(() => {
-      if (videoRef.current?.srcObject) tryPlay();
-    });
-  }, [isConnected]);
 
   return (
     <Link href={`/live/${stream.roomName}`}>
