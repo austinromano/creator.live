@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
 import { FeedPost, FeedPostData } from './FeedPost';
-import { StoriesRow, StoryUser } from './StoriesRow';
+import { StoriesRow, StoryUser, UserRoom } from './StoriesRow';
 
 interface FriendData {
   id: string;
@@ -21,10 +21,18 @@ interface CurrentUser {
   avatar: string | null;
 }
 
+interface RoomData {
+  id: string;
+  name: string;
+  icon: string | null;
+  template: string | null;
+}
+
 export function HomeFeed() {
   const { data: session } = useSession();
   const [posts, setPosts] = useState<FeedPostData[]>([]);
   const [friends, setFriends] = useState<StoryUser[]>([]);
+  const [rooms, setRooms] = useState<UserRoom[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,11 +45,12 @@ export function HomeFeed() {
         setLoading(true);
         setError(null);
 
-        // Fetch feed posts, friends, and current user in parallel
-        const [feedRes, friendsRes, userRes] = await Promise.all([
+        // Fetch feed posts, friends, current user, and rooms in parallel
+        const [feedRes, friendsRes, userRes, roomsRes] = await Promise.all([
           fetch('/api/feed'),
           fetch('/api/user/friends'),
           fetch('/api/user/me'),
+          fetch('/api/rooms'),
         ]);
 
         if (feedRes.ok) {
@@ -58,6 +67,7 @@ export function HomeFeed() {
             displayName: f.displayName,
             avatar: f.avatar,
             isLive: f.isLive,
+            isOnline: f.isOnline,
             hasStory: false, // Can add story feature later
           }));
           setFriends(storyUsers);
@@ -72,6 +82,18 @@ export function HomeFeed() {
               avatar: userData.user.avatar,
             });
           }
+        }
+
+        if (roomsRes.ok) {
+          const roomsData = await roomsRes.json();
+          // Transform rooms data for stories row
+          const userRooms: UserRoom[] = (roomsData.rooms || []).map((r: RoomData) => ({
+            id: r.id,
+            name: r.name,
+            icon: r.icon,
+            template: r.template,
+          }));
+          setRooms(userRooms);
         }
       } catch (err) {
         console.error('Error fetching feed data:', err);
@@ -105,10 +127,11 @@ export function HomeFeed() {
       {/* Stories Row */}
       <StoriesRow
         users={friends}
+        rooms={rooms}
         currentUserAvatar={currentUser?.avatar}
         onAddStoryClick={() => {
-          // Navigate to create post or go live
-          window.location.href = '/golive';
+          // Navigate to create room page
+          window.location.href = '/createroom';
         }}
       />
 

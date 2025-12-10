@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { useStreamConnection } from '@/hooks/useStreamConnection';
@@ -10,6 +10,16 @@ interface MobileStreamCardProps {
   stream: Stream;
   size?: 'xlarge' | 'large' | 'medium' | 'small' | 'xsmall';
 }
+
+// Gradient backgrounds for cards
+const CARD_GRADIENTS = [
+  'from-teal-400/80 to-green-300/80',      // Mint/teal
+  'from-purple-400/80 to-purple-300/80',    // Purple
+  'from-amber-200/80 to-orange-200/80',     // Cream/tan
+  'from-pink-300/80 to-pink-200/80',        // Light pink
+  'from-cyan-400/80 to-teal-300/80',        // Cyan
+  'from-indigo-400/80 to-purple-300/80',    // Indigo
+];
 
 export function MobileStreamCard({ stream }: MobileStreamCardProps) {
   const [imageError, setImageError] = useState(false);
@@ -24,20 +34,31 @@ export function MobileStreamCard({ stream }: MobileStreamCardProps) {
   const username = stream.user.username || 'Anonymous';
   const displayName = stream.user.displayName || username;
 
+  // Get a consistent gradient for this stream based on its id
+  const gradientClass = useMemo(() => {
+    const index = stream.id.charCodeAt(0) % CARD_GRADIENTS.length;
+    return CARD_GRADIENTS[index];
+  }, [stream.id]);
+
   return (
     <Link href={`/live/${stream.roomName}`}>
-      <div className="relative aspect-[1/1] rounded-2xl overflow-hidden bg-gray-800 group">
+      <div className={`relative aspect-[4/5] rounded-2xl overflow-hidden group`}>
+        {/* Background Gradient */}
+        <div className={`absolute inset-0 bg-gradient-to-b ${gradientClass}`} />
+
         {/* Profile Image - shown when not connected to stream */}
         {!isConnected && stream.user.avatar && !imageError ? (
-          <img
-            src={stream.user.avatar}
-            alt={displayName}
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={() => setImageError(true)}
-          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <img
+              src={stream.user.avatar}
+              alt={displayName}
+              className="w-full h-full object-cover rounded-xl"
+              onError={() => setImageError(true)}
+            />
+          </div>
         ) : !isConnected ? (
-          <div className="w-full h-full bg-gradient-to-br from-pink-500/20 to-purple-500/20 flex items-center justify-center">
-            <Heart className="h-12 w-12 text-pink-500/50" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Heart className="h-16 w-16 text-white/30" />
           </div>
         ) : null}
 
@@ -51,29 +72,24 @@ export function MobileStreamCard({ stream }: MobileStreamCardProps) {
           webkit-playsinline="true"
         />
 
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-        {/* Online Indicator */}
+        {/* Online Badge - Top Right */}
         {stream.user.isOnline && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/50 rounded-full px-2 py-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs text-white">Online</span>
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-full px-2.5 py-1">
+            <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <span className="text-xs text-white font-medium">Online</span>
           </div>
         )}
 
-        {/* Info Overlay */}
+        {/* Bottom Info Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-3">
           {/* Name */}
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-white font-semibold text-base truncate">
-              {displayName}
-            </h3>
-          </div>
+          <h3 className="text-white font-bold text-lg drop-shadow-lg mb-1">
+            {displayName}
+          </h3>
 
           {/* Category Tag */}
           {stream.category && (
-            <div className="inline-block bg-pink-500/30 text-pink-300 text-xs px-2 py-0.5 rounded-full">
+            <div className="inline-block bg-black/40 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
               {stream.category}
             </div>
           )}

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, Bell } from 'lucide-react';
+import { Loader2, Bell, Users } from 'lucide-react';
 
 interface NotificationData {
   id: string;
@@ -22,6 +22,11 @@ interface NotificationData {
     id: string;
     title: string | null;
     thumbnailUrl: string | null;
+  } | null;
+  room?: {
+    id: string;
+    name: string;
+    icon: string | null;
   } | null;
 }
 
@@ -49,6 +54,10 @@ function getNotificationText(notification: NotificationData): string {
       return 'sent you a tip';
     case 'live':
       return 'went live';
+    case 'room_invite':
+      return notification.room
+        ? `invited you to join "${notification.room.name}"`
+        : 'invited you to join a room';
     default:
       return notification.message || 'interacted with you';
   }
@@ -92,6 +101,8 @@ function getNotificationIcon(type: string): React.ReactNode {
           <div className="w-2 h-2 bg-white rounded-full" />
         </div>
       );
+    case 'room_invite':
+      return <Users className="h-4 w-4 text-purple-400" />;
     default:
       return <Bell className="h-4 w-4 text-gray-400" />;
   }
@@ -189,7 +200,9 @@ export function NotificationsList() {
         <Link
           key={notification.id}
           href={
-            notification.type === 'follow'
+            notification.type === 'room_invite' && notification.room
+              ? `/room/${notification.room.id}`
+              : notification.type === 'follow'
               ? `/profile/${notification.fromUser.username}`
               : notification.post
               ? `/post/${notification.post.id}`

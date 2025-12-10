@@ -48,6 +48,13 @@ export const GET = createRoute(
               thumbnailUrl: true,
             },
           },
+          room: {
+            select: {
+              id: true,
+              name: true,
+              icon: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 50,

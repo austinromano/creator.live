@@ -27,6 +27,12 @@ export const FILE_CONFIGS = {
     folder: 'posts',
     bucket: 'posts',
   },
+  roomIcon: {
+    maxSize: 5 * 1024 * 1024, // 5MB
+    allowedTypes: ['image/'],
+    folder: 'room-icons',
+    bucket: 'posts',
+  },
 } as const;
 
 export type FileType = keyof typeof FILE_CONFIGS;

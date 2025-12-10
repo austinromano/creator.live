@@ -2,11 +2,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { WalletConnect } from './WalletConnect';
-import { MobileNav } from './MobileNav';
-import { NetworkIndicator } from './NetworkIndicator';
 import { UserMenu } from './UserMenu';
-import { Sparkles, TrendingUp, Radio, Rocket, LogIn, Menu, ChevronDown, Star, Bell, Calendar, Wallet } from 'lucide-react';
+import { Sparkles, LogIn, Star, Bell } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useSession } from 'next-auth/react';
 
@@ -36,8 +33,13 @@ export function Header() {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
+  // Hide header on mobile when authenticated (only show on lg screens and up)
+  const headerClassName = isAuthenticated
+    ? "sticky top-0 z-50 w-full bg-[#0f0a15] hidden lg:block"
+    : "sticky top-0 z-50 w-full bg-[#0f0a15]";
+
   return (
-    <header className="sticky top-0 z-50 w-full bg-[#0f0a15]">
+    <header className={headerClassName}>
       <div className="container mx-auto px-4">
         <div className="flex h-14 items-center justify-between">
           {/* Left Side - Login/User + Mobile Nav */}
