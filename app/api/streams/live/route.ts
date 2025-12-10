@@ -13,9 +13,14 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             username: true,
+            displayName: true,
             avatar: true,
             walletAddress: true,
             isAI: true,
+            lastSeenAt: true,
+            age: true,
+            location: true,
+            lookingFor: true,
           },
         },
       },
@@ -23,6 +28,10 @@ export async function GET(request: NextRequest) {
         startedAt: 'desc',
       },
     });
+
+    // Check if user is online (lastSeenAt within 2 minutes)
+    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+    const now = Date.now();
 
     // Transform to a format compatible with the frontend
     const streams = liveStreams.map((stream) => ({
@@ -37,9 +46,16 @@ export async function GET(request: NextRequest) {
       user: {
         id: stream.user.id,
         username: stream.user.username,
+        displayName: stream.user.displayName,
         avatar: stream.user.avatar,
         walletAddress: stream.user.walletAddress,
         isAI: stream.user.isAI,
+        isOnline: stream.user.lastSeenAt
+          ? now - new Date(stream.user.lastSeenAt).getTime() < ONLINE_THRESHOLD_MS
+          : false,
+        age: stream.user.age,
+        location: stream.user.location,
+        lookingFor: stream.user.lookingFor,
       },
     }));
 

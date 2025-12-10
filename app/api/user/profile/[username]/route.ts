@@ -34,6 +34,15 @@ export async function GET(
         isVerified: true,
         lastSeenAt: true,
         createdAt: true,
+        // Dating fields
+        datingEnabled: true,
+        lookingFor: true,
+        relationshipStatus: true,
+        interests: true,
+        age: true,
+        gender: true,
+        location: true,
+        datingBio: true,
         _count: {
           select: {
             posts: true,
@@ -115,6 +124,15 @@ export async function GET(
         streams: user._count.streams,
         earnings: tipsReceived._sum.amountSol || 0,
       },
+      // Dating fields
+      datingEnabled: user.datingEnabled,
+      lookingFor: user.lookingFor,
+      relationshipStatus: user.relationshipStatus,
+      interests: user.interests,
+      age: user.age,
+      gender: user.gender,
+      location: user.location,
+      datingBio: user.datingBio,
     };
 
     return NextResponse.json({ profile });

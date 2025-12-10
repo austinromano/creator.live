@@ -1,12 +1,10 @@
 'use client';
+
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { MapPin, Heart } from 'lucide-react';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
-import { Eye } from 'lucide-react';
-import { isAudioUnlocked, onAudioUnlock } from '@/lib/audio-unlock';
+import { onAudioUnlock } from '@/lib/audio-unlock';
 
 interface UserStream {
   id: string;
@@ -18,8 +16,13 @@ interface UserStream {
   user: {
     id: string;
     username: string | null;
+    displayName: string | null;
     avatar: string | null;
     walletAddress: string | null;
+    isOnline: boolean;
+    age: number | null;
+    location: string | null;
+    lookingFor: string | null;
   };
 }
 
@@ -28,30 +31,15 @@ interface MobileStreamCardProps {
   size?: 'xlarge' | 'large' | 'medium' | 'small' | 'xsmall';
 }
 
-export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardProps) {
-  const router = useRouter();
+export function MobileStreamCard({ stream }: MobileStreamCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const hasTriedPlay = useRef(false);
 
   const username = stream.user.username || 'Anonymous';
-  const initials = username.slice(0, 2).toUpperCase();
-
-  const handleProfileClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    router.push(`/profile/${username}`);
-  };
-
-  // Aspect ratios based on size
-  const aspectClasses = {
-    xlarge: 'aspect-[1/2]',     // Extra tall - spans ~2 cards (right column first)
-    large: 'aspect-[3/4]',      // Tall
-    medium: 'aspect-[1/1]',     // Medium height - most cards
-    small: 'aspect-[1/1]',      // Square
-    xsmall: 'aspect-[6/5]',     // Slightly shorter than square
-  };
+  const displayName = stream.user.displayName || username;
 
   // Try to play video
   const tryPlay = () => {
@@ -135,66 +123,68 @@ export function MobileStreamCard({ stream, size = 'medium' }: MobileStreamCardPr
 
   return (
     <Link href={`/live/${stream.roomName}`}>
-      <div className="group relative overflow-hidden cursor-pointer rounded-2xl">
-        {/* Card with variable aspect ratio based on size */}
-        <div className={`relative ${aspectClasses[size]} bg-gradient-to-br from-[#4a2d5c] via-[#3d2850] to-[#2a1f3d] rounded-2xl overflow-hidden`}>
-          {/* Video or Avatar fallback */}
-          {!isConnected && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <Avatar className="h-24 w-24 ring-4 ring-white/20">
-                <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-                <AvatarFallback className="bg-purple-600 text-3xl">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+      <div className="relative aspect-[1/1] rounded-2xl overflow-hidden bg-gray-800 group">
+        {/* Profile Image - shown when not connected to stream */}
+        {!isConnected && stream.user.avatar && !imageError ? (
+          <img
+            src={stream.user.avatar}
+            alt={displayName}
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : !isConnected ? (
+          <div className="w-full h-full bg-gradient-to-br from-pink-500/20 to-purple-500/20 flex items-center justify-center">
+            <Heart className="h-12 w-12 text-pink-500/50" />
+          </div>
+        ) : null}
+
+        {/* Live video stream */}
+        <video
+          ref={videoRef}
+          className={`absolute inset-0 w-full h-full object-cover ${isConnected ? 'opacity-100' : 'opacity-0'}`}
+          autoPlay
+          muted
+          playsInline
+          webkit-playsinline="true"
+        />
+
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+        {/* Online Indicator */}
+        {stream.user.isOnline && (
+          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/50 rounded-full px-2 py-1">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-xs text-white">Online</span>
+          </div>
+        )}
+
+        {/* Info Overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-3">
+          {/* Name and Age */}
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-white font-semibold text-base truncate">
+              {displayName}
+            </h3>
+            {stream.user.age && (
+              <span className="text-white/80 text-sm">{stream.user.age}</span>
+            )}
+          </div>
+
+          {/* Location */}
+          {stream.user.location && (
+            <div className="flex items-center gap-1 text-gray-300 text-xs mb-2">
+              <MapPin className="h-3 w-3" />
+              <span className="truncate">{stream.user.location}</span>
             </div>
           )}
 
-          {/* Live video */}
-          <video
-            ref={videoRef}
-            className={`w-full h-full object-cover ${isConnected ? 'opacity-100' : 'opacity-0'}`}
-            autoPlay
-            muted
-            playsInline
-            webkit-playsinline="true"
-          />
-
-          {/* Top badges row */}
-          <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
-            <Badge className="bg-[#cc0000] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider">
-              LIVE
-            </Badge>
-            <Badge variant="secondary" className="bg-black/50 text-white text-[10px] rounded px-1.5 py-0.5 flex items-center gap-1">
-              <Eye className="h-3 w-3" />
-              {stream.viewerCount >= 1000 ? `${(stream.viewerCount / 1000).toFixed(1)}k` : stream.viewerCount || 0}
-            </Badge>
-          </div>
-
-          {/* Creator info overlay at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-3 pt-8">
-            <div className="flex items-center gap-2">
-              <div
-                onClick={handleProfileClick}
-                className="flex-shrink-0 cursor-pointer"
-              >
-                <Avatar className="h-8 w-8 ring-2 ring-purple-500/50 hover:ring-purple-500 transition-all">
-                  <AvatarImage src={stream.user.avatar || undefined} alt={username} />
-                  <AvatarFallback className="bg-purple-600 text-xs">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-white font-semibold text-sm truncate">
-                  {username}
-                </h3>
-                <p className="text-gray-300 text-xs truncate">
-                  {stream.title}
-                </p>
-              </div>
+          {/* Looking For Tag */}
+          {stream.user.lookingFor && (
+            <div className="inline-block bg-pink-500/30 text-pink-300 text-xs px-2 py-0.5 rounded-full">
+              {stream.user.lookingFor}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </Link>

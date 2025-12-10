@@ -1,13 +1,14 @@
 'use client';
 
-import { Grid3X3, PlayCircle, Sparkles } from 'lucide-react';
+import { Grid3X3, PlayCircle, Sparkles, Heart } from 'lucide-react';
 
 interface ContentTabsProps {
-  activeTab: 'posts' | 'replays' | 'liked';
-  onTabChange: (tab: 'posts' | 'replays' | 'liked') => void;
+  activeTab: 'posts' | 'replays' | 'liked' | 'dating';
+  onTabChange: (tab: 'posts' | 'replays' | 'liked' | 'dating') => void;
   postCount?: number;
   replayCount?: number;
   likedCount?: number;
+  showDating?: boolean;
 }
 
 export function ContentTabs({
@@ -16,12 +17,17 @@ export function ContentTabs({
   postCount = 0,
   replayCount = 0,
   likedCount = 0,
+  showDating = false,
 }: ContentTabsProps) {
-  const tabs = [
+  const baseTabs = [
     { id: 'posts' as const, icon: Grid3X3, label: 'Posts', count: postCount },
     { id: 'replays' as const, icon: PlayCircle, label: 'Replays', count: replayCount },
     { id: 'liked' as const, icon: Sparkles, label: 'Sparked', count: likedCount },
   ];
+
+  const tabs = showDating
+    ? [...baseTabs, { id: 'dating' as const, icon: Heart, label: 'Connect', count: 0 }]
+    : baseTabs;
 
   return (
     <div className="border-t border-gray-800">

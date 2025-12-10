@@ -14,12 +14,17 @@ interface LiveStream {
   user: {
     id: string;
     username: string | null;
+    displayName: string | null;
     avatar: string | null;
     walletAddress: string | null;
+    isOnline: boolean;
+    age: number | null;
+    location: string | null;
+    lookingFor: string | null;
   };
 }
 
-const MOBILE_TABS = ['For You', 'Popular', 'New', 'IRL', 'Gaming', 'Music'];
+const MOBILE_TABS = ['For You', 'Popular', 'IRL', 'Gaming', 'Music'];
 
 // Unified streaming model: all streams come from the database
 // Each user = 1 stream room (user-{userId})

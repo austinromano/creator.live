@@ -15,6 +15,8 @@ import {
   CreatePostModal,
   PostDetailModal,
   EditProfileModal,
+  DatingProfile,
+  EditDatingModal,
 } from '@/components/profile';
 
 interface LiveStreamInfo {
@@ -46,6 +48,15 @@ interface ProfileData {
     streams: number;
     earnings: number;
   };
+  // Dating fields
+  datingEnabled: boolean;
+  lookingFor: string | null;
+  relationshipStatus: string | null;
+  interests: string[];
+  age: number | null;
+  gender: string | null;
+  location: string | null;
+  datingBio: string | null;
 }
 
 export default function ProfilePage() {
@@ -62,8 +73,9 @@ export default function ProfilePage() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [selectedPost, setSelectedPost] = useState<ContentGridItem | null>(null);
   const [currentUserUsername, setCurrentUserUsername] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'posts' | 'replays' | 'liked'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'replays' | 'liked' | 'dating'>('posts');
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showEditDating, setShowEditDating] = useState(false);
 
   // Fetch current user's username from database
   useEffect(() => {
@@ -312,6 +324,7 @@ export default function ProfilePage() {
         postCount={profile.stats.posts}
         replayCount={0}
         likedCount={0}
+        showDating={profile.datingEnabled || isOwnProfile}
       />
 
       {/* Content grid */}
@@ -366,6 +379,22 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Dating/Connect tab */}
+      {activeTab === 'dating' && (
+        <DatingProfile
+          datingEnabled={profile.datingEnabled}
+          lookingFor={profile.lookingFor}
+          relationshipStatus={profile.relationshipStatus}
+          interests={profile.interests}
+          age={profile.age}
+          gender={profile.gender}
+          location={profile.location}
+          datingBio={profile.datingBio}
+          isOwnProfile={isOwnProfile}
+          onEditClick={() => setShowEditDating(true)}
+        />
+      )}
+
       {/* Create Post Modal */}
       <CreatePostModal
         isOpen={showCreatePost}
@@ -393,6 +422,25 @@ export default function ProfilePage() {
             avatar: profile.avatar,
             subscriptionPrice: profile.subscriptionPrice,
             subscriptionsEnabled: profile.subscriptionsEnabled,
+          }}
+          onSave={fetchProfile}
+        />
+      )}
+
+      {/* Edit Dating Modal */}
+      {profile && (
+        <EditDatingModal
+          isOpen={showEditDating}
+          onClose={() => setShowEditDating(false)}
+          profile={{
+            datingEnabled: profile.datingEnabled,
+            lookingFor: profile.lookingFor,
+            relationshipStatus: profile.relationshipStatus,
+            interests: profile.interests,
+            age: profile.age,
+            gender: profile.gender,
+            location: profile.location,
+            datingBio: profile.datingBio,
           }}
           onSave={fetchProfile}
         />
