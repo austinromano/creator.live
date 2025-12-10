@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Home, Radio, Plus, MessageCircle, User } from 'lucide-react';
+import { Home, Radio, Camera, MessageCircle, User } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
@@ -53,7 +53,7 @@ export function MobileBottomNav() {
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
     { href: '/explore', icon: Radio, label: 'Live' },
-    { href: '/golive', icon: Plus, label: 'Go Live', isCenter: true },
+    { href: '/golive', icon: Camera, label: 'Go Live', isCenter: true },
     { href: '/messages', icon: MessageCircle, label: 'Messages', badge: unreadCount },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
@@ -74,12 +74,12 @@ export function MobileBottomNav() {
               >
                 <div className="relative">
                   {/* Breathing glow effect */}
-                  <div className="absolute inset-0 w-12 h-12 bg-purple-500 rounded-full blur-sm animate-[pulse_1.5s_ease-in-out_infinite] opacity-40" />
-                  <div className="relative w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/30">
+                  <div className="absolute inset-0 w-12 h-12 bg-purple-300 rounded-full blur-md animate-[pulse_4s_ease-in-out_infinite] opacity-90" />
+                  <div className="relative w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/70">
                     <Icon className="h-6 w-6 text-white" />
                   </div>
                 </div>
-                <span className="text-[10px] text-gray-400 mt-1">{item.label}</span>
+                <span className="text-[10px] text-transparent mt-1">.</span>
               </Link>
             );
           }
