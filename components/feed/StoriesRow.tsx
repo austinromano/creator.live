@@ -21,7 +21,7 @@ interface StoriesRowProps {
 
 export function StoriesRow({ users, currentUserAvatar, onAddStoryClick }: StoriesRowProps) {
   return (
-    <div className="border-b border-gray-800 py-4">
+    <div className="sticky top-14 z-40 bg-[#0f0a15] border-b border-gray-800 py-4">
       <div className="flex gap-4 overflow-x-auto px-4 scrollbar-hide">
         {/* Your Story */}
         <button
