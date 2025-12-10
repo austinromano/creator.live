@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuthId, errorResponse, NotFoundError, ForbiddenError } from '@/lib/api/middleware';
+import { requireAuthId, errorResponse, NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/middleware';
+
+const updateRoomSchema = z.object({
+  allowMemberInvites: z.boolean().optional(),
+});
 
 // GET /api/rooms/[id] - Get room details
 export async function GET(
@@ -53,6 +58,7 @@ export async function GET(
       template: room.template,
       userId: room.user.id,
       isMember: !!membership,
+      allowMemberInvites: room.allowMemberInvites,
       members: [
         {
           id: room.user.id,
@@ -100,6 +106,52 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: 'Room deleted successfully' });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+// PATCH /api/rooms/[id] - Update room settings (owner only)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const userId = await requireAuthId();
+    const { id } = await params;
+    const body = await request.json();
+
+    const result = updateRoomSchema.safeParse(body);
+    if (!result.success) {
+      throw new BadRequestError('Invalid request data');
+    }
+
+    const room = await prisma.room.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+
+    if (!room) {
+      throw new NotFoundError('Room not found');
+    }
+
+    // Only the room owner can update settings
+    if (room.userId !== userId) {
+      throw new ForbiddenError('Only the room owner can update settings');
+    }
+
+    const updatedRoom = await prisma.room.update({
+      where: { id },
+      data: result.data,
+    });
+
+    return NextResponse.json({
+      success: true,
+      room: {
+        id: updatedRoom.id,
+        allowMemberInvites: updatedRoom.allowMemberInvites,
+      },
+    });
   } catch (error) {
     return errorResponse(error);
   }

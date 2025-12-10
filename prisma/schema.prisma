@@ -185,14 +185,15 @@ model Spark {
 
 // Rooms table - user-created rooms (like Discord servers)
 model Room {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  name        String
-  icon        String?  // URL to room icon image
-  template    String?  // gaming, friends, study, creative
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  name                String
+  icon                String?  // URL to room icon image
+  template            String?  // gaming, friends, study, creative
+  isActive            Boolean  @default(true) @map("is_active")
+  allowMemberInvites  Boolean  @default(true) @map("allow_member_invites") // Whether members can invite others
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   // Relations
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)

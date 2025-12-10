@@ -37,6 +37,7 @@ interface RoomData {
   template: string | null;
   userId: string;
   isMember: boolean;
+  allowMemberInvites: boolean;
   members: RoomMember[];
 }
 
@@ -342,16 +343,21 @@ function SettingsModal({
   onClose,
   roomId,
   roomName,
+  allowMemberInvites,
   onDeleteRoom,
+  onToggleMemberInvites,
 }: {
   isOpen: boolean;
   onClose: () => void;
   roomId: string;
   roomName: string;
+  allowMemberInvites: boolean;
   onDeleteRoom: () => void;
+  onToggleMemberInvites: (value: boolean) => void;
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isTogglingInvites, setIsTogglingInvites] = useState(false);
 
   const handleDeleteRoom = async () => {
     setIsDeleting(true);
@@ -371,6 +377,29 @@ function SettingsModal({
       alert('Failed to delete room');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleMemberInvites = async () => {
+    setIsTogglingInvites(true);
+    try {
+      const response = await fetch(`/api/rooms/${roomId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allowMemberInvites: !allowMemberInvites }),
+      });
+
+      if (response.ok) {
+        onToggleMemberInvites(!allowMemberInvites);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to update setting');
+      }
+    } catch (error) {
+      console.error('Toggle error:', error);
+      alert('Failed to update setting');
+    } finally {
+      setIsTogglingInvites(false);
     }
   };
 
@@ -397,6 +426,27 @@ function SettingsModal({
               <div className="p-3 bg-[#252033] rounded-lg">
                 <p className="text-gray-400 text-sm mb-1">Room Name</p>
                 <p className="text-white font-medium">{roomName}</p>
+              </div>
+
+              {/* Allow Member Invites Toggle */}
+              <div className="flex items-center justify-between p-3 bg-[#252033] rounded-lg">
+                <div>
+                  <p className="text-white font-medium">Allow Member Invites</p>
+                  <p className="text-gray-400 text-sm">Members can invite others to join</p>
+                </div>
+                <button
+                  onClick={handleToggleMemberInvites}
+                  disabled={isTogglingInvites}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${
+                    allowMemberInvites ? 'bg-purple-600' : 'bg-gray-600'
+                  } ${isTogglingInvites ? 'opacity-50' : ''}`}
+                >
+                  <div
+                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      allowMemberInvites ? 'translate-x-7' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* Delete Button */}
@@ -630,6 +680,7 @@ export default function PrivateRoomPage() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [participants, setParticipants] = useState<LiveKitParticipant[]>([]);
   const [isMember, setIsMember] = useState(false);
+  const [allowMemberInvites, setAllowMemberInvites] = useState(true);
 
   const livekitRoomRef = useRef<Room | null>(null);
   const localVideoTrackRef = useRef<LocalVideoTrack | null>(null);
@@ -646,6 +697,7 @@ export default function PrivateRoomPage() {
         const data = await response.json();
         setRoomData(data.room);
         setIsMember(data.room.isMember || false);
+        setAllowMemberInvites(data.room.allowMemberInvites ?? true);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load room');
       } finally {
@@ -937,7 +989,8 @@ export default function PrivateRoomPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isOwner && (
+          {/* Show invite button to owner OR to members if allowMemberInvites is true */}
+          {(isOwner || (isMember && allowMemberInvites)) && (
             <button
               onClick={() => setShowInviteModal(true)}
               className="p-2 text-gray-400 hover:text-white transition-colors"
@@ -1034,7 +1087,9 @@ export default function PrivateRoomPage() {
           onClose={() => setShowSettingsModal(false)}
           roomId={roomId}
           roomName={roomData.name}
+          allowMemberInvites={allowMemberInvites}
           onDeleteRoom={handleDeleteRoom}
+          onToggleMemberInvites={setAllowMemberInvites}
         />
       )}
 

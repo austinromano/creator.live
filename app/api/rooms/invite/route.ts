@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuthId, errorResponse, BadRequestError, NotFoundError } from '@/lib/api/middleware';
+import { requireAuthId, errorResponse, BadRequestError, NotFoundError, ForbiddenError } from '@/lib/api/middleware';
 
 const inviteSchema = z.object({
   roomId: z.string().min(1),
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     const { roomId, userId } = result.data;
 
-    // Verify the room exists and the current user is the owner
+    // Verify the room exists
     const room = await prisma.room.findUnique({
       where: { id: roomId },
       include: {
@@ -39,8 +39,29 @@ export async function POST(request: NextRequest) {
       throw new NotFoundError('Room not found');
     }
 
-    if (room.userId !== currentUserId) {
-      throw new BadRequestError('Only the room owner can send invites');
+    // Check if user can invite:
+    // - Owner can always invite
+    // - Members can invite if allowMemberInvites is true
+    const isOwner = room.userId === currentUserId;
+
+    if (!isOwner) {
+      // Check if user is a member
+      const membership = await prisma.roomMember.findUnique({
+        where: {
+          roomId_userId: {
+            roomId,
+            userId: currentUserId,
+          },
+        },
+      });
+
+      if (!membership) {
+        throw new ForbiddenError('You must be a member of this room to send invites');
+      }
+
+      if (!room.allowMemberInvites) {
+        throw new ForbiddenError('Only the room owner can send invites');
+      }
     }
 
     // Verify the target user exists
