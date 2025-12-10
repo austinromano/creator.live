@@ -1,16 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createRoute } from '@/lib/api/middleware';
 
-// GET /api/user/me - Get current logged in user
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-
-    const userId = (session?.user as any)?.id;
+export const GET = createRoute(
+  async (_req, { userId }) => {
     if (!userId) {
-      return NextResponse.json({ user: null });
+      return { user: null };
     }
 
     const user = await prisma.user.findUnique({
@@ -26,16 +20,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (!user) {
-      return NextResponse.json({ user: null });
-    }
-
-    return NextResponse.json({ user });
-  } catch (error) {
-    console.error('Error fetching user:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch user' },
-      { status: 500 }
-    );
-  }
-}
+    return { user: user ?? null };
+  },
+  { auth: 'optional', authMode: 'id-only' }
+);

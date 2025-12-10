@@ -1,23 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { TIME } from '@/lib/constants';
+import { createRoute } from '@/lib/api/middleware';
 
-// GET /api/user/friends - Get list of users the current user follows
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    const currentUserId = (session?.user as any)?.id;
-
-    if (!currentUserId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get all users that the current user follows
+export const GET = createRoute(
+  async (_req, { userId }) => {
     const following = await prisma.follower.findMany({
-      where: {
-        followerId: currentUserId,
-      },
+      where: { followerId: userId! },
       include: {
         following: {
           select: {
@@ -28,9 +16,7 @@ export async function GET(request: NextRequest) {
             isVerified: true,
             lastSeenAt: true,
             streams: {
-              where: {
-                isLive: true,
-              },
+              where: { isLive: true },
               select: {
                 id: true,
                 streamKey: true,
@@ -42,23 +28,16 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Consider user online if lastSeenAt is within the last 2 minutes
-    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
     const now = Date.now();
 
-    console.log('Found following records:', following.length);
-
-    // Transform the data to a cleaner format
     const friends = following.map((f) => {
       const user = f.following;
       const liveStream = user.streams?.[0] || null;
       const isOnline = user.lastSeenAt
-        ? (now - new Date(user.lastSeenAt).getTime()) < ONLINE_THRESHOLD_MS
+        ? now - new Date(user.lastSeenAt).getTime() < TIME.ONLINE_THRESHOLD
         : false;
 
       return {
@@ -90,9 +69,7 @@ export async function GET(request: NextRequest) {
       return new Date(b.followedAt).getTime() - new Date(a.followedAt).getTime();
     });
 
-    return NextResponse.json({ friends });
-  } catch (error) {
-    console.error('Error fetching friends:', error);
-    return NextResponse.json({ error: 'Failed to fetch friends' }, { status: 500 });
-  }
-}
+    return { friends };
+  },
+  { auth: 'required', authMode: 'id-only' }
+);

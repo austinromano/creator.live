@@ -1,69 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createRoute, NotFoundError, ForbiddenError } from '@/lib/api/middleware';
+import { endStreamSchema } from '@/lib/validations';
 
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const { streamId } = await req.json();
-
-    if (!streamId) {
-      return NextResponse.json(
-        { error: 'Stream ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Find the stream and verify ownership
+export const POST = createRoute(
+  async (_req, { userId }, body) => {
     const stream = await prisma.stream.findUnique({
-      where: { id: streamId },
+      where: { id: body.streamId },
     });
 
     if (!stream) {
-      return NextResponse.json(
-        { error: 'Stream not found' },
-        { status: 404 }
-      );
+      throw new NotFoundError('Stream not found');
     }
 
-    if (stream.userId !== (session.user as any).id) {
-      return NextResponse.json(
-        { error: 'Unauthorized to end this stream' },
-        { status: 403 }
-      );
+    if (stream.userId !== userId) {
+      throw new ForbiddenError('Unauthorized to end this stream');
     }
 
-    // Update stream to mark it as ended
     const updatedStream = await prisma.stream.update({
-      where: { id: streamId },
+      where: { id: body.streamId },
       data: {
         isLive: false,
         endedAt: new Date(),
       },
     });
 
-    return NextResponse.json({
+    return {
       success: true,
       stream: {
         id: updatedStream.id,
         isLive: updatedStream.isLive,
         endedAt: updatedStream.endedAt,
       },
-    });
-  } catch (error) {
-    console.error('Error ending stream:', error);
-    return NextResponse.json(
-      { error: 'Failed to end stream' },
-      { status: 500 }
-    );
-  }
-}
+    };
+  },
+  { auth: 'required', authMode: 'id-only', bodySchema: endStreamSchema }
+);

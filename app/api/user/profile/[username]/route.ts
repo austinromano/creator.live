@@ -1,22 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { TIME } from '@/lib/constants';
+import { createRoute, NotFoundError, BadRequestError } from '@/lib/api/middleware';
 
-// GET /api/user/profile/[username] - Get user profile by username
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ username: string }> }
-) {
-  try {
-    const { username } = await context.params;
+export const GET = createRoute(
+  async (_req, { params }) => {
+    const username = params.username;
 
     if (!username) {
-      return NextResponse.json(
-        { error: 'Username is required' },
-        { status: 400 }
-      );
+      throw new BadRequestError('Username is required');
     }
 
-    // Normalize username to lowercase for lookup
     const normalizedUsername = username.toLowerCase();
 
     const user = await prisma.user.findUnique({
@@ -42,11 +35,8 @@ export async function GET(
             streams: true,
           },
         },
-        // Get active live stream if any
         streams: {
-          where: {
-            isLive: true,
-          },
+          where: { isLive: true },
           select: {
             id: true,
             streamKey: true,
@@ -60,69 +50,52 @@ export async function GET(
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      throw new NotFoundError('User not found');
     }
 
-    // Get total tips received (earnings)
     const tipsReceived = await prisma.tip.aggregate({
-      where: {
-        toWallet: user.id, // This should be wallet address, but we need to handle both cases
-      },
-      _sum: {
-        amountSol: true,
-      },
+      where: { toWallet: user.id },
+      _sum: { amountSol: true },
     });
 
-    // Check if user has an active live stream
-    const liveStream = user.streams.length > 0 ? user.streams[0] : null;
-
-    // Check if user is online (lastSeenAt within 2 minutes)
-    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    const liveStream = user.streams[0] || null;
     const now = Date.now();
     const isOnline = user.lastSeenAt
-      ? (now - new Date(user.lastSeenAt).getTime()) < ONLINE_THRESHOLD_MS
+      ? now - new Date(user.lastSeenAt).getTime() < TIME.ONLINE_THRESHOLD
       : false;
 
-    // Format response
-    const profile = {
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName || user.username,
-      avatar: user.avatar,
-      coverImage: user.coverImage,
-      bio: user.bio,
-      greeting: user.greeting,
-      subscriptionPrice: user.subscriptionPrice,
-      subscriptionsEnabled: user.subscriptionsEnabled,
-      isVerified: user.isVerified,
-      createdAt: user.createdAt,
-      isOnline,
-      isLive: !!liveStream,
-      liveStream: liveStream ? {
-        id: liveStream.id,
-        roomName: `user-${user.id}`,
-        title: liveStream.title,
-        viewerCount: liveStream.viewerCount,
-        startedAt: liveStream.startedAt,
-      } : null,
-      stats: {
-        posts: user._count.posts,
-        followers: user._count.followers,
-        following: user._count.following,
-        streams: user._count.streams,
-        earnings: tipsReceived._sum.amountSol || 0,
+    return {
+      profile: {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName || user.username,
+        avatar: user.avatar,
+        coverImage: user.coverImage,
+        bio: user.bio,
+        greeting: user.greeting,
+        subscriptionPrice: user.subscriptionPrice,
+        subscriptionsEnabled: user.subscriptionsEnabled,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt,
+        isOnline,
+        isLive: !!liveStream,
+        liveStream: liveStream
+          ? {
+              id: liveStream.id,
+              roomName: `user-${user.id}`,
+              title: liveStream.title,
+              viewerCount: liveStream.viewerCount,
+              startedAt: liveStream.startedAt,
+            }
+          : null,
+        stats: {
+          posts: user._count.posts,
+          followers: user._count.followers,
+          following: user._count.following,
+          streams: user._count.streams,
+          earnings: tipsReceived._sum.amountSol || 0,
+        },
       },
     };
-
-    return NextResponse.json({ profile });
-  } catch (error) {
-    console.error('Error fetching profile:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch profile' },
-      { status: 500 }
-    );
   }
-}
+);

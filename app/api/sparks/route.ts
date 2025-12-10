@@ -1,142 +1,100 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { createRoute, NotFoundError, BadRequestError } from '@/lib/api/middleware';
 
-// POST /api/sparks - Spark a post (like)
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    const currentUserId = (session?.user as any)?.id;
+const sparkSchema = z.object({
+  postId: z.string().min(1),
+});
 
-    if (!currentUserId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { postId } = body;
-
-    if (!postId) {
-      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
-    }
-
-    // Get the post to find the owner
+export const POST = createRoute(
+  async (_req, { userId }, body) => {
     const post = await prisma.post.findUnique({
-      where: { id: postId },
+      where: { id: body.postId },
       select: { userId: true },
     });
 
     if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+      throw new NotFoundError('Post not found');
     }
 
-    // Check if already sparked
     const existingSpark = await prisma.spark.findUnique({
       where: {
         userId_postId: {
-          userId: currentUserId,
-          postId,
+          userId: userId!,
+          postId: body.postId,
         },
       },
     });
 
     if (existingSpark) {
-      return NextResponse.json({ error: 'Already sparked' }, { status: 400 });
+      throw new BadRequestError('Already sparked');
     }
 
-    // Create spark and notification in a transaction
     await prisma.$transaction(async (tx) => {
-      // Create the spark
       await tx.spark.create({
         data: {
-          userId: currentUserId,
-          postId,
+          userId: userId!,
+          postId: body.postId,
         },
       });
 
-      // Update post spark count
       await tx.post.update({
-        where: { id: postId },
+        where: { id: body.postId },
         data: { viewerCount: { increment: 1 } },
       });
 
-      // Create notification (only if not sparking your own post)
-      if (post.userId !== currentUserId) {
+      if (post.userId !== userId) {
         await tx.notification.create({
           data: {
             userId: post.userId,
-            fromUserId: currentUserId,
+            fromUserId: userId!,
             type: 'spark',
-            postId,
+            postId: body.postId,
           },
         });
       }
     });
 
-    return NextResponse.json({ success: true, sparked: true });
-  } catch (error) {
-    console.error('Error sparking post:', error);
-    return NextResponse.json({ error: 'Failed to spark post' }, { status: 500 });
-  }
-}
+    return { success: true, sparked: true };
+  },
+  { auth: 'required', authMode: 'id-only', bodySchema: sparkSchema }
+);
 
-// DELETE /api/sparks - Unspark a post (unlike)
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    const currentUserId = (session?.user as any)?.id;
-
-    if (!currentUserId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { postId } = body;
-
-    if (!postId) {
-      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
-    }
-
-    // Get the post to find the owner
+export const DELETE = createRoute(
+  async (_req, { userId }, body) => {
     const post = await prisma.post.findUnique({
-      where: { id: postId },
+      where: { id: body.postId },
       select: { userId: true },
     });
 
     if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+      throw new NotFoundError('Post not found');
     }
 
-    // Delete spark and notification in a transaction
     await prisma.$transaction(async (tx) => {
-      // Delete the spark
       await tx.spark.deleteMany({
         where: {
-          userId: currentUserId,
-          postId,
+          userId: userId!,
+          postId: body.postId,
         },
       });
 
-      // Decrement post spark count (don't go below 0)
       await tx.post.update({
-        where: { id: postId },
+        where: { id: body.postId },
         data: { viewerCount: { decrement: 1 } },
       });
 
-      // Remove the notification
       await tx.notification.deleteMany({
         where: {
           userId: post.userId,
-          fromUserId: currentUserId,
+          fromUserId: userId!,
           type: 'spark',
-          postId,
+          postId: body.postId,
         },
       });
     });
 
-    return NextResponse.json({ success: true, sparked: false });
-  } catch (error) {
-    console.error('Error unsparking post:', error);
-    return NextResponse.json({ error: 'Failed to unspark post' }, { status: 500 });
-  }
-}
+    return { success: true, sparked: false };
+  },
+  { auth: 'required', authMode: 'id-only', bodySchema: sparkSchema }
+);

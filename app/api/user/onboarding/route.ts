@@ -1,98 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { createRoute, BadRequestError, ConflictError } from '@/lib/api/middleware';
 
-// Reserved usernames that can't be claimed
 const RESERVED_USERNAMES = [
   'admin', 'support', 'help', 'api', 'www', 'app', 'mail',
   'official', 'osho', 'system', 'mod', 'moderator', 'staff',
   'null', 'undefined', 'anonymous', 'user', 'guest', 'test',
 ];
 
-// POST /api/user/onboarding - Complete user onboarding
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
+const onboardingSchema = z.object({
+  username: z
+    .string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(20, 'Username must be 20 characters or less')
+    .regex(/^[a-z][a-z0-9_]*$/, 'Username must start with a letter and contain only letters, numbers, and underscores')
+    .transform(val => val.toLowerCase())
+    .refine(val => !RESERVED_USERNAMES.includes(val), 'This username is not available'),
+  image: z.string().url().optional(),
+});
 
-    const userId = (session?.user as any)?.id;
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const { username, image } = body;
-
-    // Validate username exists
-    if (!username || typeof username !== 'string') {
-      return NextResponse.json(
-        { error: 'Username is required' },
-        { status: 400 }
-      );
-    }
-
-    // Normalize: trim whitespace and convert to lowercase
-    const normalizedUsername = username.trim().toLowerCase();
-
-    // Length validation
-    if (normalizedUsername.length < 3) {
-      return NextResponse.json(
-        { error: 'Username must be at least 3 characters' },
-        { status: 400 }
-      );
-    }
-
-    if (normalizedUsername.length > 20) {
-      return NextResponse.json(
-        { error: 'Username must be 20 characters or less' },
-        { status: 400 }
-      );
-    }
-
-    // Character validation - only letters, numbers, underscores
-    if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
-      return NextResponse.json(
-        { error: 'Username can only contain letters, numbers, and underscores' },
-        { status: 400 }
-      );
-    }
-
-    // Can't start with underscore or number
-    if (/^[_0-9]/.test(normalizedUsername)) {
-      return NextResponse.json(
-        { error: 'Username must start with a letter' },
-        { status: 400 }
-      );
-    }
-
-    // Reserved username check
-    if (RESERVED_USERNAMES.includes(normalizedUsername)) {
-      return NextResponse.json(
-        { error: 'This username is not available' },
-        { status: 400 }
-      );
-    }
-
-    // Build update data - let schema defaults handle greeting/subscriptionPrice
+export const POST = createRoute(
+  async (_req, { userId }, body) => {
     const updateData: Prisma.UserUpdateInput = {
-      username: normalizedUsername,
-      displayName: username.trim(), // Preserve original casing for display
+      username: body.username,
+      displayName: body.username,
       hasCompletedOnboarding: true,
     };
 
-    // Only update avatar if provided
-    if (image && typeof image === 'string' && image.trim()) {
-      updateData.avatar = image.trim();
+    if (body.image) {
+      updateData.avatar = body.image;
     }
 
-    // Use try/catch to handle unique constraint violation (race-safe)
     try {
       const updatedUser = await prisma.user.update({
-        where: { id: userId },
+        where: { id: userId! },
         data: updateData,
         select: {
           id: true,
@@ -107,24 +49,13 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return NextResponse.json({ user: updatedUser });
+      return { user: updatedUser };
     } catch (error) {
-      // Handle unique constraint violation (username already taken)
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          return NextResponse.json(
-            { error: 'Username is already taken' },
-            { status: 400 }
-          );
-        }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('Username is already taken');
       }
       throw error;
     }
-  } catch (error) {
-    console.error('Error completing onboarding:', error);
-    return NextResponse.json(
-      { error: 'Failed to complete onboarding' },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { auth: 'required', authMode: 'id-only', bodySchema: onboardingSchema }
+);

@@ -1,45 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createRoute } from '@/lib/api/middleware';
 
-// GET /api/feed - Get posts from users you follow in chronological order
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    const currentUserId = (session?.user as any)?.id;
-
-    if (!currentUserId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const GET = createRoute(
+  async (_req, { userId }) => {
     // Get all user IDs that the current user follows
     const following = await prisma.follower.findMany({
-      where: {
-        followerId: currentUserId,
-      },
-      select: {
-        followingId: true,
-      },
+      where: { followerId: userId! },
+      select: { followingId: true },
     });
 
     const followingIds = following.map((f) => f.followingId);
 
     if (followingIds.length === 0) {
-      return NextResponse.json({ posts: [] });
+      return { posts: [] };
     }
 
     // Get posts from followed users in chronological order (newest first)
-    // Exclude paid and locked posts from the feed
     const posts = await prisma.post.findMany({
       where: {
-        userId: {
-          in: followingIds,
-        },
+        userId: { in: followingIds },
         isPublished: true,
-        type: {
-          notIn: ['paid', 'locked'],
-        },
+        type: { notIn: ['paid', 'locked'] },
       },
       include: {
         user: {
@@ -52,23 +33,15 @@ export async function GET(request: NextRequest) {
           },
         },
         sparks: {
-          where: {
-            userId: currentUserId,
-          },
-          select: {
-            id: true,
-          },
+          where: { userId: userId! },
+          select: { id: true },
         },
         _count: {
-          select: {
-            sparks: true,
-          },
+          select: { sparks: true },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 50, // Limit to 50 posts for now
+      orderBy: { createdAt: 'desc' },
+      take: 50,
     });
 
     // Transform the data
@@ -81,7 +54,7 @@ export async function GET(request: NextRequest) {
       contentUrl: post.contentUrl,
       price: post.price,
       sparkCount: post._count.sparks,
-      sparked: post.sparks.length > 0, // Current user has sparked this post
+      sparked: post.sparks.length > 0,
       createdAt: post.createdAt,
       user: {
         id: post.user.id,
@@ -92,9 +65,7 @@ export async function GET(request: NextRequest) {
       },
     }));
 
-    return NextResponse.json({ posts: feedPosts });
-  } catch (error) {
-    console.error('Error fetching feed:', error);
-    return NextResponse.json({ error: 'Failed to fetch feed' }, { status: 500 });
-  }
-}
+    return { posts: feedPosts };
+  },
+  { auth: 'required', authMode: 'id-only' }
+);

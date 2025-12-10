@@ -1,51 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { AccessToken } from 'livekit-server-sdk';
+import { createRoute, BadRequestError, ApiError } from '@/lib/api/middleware';
 
-export async function POST(request: NextRequest) {
-  try {
-    const { roomName, identity, isPublisher } = await request.json();
+const tokenSchema = z.object({
+  roomName: z.string().min(1),
+  identity: z.string().min(1),
+  isPublisher: z.boolean().default(false),
+});
 
-    if (!roomName || !identity) {
-      return NextResponse.json(
-        { error: 'Missing roomName or identity' },
-        { status: 400 }
-      );
-    }
-
+export const POST = createRoute(
+  async (_req, _ctx, body) => {
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
 
     if (!apiKey || !apiSecret) {
-      console.error('LiveKit credentials not configured');
-      return NextResponse.json(
-        { error: 'LiveKit not configured' },
-        { status: 500 }
-      );
+      throw new ApiError('LiveKit not configured', 500, 'LIVEKIT_NOT_CONFIGURED');
     }
 
-    // Create access token
     const at = new AccessToken(apiKey, apiSecret, {
-      identity,
-      ttl: '6h', // Token valid for 6 hours
+      identity: body.identity,
+      ttl: '6h',
     });
 
-    // Grant permissions
     at.addGrant({
       roomJoin: true,
-      room: roomName,
-      canPublish: isPublisher,
+      room: body.roomName,
+      canPublish: body.isPublisher,
       canSubscribe: true,
       canPublishData: true,
     });
 
     const token = await at.toJwt();
 
-    return NextResponse.json({ token });
-  } catch (error) {
-    console.error('Error generating LiveKit token:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate token' },
-      { status: 500 }
-    );
-  }
-}
+    return { token };
+  },
+  { bodySchema: tokenSchema }
+);
