@@ -122,7 +122,6 @@ export const API_ENDPOINTS = {
     PROFILE: '/api/user/profile',
     AVATAR: '/api/user/avatar',
     COVER: '/api/user/cover',
-    DATING: '/api/user/dating',
     FOLLOW: '/api/user/follow',
     FRIENDS: '/api/user/friends',
   },

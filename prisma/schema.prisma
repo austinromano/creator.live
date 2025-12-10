@@ -32,16 +32,6 @@ model User {
   subscriptionsEnabled Boolean  @default(true) @map("subscriptions_enabled")
   isVerified           Boolean  @default(false) @map("is_verified")
 
-  // Dating profile fields
-  datingEnabled        Boolean  @default(false) @map("dating_enabled")
-  lookingFor           String?  @map("looking_for")     // friendship, dating, networking, etc.
-  relationshipStatus   String?  @map("relationship_status") // single, taken, etc.
-  interests            String[] @default([])            // Array of interest tags
-  age                  Int?
-  gender               String?
-  location             String?
-  datingBio            String?  @map("dating_bio")      // Separate bio for dating profile
-
   // Relations
   streams       Stream[]
   sentTips      Tip[]      @relation("SentTips")

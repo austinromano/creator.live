@@ -8,6 +8,4 @@ export { ContentTabs } from './ContentTabs';
 export { CreatePostModal } from './CreatePostModal';
 export { PostDetailModal } from './PostDetailModal';
 export { EditProfileModal } from './EditProfileModal';
-export { DatingProfile } from './DatingProfile';
-export { EditDatingModal } from './EditDatingModal';
 export type { ContentGridItem } from './ContentGrid';

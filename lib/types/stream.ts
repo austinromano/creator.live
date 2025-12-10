@@ -12,9 +12,6 @@ export interface StreamUser {
   walletAddress?: string | null;
   isOnline?: boolean;
   isAI?: boolean;
-  age?: number | null;
-  location?: string | null;
-  lookingFor?: string | null;
 }
 
 // Core stream data from database

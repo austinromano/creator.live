@@ -21,9 +21,6 @@ export async function GET(request: NextRequest) {
             walletAddress: true,
             isAI: true,
             lastSeenAt: true,
-            age: true,
-            location: true,
-            lookingFor: true,
           },
         },
       },
@@ -54,9 +51,6 @@ export async function GET(request: NextRequest) {
         isOnline: stream.user.lastSeenAt
           ? now - new Date(stream.user.lastSeenAt).getTime() < TIME.ONLINE_THRESHOLD
           : false,
-        age: stream.user.age,
-        location: stream.user.location,
-        lookingFor: stream.user.lookingFor,
       },
     }));
 
