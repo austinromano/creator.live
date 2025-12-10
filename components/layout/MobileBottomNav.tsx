@@ -60,7 +60,7 @@ export function MobileBottomNav() {
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-50 pb-safe">
-      <div className="flex items-center justify-around h-16">
+      <div className="flex items-end justify-around h-16 pb-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -70,7 +70,7 @@ export function MobileBottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center justify-center -mt-4"
+                className="flex flex-col items-center -mt-4"
               >
                 <div className="relative">
                   {/* Breathing glow effect */}
@@ -79,7 +79,6 @@ export function MobileBottomNav() {
                     <Icon className="h-6 w-6 text-white" />
                   </div>
                 </div>
-                <span className="text-[10px] text-transparent mt-1">.</span>
               </Link>
             );
           }
@@ -88,7 +87,7 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-col items-center justify-center py-2 relative"
+              className="flex flex-col items-center relative w-16"
             >
               <div className="relative inline-flex">
                 <Icon className={`h-6 w-6 ${isActive ? 'text-purple-500' : 'text-gray-400'}`} />
