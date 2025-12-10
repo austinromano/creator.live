@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthId();
+    const userId = await requireAuthId();
     const { id } = await params;
 
     const room = await prisma.room.findUnique({
@@ -30,6 +30,16 @@ export async function GET(
       throw new NotFoundError('Room not found');
     }
 
+    // Check if current user is a member of this room
+    const membership = await prisma.roomMember.findUnique({
+      where: {
+        roomId_userId: {
+          roomId: id,
+          userId,
+        },
+      },
+    });
+
     // Check if user is online (seen in last 5 minutes)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const isOwnerOnline = room.user.lastSeenAt && room.user.lastSeenAt > fiveMinutesAgo;
@@ -42,6 +52,7 @@ export async function GET(
       icon: room.icon,
       template: room.template,
       userId: room.user.id,
+      isMember: !!membership,
       members: [
         {
           id: room.user.id,

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft, Settings, Users, Mic, MicOff, Video, VideoOff, PhoneOff, UserPlus, X, Search, Loader2, Trash2, LogOut } from 'lucide-react';
+import { ArrowLeft, Settings, Users, Mic, MicOff, Video, VideoOff, PhoneOff, UserPlus, X, Search, Loader2, Trash2, LogOut, Plus, Check } from 'lucide-react';
 import Link from 'next/link';
 import {
   Room,
@@ -36,6 +36,7 @@ interface RoomData {
   icon: string | null;
   template: string | null;
   userId: string;
+  isMember: boolean;
   members: RoomMember[];
 }
 
@@ -446,25 +447,53 @@ function SettingsModal({
   );
 }
 
-// Member Settings Modal (for non-owners - has Leave option)
+// Member Settings Modal (for non-owners - has Add/Leave options)
 function MemberSettingsModal({
   isOpen,
   onClose,
   roomId,
   roomName,
+  isMember,
+  onAddRoom,
   onLeaveRoom,
 }: {
   isOpen: boolean;
   onClose: () => void;
   roomId: string;
   roomName: string;
+  isMember: boolean;
+  onAddRoom: () => void;
   onLeaveRoom: () => void;
 }) {
-  const [isLeaving, setIsLeaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 
+  const handleAddRoom = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/rooms/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId }),
+      });
+
+      if (response.ok) {
+        onAddRoom();
+        onClose();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to add room');
+      }
+    } catch (error) {
+      console.error('Add room error:', error);
+      alert('Failed to add room');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLeaveRoom = async () => {
-    setIsLeaving(true);
+    setIsLoading(true);
     try {
       const response = await fetch(`/api/rooms/join?roomId=${roomId}`, {
         method: 'DELETE',
@@ -480,7 +509,7 @@ function MemberSettingsModal({
       console.error('Leave error:', error);
       alert('Failed to leave room');
     } finally {
-      setIsLeaving(false);
+      setIsLoading(false);
     }
   };
 
@@ -509,14 +538,42 @@ function MemberSettingsModal({
                 <p className="text-white font-medium">{roomName}</p>
               </div>
 
-              {/* Leave Button */}
-              <button
-                onClick={() => setShowConfirmLeave(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
-              >
-                <LogOut className="h-5 w-5" />
-                Leave Room
-              </button>
+              {/* Add to My Rooms Button (if not a member) */}
+              {!isMember && (
+                <button
+                  onClick={handleAddRoom}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Plus className="h-5 w-5" />
+                      Add to My Rooms
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Already Added indicator (if member) */}
+              {isMember && (
+                <div className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-500/10 text-green-400 rounded-lg">
+                  <Check className="h-5 w-5" />
+                  Added to My Rooms
+                </div>
+              )}
+
+              {/* Leave Button (only if member) */}
+              {isMember && (
+                <button
+                  onClick={() => setShowConfirmLeave(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                >
+                  <LogOut className="h-5 w-5" />
+                  Leave Room
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -539,10 +596,10 @@ function MemberSettingsModal({
                 </button>
                 <button
                   onClick={handleLeaveRoom}
-                  disabled={isLeaving}
+                  disabled={isLoading}
                   className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {isLeaving ? (
+                  {isLoading ? (
                     <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                   ) : (
                     'Leave'
@@ -572,6 +629,7 @@ export default function PrivateRoomPage() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [participants, setParticipants] = useState<LiveKitParticipant[]>([]);
+  const [isMember, setIsMember] = useState(false);
 
   const livekitRoomRef = useRef<Room | null>(null);
   const localVideoTrackRef = useRef<LocalVideoTrack | null>(null);
@@ -587,6 +645,7 @@ export default function PrivateRoomPage() {
         }
         const data = await response.json();
         setRoomData(data.room);
+        setIsMember(data.room.isMember || false);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load room');
       } finally {
@@ -986,6 +1045,8 @@ export default function PrivateRoomPage() {
           onClose={() => setShowSettingsModal(false)}
           roomId={roomId}
           roomName={roomData.name}
+          isMember={isMember}
+          onAddRoom={() => setIsMember(true)}
           onLeaveRoom={handleDeleteRoom}
         />
       )}
