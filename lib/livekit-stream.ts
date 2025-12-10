@@ -387,6 +387,7 @@ export class LiveKitStreamer {
     this.setupDataListener();
 
     // Check for existing participants and their tracks
+    if (!this.room) return;
     this.room.remoteParticipants.forEach((participant) => {
       participant.trackPublications.forEach((publication) => {
         if (publication.track && publication.isSubscribed) {
@@ -464,6 +465,7 @@ export class LiveKitStreamer {
     this.setupDataListener();
 
     // Check for existing participants and their tracks
+    if (!this.room) return;
     this.room.remoteParticipants.forEach((participant) => {
       participant.trackPublications.forEach((publication) => {
         if (publication.track) {
