@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title } = await req.json();
+    const { title, category } = await req.json();
 
     // Auto-cleanup any stale streams for this user before starting a new one
     // This handles cases where the browser was closed without properly ending the stream
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         userId: (session.user as any).id,
         streamKey,
         title: title || 'Untitled Stream',
+        category: category || null,
         isLive: true,
         startedAt: new Date(),
       },

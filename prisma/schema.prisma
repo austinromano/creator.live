@@ -85,6 +85,7 @@ model Stream {
   userId     String    @map("user_id")
   streamKey  String    @unique @map("stream_key")
   title      String?
+  category   String?   // IRL, Gaming, Music
   thumbnail  String?   @db.Text // Base64 thumbnail image
   isLive     Boolean   @default(false) @map("is_live")
   startedAt  DateTime? @map("started_at")

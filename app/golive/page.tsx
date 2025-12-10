@@ -28,6 +28,9 @@ import {
   X,
   Volume2,
   VolumeX,
+  Gamepad2,
+  Music,
+  Camera,
 } from 'lucide-react';
 import Link from 'next/link';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
@@ -93,6 +96,7 @@ export default function ProfilePage() {
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const [streamTitle, setStreamTitle] = useState('');
+  const [streamCategory, setStreamCategory] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [userLoading, setUserLoading] = useState(true);
   const thumbnailIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -479,6 +483,7 @@ export default function ProfilePage() {
         },
         body: JSON.stringify({
           title: streamTitle || `${username}'s Live Stream`,
+          category: streamCategory,
         }),
       });
 
@@ -1606,10 +1611,52 @@ export default function ProfilePage() {
         {!isLive && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e10]">
             <div className="text-center">
-              <div className="text-4xl font-bold text-gray-600 mb-4">OFFLINE</div>
+              <div className="text-4xl font-bold text-gray-600 mb-6">OFFLINE</div>
+
+              {/* Category Selection */}
+              <div className="mb-6">
+                <p className="text-gray-400 text-sm mb-3">Select a category</p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setStreamCategory('IRL')}
+                    className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-all ${
+                      streamCategory === 'IRL'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    <Camera className="h-6 w-6" />
+                    <span className="text-sm font-medium">IRL</span>
+                  </button>
+                  <button
+                    onClick={() => setStreamCategory('Gaming')}
+                    className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-all ${
+                      streamCategory === 'Gaming'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    <Gamepad2 className="h-6 w-6" />
+                    <span className="text-sm font-medium">Gaming</span>
+                  </button>
+                  <button
+                    onClick={() => setStreamCategory('Music')}
+                    className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-all ${
+                      streamCategory === 'Music'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    <Music className="h-6 w-6" />
+                    <span className="text-sm font-medium">Music</span>
+                  </button>
+                </div>
+              </div>
+
               <Button
                 onClick={handleGoLive}
-                className="bg-purple-600 hover:bg-purple-700 text-lg px-6 py-3"
+                disabled={!streamCategory}
+                className="bg-purple-600 hover:bg-purple-700 text-lg px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Radio className="h-5 w-5 mr-2" />
                 Go Live
@@ -2201,10 +2248,52 @@ export default function ProfilePage() {
               {!isLive && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="text-6xl font-bold text-gray-600 mb-4">OFFLINE</div>
+                    <div className="text-6xl font-bold text-gray-600 mb-6">OFFLINE</div>
+
+                    {/* Category Selection */}
+                    <div className="mb-6">
+                      <p className="text-gray-400 text-sm mb-3">Select a category</p>
+                      <div className="flex gap-3 justify-center">
+                        <button
+                          onClick={() => setStreamCategory('IRL')}
+                          className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl transition-all ${
+                            streamCategory === 'IRL'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <Camera className="h-6 w-6" />
+                          <span className="text-sm font-medium">IRL</span>
+                        </button>
+                        <button
+                          onClick={() => setStreamCategory('Gaming')}
+                          className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl transition-all ${
+                            streamCategory === 'Gaming'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <Gamepad2 className="h-6 w-6" />
+                          <span className="text-sm font-medium">Gaming</span>
+                        </button>
+                        <button
+                          onClick={() => setStreamCategory('Music')}
+                          className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl transition-all ${
+                            streamCategory === 'Music'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <Music className="h-6 w-6" />
+                          <span className="text-sm font-medium">Music</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <Button
                       onClick={handleGoLive}
-                      className="bg-purple-600 hover:bg-purple-700"
+                      disabled={!streamCategory}
+                      className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Radio className="h-4 w-4 mr-2" />
                       Go Live

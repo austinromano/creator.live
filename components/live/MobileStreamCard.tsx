@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Heart } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
 import { onAudioUnlock } from '@/lib/audio-unlock';
 
@@ -10,6 +10,7 @@ interface UserStream {
   id: string;
   roomName: string;
   title: string;
+  category: string | null;
   isLive: boolean;
   viewerCount: number;
   startedAt: string | null;
@@ -161,28 +162,17 @@ export function MobileStreamCard({ stream }: MobileStreamCardProps) {
 
         {/* Info Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-3">
-          {/* Name and Age */}
+          {/* Name */}
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-white font-semibold text-base truncate">
               {displayName}
             </h3>
-            {stream.user.age && (
-              <span className="text-white/80 text-sm">{stream.user.age}</span>
-            )}
           </div>
 
-          {/* Location */}
-          {stream.user.location && (
-            <div className="flex items-center gap-1 text-gray-300 text-xs mb-2">
-              <MapPin className="h-3 w-3" />
-              <span className="truncate">{stream.user.location}</span>
-            </div>
-          )}
-
-          {/* Looking For Tag */}
-          {stream.user.lookingFor && (
+          {/* Category Tag */}
+          {stream.category && (
             <div className="inline-block bg-pink-500/30 text-pink-300 text-xs px-2 py-0.5 rounded-full">
-              {stream.user.lookingFor}
+              {stream.category}
             </div>
           )}
         </div>

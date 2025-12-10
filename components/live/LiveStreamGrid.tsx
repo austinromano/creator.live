@@ -8,6 +8,7 @@ interface LiveStream {
   id: string;
   roomName: string;
   title: string;
+  category: string | null;
   isLive: boolean;
   viewerCount: number;
   startedAt: string | null;
@@ -148,13 +149,20 @@ export function LiveStreamGrid() {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {liveStreams.map((stream) => (
-            <MobileStreamCard
-              key={stream.id}
-              stream={stream}
-              size="medium"
-            />
-          ))}
+          {liveStreams
+            .filter((stream) => {
+              // For You and Popular show all streams
+              if (activeTab === 'For You' || activeTab === 'Popular') return true;
+              // Filter by category for IRL, Gaming, Music tabs
+              return stream.category === activeTab;
+            })
+            .map((stream) => (
+              <MobileStreamCard
+                key={stream.id}
+                stream={stream}
+                size="medium"
+              />
+            ))}
         </div>
       </section>
 

@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       odyseeStreamKey: stream.id, // Used for the live page link
       roomName: `user-${stream.userId}`, // User-based room name
       title: stream.title || `${stream.user.username}'s Live Stream`,
+      category: stream.category,
       isLive: stream.isLive,
       viewerCount: stream.viewerCount,
       startedAt: stream.startedAt,
