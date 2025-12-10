@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft, Settings, Users, Mic, MicOff, Video, VideoOff, PhoneOff, UserPlus, X, Search, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Settings, Users, Mic, MicOff, Video, VideoOff, PhoneOff, UserPlus, X, Search, Loader2, Trash2, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import {
   Room,
@@ -446,6 +446,117 @@ function SettingsModal({
   );
 }
 
+// Member Settings Modal (for non-owners - has Leave option)
+function MemberSettingsModal({
+  isOpen,
+  onClose,
+  roomId,
+  roomName,
+  onLeaveRoom,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  roomId: string;
+  roomName: string;
+  onLeaveRoom: () => void;
+}) {
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [showConfirmLeave, setShowConfirmLeave] = useState(false);
+
+  const handleLeaveRoom = async () => {
+    setIsLeaving(true);
+    try {
+      const response = await fetch(`/api/rooms/join?roomId=${roomId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        onLeaveRoom();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to leave room');
+      }
+    } catch (error) {
+      console.error('Leave error:', error);
+      alert('Failed to leave room');
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+      <div className="w-full max-w-md bg-[#1a1225] rounded-xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <h2 className="text-lg font-semibold text-white">Room Settings</h2>
+          <button
+            onClick={onClose}
+            className="p-1 text-gray-400 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4">
+          {!showConfirmLeave ? (
+            <div className="space-y-4">
+              <div className="p-3 bg-[#252033] rounded-lg">
+                <p className="text-gray-400 text-sm mb-1">Room Name</p>
+                <p className="text-white font-medium">{roomName}</p>
+              </div>
+
+              {/* Leave Button */}
+              <button
+                onClick={() => setShowConfirmLeave(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                Leave Room
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <LogOut className="h-6 w-6 text-red-400" />
+                </div>
+                <h3 className="text-white font-semibold mb-2">Leave &quot;{roomName}&quot;?</h3>
+                <p className="text-gray-400 text-sm">
+                  You will be removed from this room. You can rejoin if invited again.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmLeave(false)}
+                  className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLeaveRoom}
+                  disabled={isLeaving}
+                  className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isLeaving ? (
+                    <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                  ) : (
+                    'Leave'
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PrivateRoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -767,22 +878,22 @@ export default function PrivateRoomPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
-            title="Invite user"
-          >
-            <UserPlus className="h-5 w-5" />
-          </button>
           {isOwner && (
             <button
-              onClick={() => setShowSettingsModal(true)}
+              onClick={() => setShowInviteModal(true)}
               className="p-2 text-gray-400 hover:text-white transition-colors"
-              title="Room settings"
+              title="Invite user"
             >
-              <Settings className="h-5 w-5" />
+              <UserPlus className="h-5 w-5" />
             </button>
           )}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-2 text-gray-400 hover:text-white transition-colors"
+            title="Room settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
         </div>
       </header>
 
@@ -865,6 +976,17 @@ export default function PrivateRoomPage() {
           roomId={roomId}
           roomName={roomData.name}
           onDeleteRoom={handleDeleteRoom}
+        />
+      )}
+
+      {/* Member Settings Modal (non-owners) */}
+      {!isOwner && (
+        <MemberSettingsModal
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          roomId={roomId}
+          roomName={roomData.name}
+          onLeaveRoom={handleDeleteRoom}
         />
       )}
     </div>
