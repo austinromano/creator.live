@@ -46,7 +46,7 @@ function getTemplateIcon(template: string | null) {
 
 export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryClick }: StoriesRowProps) {
   return (
-    <div className="sticky top-0 lg:top-14 z-40 bg-[#0f0a15] border-b border-gray-800 py-4">
+    <div className="lg:sticky lg:top-14 z-40 bg-[#0f0a15] border-b border-gray-800 pt-3 pb-4">
       <div className="flex gap-4 overflow-x-auto px-4 scrollbar-hide">
         {/* Your Story / Add Room */}
         <button
@@ -65,7 +65,7 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
             </div>
           </div>
           <span className="text-xs text-gray-400 max-w-[64px] truncate">
-            Your room
+            Make room
           </span>
         </button>
 
@@ -77,13 +77,13 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
             className="flex flex-col items-center gap-1 flex-shrink-0"
           >
             <div className="relative">
-              <div className="absolute inset-0 rounded-full p-[2px] bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500">
-                <div className="w-full h-full rounded-full bg-black p-[2px]">
-                  <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[#1a1225]">
+              <div className="absolute inset-0 rounded-2xl p-[2px] bg-purple-500">
+                <div className="w-full h-full rounded-2xl bg-black p-[2px]">
+                  <div className="w-full h-full rounded-xl overflow-hidden flex items-center justify-center bg-[#1a1225]">
                     {room.icon ? (
-                      <Avatar className="h-full w-full">
-                        <AvatarImage src={room.icon} />
-                        <AvatarFallback className="bg-[#1a1225] text-white">
+                      <Avatar className="h-full w-full rounded-xl">
+                        <AvatarImage src={room.icon} className="rounded-xl" />
+                        <AvatarFallback className="bg-[#1a1225] text-white rounded-xl">
                           {room.name[0]?.toUpperCase() || '?'}
                         </AvatarFallback>
                       </Avatar>

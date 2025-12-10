@@ -94,6 +94,7 @@ function ParticipantCard({
   isHost?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const gradient = useMemo(() => getGradientForUser(participant.identity, index), [participant.identity, index]);
 
   // Parse identity to get display info
@@ -110,6 +111,40 @@ function ParticipantCard({
       };
     }
   }, [participant.videoTrack]);
+
+  // Attach audio track to audio element (for remote participants only)
+  useEffect(() => {
+    if (!isLocal && audioRef.current && participant.audioTrack) {
+      const audioEl = audioRef.current;
+      participant.audioTrack.attach(audioEl);
+
+      // iOS Safari requires explicit play() call after user interaction
+      const playAudio = async () => {
+        try {
+          audioEl.muted = false;
+          await audioEl.play();
+        } catch (err) {
+          console.log('Audio play failed, waiting for user interaction:', err);
+        }
+      };
+
+      playAudio();
+
+      // Also try to play on any user interaction (for iOS)
+      const handleInteraction = () => {
+        playAudio();
+      };
+
+      document.addEventListener('touchstart', handleInteraction, { once: true });
+      document.addEventListener('click', handleInteraction, { once: true });
+
+      return () => {
+        participant.audioTrack?.detach(audioEl);
+        document.removeEventListener('touchstart', handleInteraction);
+        document.removeEventListener('click', handleInteraction);
+      };
+    }
+  }, [participant.audioTrack, isLocal]);
 
   return (
     <div className={`relative aspect-[4/5] rounded-2xl overflow-hidden bg-gradient-to-b ${gradient}`}>
@@ -165,6 +200,9 @@ function ParticipantCard({
           </div>
         )}
       </div>
+
+      {/* Audio element for remote participants */}
+      {!isLocal && <audio ref={audioRef} autoPlay playsInline />}
     </div>
   );
 }
@@ -797,13 +835,21 @@ export default function PrivateRoomPage() {
         const { token } = await tokenResponse.json();
         console.log('Got LiveKit token, connecting to room...');
 
-        // Create LiveKit room
+        // Create LiveKit room with optimized audio settings
         const room = new Room({
           adaptiveStream: true,
           dynacast: true,
           videoCaptureDefaults: {
             resolution: VideoPresets.h720.resolution,
             facingMode: 'user',
+          },
+          audioCaptureDefaults: {
+            autoGainControl: true,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+          audioOutput: {
+            deviceId: 'default',
           },
         });
 
@@ -853,6 +899,19 @@ export default function PrivateRoomPage() {
         console.log('Connecting to LiveKit URL:', livekitUrl);
         await room.connect(livekitUrl, token);
         console.log('Connected to LiveKit room:', `room-${roomId}`);
+
+        // Start audio for iOS - requires user gesture
+        // LiveKit has a built-in method to handle this
+        room.startAudio().catch((err) => {
+          console.log('startAudio deferred, will retry on interaction:', err);
+        });
+
+        // Retry startAudio on user interaction (for iOS)
+        const startAudioOnInteraction = () => {
+          room.startAudio().catch(() => {});
+        };
+        document.addEventListener('touchstart', startAudioOnInteraction, { once: true });
+        document.addEventListener('click', startAudioOnInteraction, { once: true });
 
         // Enable camera and microphone
         try {
