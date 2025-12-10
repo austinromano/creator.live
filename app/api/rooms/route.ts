@@ -10,10 +10,11 @@ const createRoomSchema = z.object({
   icon: z.string().nullish(),
 });
 
-// GET /api/rooms - Get user's rooms
+// GET /api/rooms - Get user's owned and joined rooms
 export const GET = createRoute(
   async (_request: NextRequest, { userId }) => {
-    const rooms = await prisma.room.findMany({
+    // Get rooms the user owns
+    const ownedRooms = await prisma.room.findMany({
       where: {
         userId,
         isActive: true,
@@ -23,7 +24,39 @@ export const GET = createRoute(
       },
     });
 
-    return { rooms };
+    // Get rooms the user has joined (as a member)
+    const joinedRoomMemberships = await prisma.roomMember.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        room: {
+          select: {
+            id: true,
+            name: true,
+            icon: true,
+            template: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+          },
+        },
+      },
+      orderBy: {
+        joinedAt: 'desc',
+      },
+    });
+
+    // Filter out inactive rooms and extract room data
+    const joinedRooms = joinedRoomMemberships
+      .filter((m) => m.room.isActive)
+      .map((m) => m.room);
+
+    // Combine owned and joined rooms, with owned first
+    const rooms = [...ownedRooms, ...joinedRooms];
+
+    return { rooms, ownedRooms, joinedRooms };
   },
   { auth: 'required', authMode: 'id-only' }
 );

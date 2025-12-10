@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, Bell, Users } from 'lucide-react';
+import { Loader2, Bell, Users, UserPlus } from 'lucide-react';
 
 interface NotificationData {
   id: string;
@@ -110,9 +111,12 @@ function getNotificationIcon(type: string): React.ReactNode {
 
 export function NotificationsList() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [joiningRoom, setJoiningRoom] = useState<string | null>(null);
+  const [joinedRooms, setJoinedRooms] = useState<Set<string>>(new Set());
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -149,6 +153,39 @@ export function NotificationsList() {
       console.error('Error marking notifications as read:', err);
     }
   }, []);
+
+  const joinRoom = useCallback(async (roomId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setJoiningRoom(roomId);
+    try {
+      const response = await fetch('/api/rooms/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId }),
+      });
+
+      if (response.ok) {
+        setJoinedRooms((prev) => new Set([...prev, roomId]));
+        // Navigate to the room after joining
+        router.push(`/room/${roomId}`);
+      } else {
+        const data = await response.json();
+        // If already joined or is owner, just navigate to room
+        if (response.status === 409 || response.status === 400) {
+          router.push(`/room/${roomId}`);
+        } else {
+          alert(data.error || 'Failed to join room');
+        }
+      }
+    } catch (err) {
+      console.error('Error joining room:', err);
+      alert('Failed to join room');
+    } finally {
+      setJoiningRoom(null);
+    }
+  }, [router]);
 
   useEffect(() => {
     // Only fetch when session is ready and authenticated
@@ -241,6 +278,30 @@ export function NotificationsList() {
             </p>
           </div>
 
+          {/* Join button for room invites */}
+          {notification.type === 'room_invite' && notification.room && (
+            <button
+              onClick={(e) => joinRoom(notification.room!.id, e)}
+              disabled={joiningRoom === notification.room.id || joinedRooms.has(notification.room.id)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                joinedRooms.has(notification.room.id)
+                  ? 'bg-green-500/20 text-green-400 cursor-default'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white'
+              }`}
+            >
+              {joiningRoom === notification.room.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : joinedRooms.has(notification.room.id) ? (
+                'Joined'
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4" />
+                  Join
+                </>
+              )}
+            </button>
+          )}
+
           {/* Post thumbnail if applicable */}
           {notification.post?.thumbnailUrl && (
             <div className="flex-shrink-0">
@@ -253,7 +314,7 @@ export function NotificationsList() {
           )}
 
           {/* Unread indicator */}
-          {!notification.isRead && (
+          {!notification.isRead && !notification.room && (
             <div className="flex-shrink-0">
               <div className="w-2 h-2 bg-purple-500 rounded-full" />
             </div>

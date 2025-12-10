@@ -43,6 +43,7 @@ model User {
   sentNotifications     Notification[] @relation("SentNotifications")
   sparks                Spark[]
   rooms                 Room[]
+  roomMemberships       RoomMember[]
 
   @@map("users")
 }
@@ -196,7 +197,25 @@ model Room {
   // Relations
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[]
+  members       RoomMember[]
 
   @@index([userId])
   @@map("rooms")
+}
+
+// RoomMember table - tracks users who have joined rooms (not owners)
+model RoomMember {
+  id        String   @id @default(cuid())
+  roomId    String   @map("room_id")
+  userId    String   @map("user_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  // Relations
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId]) // User can only join a room once
+  @@index([userId])
+  @@index([roomId])
+  @@map("room_members")
 }
