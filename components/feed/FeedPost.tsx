@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Heart } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export interface FeedPostData {
@@ -143,7 +143,7 @@ export function FeedPost({ post }: FeedPostProps) {
   return (
     <article className="border-b border-gray-800">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-1">
         <Link href={`/profile/${post.user.username}`} className="flex items-center gap-3">
           <Avatar className="h-8 w-8 ring-2 ring-purple-500/50">
             <AvatarImage src={post.user.avatar || undefined} alt={post.user.username || ''} />
@@ -183,7 +183,7 @@ export function FeedPost({ post }: FeedPostProps) {
               preload="metadata"
             />
           ) : (
-            <div className="relative w-full" style={{ aspectRatio: '1/1' }}>
+            <div className="relative w-full" style={{ aspectRatio: '4/5' }}>
               <Image
                 src={contentUrl}
                 alt={post.title || 'Post'}
@@ -202,43 +202,30 @@ export function FeedPost({ post }: FeedPostProps) {
       </div>
 
       {/* Action Buttons */}
-      <div className="px-4 py-3">
+      <div className="px-4 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Spark Button - Star with plus */}
+            {/* Like Button - Heart */}
             <button
               onClick={handleSpark}
-              className="transition-transform active:scale-125 flex items-center justify-center"
+              className="flex items-center justify-center transition-transform active:scale-125"
             >
-              <svg
-                viewBox="0 0 24 24"
+              <Heart
                 className={`h-7 w-7 transition-colors ${
                   sparked
-                    ? 'text-purple-400'
+                    ? 'text-red-500 fill-red-500'
                     : 'text-white hover:text-gray-300'
                 }`}
-                fill={sparked ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                {/* 4-pointed star */}
-                <path
-                  d="M12 3L13.5 9.5L20 11L13.5 12.5L12 19L10.5 12.5L4 11L10.5 9.5L12 3Z"
-                  strokeLinejoin="round"
-                />
-                {/* Plus sign in top right */}
-                <line x1="19" y1="2" x2="19" y2="6" strokeLinecap="round" />
-                <line x1="17" y1="4" x2="21" y2="4" strokeLinecap="round" />
-              </svg>
+              />
             </button>
 
             {/* Comment Button */}
-            <button className="text-white hover:text-gray-300">
+            <button className="flex items-center justify-center text-white hover:text-gray-300">
               <MessageCircle className="h-7 w-7" />
             </button>
 
             {/* Share Button */}
-            <button className="text-white hover:text-gray-300">
+            <button className="flex items-center justify-center text-white hover:text-gray-300">
               <Send className="h-7 w-7" />
             </button>
           </div>
@@ -246,7 +233,7 @@ export function FeedPost({ post }: FeedPostProps) {
           {/* Save Button */}
           <button
             onClick={() => setSaved(!saved)}
-            className="text-white hover:text-gray-300"
+            className="flex items-center justify-center text-white hover:text-gray-300"
           >
             <Bookmark
               className={`h-7 w-7 ${saved ? 'fill-white' : ''}`}
@@ -254,11 +241,11 @@ export function FeedPost({ post }: FeedPostProps) {
           </button>
         </div>
 
-        {/* Spark Count */}
+        {/* Like Count */}
         {sparkCount > 0 && (
           <div className="mt-2">
             <span className="font-semibold text-white text-sm">
-              {sparkCount.toLocaleString()} spark{sparkCount !== 1 ? 's' : ''}
+              {sparkCount.toLocaleString()} like{sparkCount !== 1 ? 's' : ''}
             </span>
           </div>
         )}

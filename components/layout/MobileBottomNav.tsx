@@ -53,10 +53,15 @@ export function MobileBottomNav() {
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
     { href: '/explore', icon: Radio, label: 'Live' },
-    { href: '/golive', icon: Camera, label: 'Go Live', isCenter: true },
+    { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
     { href: '/messages', icon: MessageCircle, label: 'Messages', badge: unreadCount },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
+
+  // Hide navbar on camera and golive pages (must be after all hooks)
+  if (pathname === '/camera' || pathname === '/golive') {
+    return null;
+  }
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-50 pb-safe">

@@ -11,14 +11,13 @@ export const GET = createRoute(
 
     const followingIds = following.map((f) => f.followingId);
 
-    if (followingIds.length === 0) {
-      return { posts: [] };
-    }
+    // Include current user's own posts in feed
+    const userIdsForFeed = [...followingIds, userId!];
 
-    // Get posts from followed users in chronological order (newest first)
+    // Get posts from followed users AND own posts in chronological order (newest first)
     const posts = await prisma.post.findMany({
       where: {
-        userId: { in: followingIds },
+        userId: { in: userIdsForFeed },
         isPublished: true,
         type: { notIn: ['paid', 'locked'] },
       },

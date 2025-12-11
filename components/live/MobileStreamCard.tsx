@@ -16,7 +16,6 @@ const CARD_GRADIENTS = [
   'from-teal-400/80 to-green-300/80',      // Mint/teal
   'from-purple-400/80 to-purple-300/80',    // Purple
   'from-amber-200/80 to-orange-200/80',     // Cream/tan
-  'from-pink-300/80 to-pink-200/80',        // Light pink
   'from-cyan-400/80 to-teal-300/80',        // Cyan
   'from-indigo-400/80 to-purple-300/80',    // Indigo
 ];
@@ -42,30 +41,28 @@ export function MobileStreamCard({ stream }: MobileStreamCardProps) {
 
   return (
     <Link href={`/live/${stream.roomName}`}>
-      <div className={`relative aspect-[4/5] rounded-2xl overflow-hidden group`}>
+      <div className={`relative aspect-square rounded-xl overflow-hidden group`}>
         {/* Background Gradient */}
         <div className={`absolute inset-0 bg-gradient-to-b ${gradientClass}`} />
 
-        {/* Profile Image - shown when not connected to stream */}
-        {!isConnected && stream.user.avatar && !imageError ? (
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <img
-              src={stream.user.avatar}
-              alt={displayName}
-              className="w-full h-full object-cover rounded-xl"
-              onError={() => setImageError(true)}
-            />
-          </div>
-        ) : !isConnected ? (
+        {/* Profile Image - always shown as fallback/loading state */}
+        {stream.user.avatar && !imageError ? (
+          <img
+            src={stream.user.avatar}
+            alt={displayName}
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <Heart className="h-16 w-16 text-white/30" />
           </div>
-        ) : null}
+        )}
 
-        {/* Live video stream */}
+        {/* Live video stream - overlays profile image when connected */}
         <video
           ref={videoRef}
-          className={`absolute inset-0 w-full h-full object-cover ${isConnected ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isConnected ? 'opacity-100' : 'opacity-0'}`}
           autoPlay
           muted
           playsInline
@@ -80,6 +77,9 @@ export function MobileStreamCard({ stream }: MobileStreamCardProps) {
           </div>
         )}
 
+        {/* Bottom Gradient Overlay */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+
         {/* Bottom Info Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-3">
           {/* Name */}
@@ -89,7 +89,7 @@ export function MobileStreamCard({ stream }: MobileStreamCardProps) {
 
           {/* Category Tag */}
           {stream.category && (
-            <div className="inline-block bg-black/40 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
+            <div className="inline-block bg-purple-500/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
               {stream.category}
             </div>
           )}

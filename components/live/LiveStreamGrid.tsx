@@ -120,7 +120,7 @@ export function LiveStreamGrid() {
         {/* Two Column Grid Layout */}
         <div
           ref={contentRef}
-          className="grid grid-cols-2 gap-3 px-3 pt-3 pb-24 transition-transform"
+          className="grid grid-cols-2 gap-2 px-2 pt-3 pb-24 transition-transform"
           style={{
             transform: `translateX(${swipeOffset}px)`,
             transitionDuration: isTransitioning ? '200ms' : '0ms',

@@ -1,7 +1,7 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,9 @@ import {
   Gamepad2,
   Music,
   Camera,
+  Zap,
+  FlipHorizontal,
+  Settings,
 } from 'lucide-react';
 import Link from 'next/link';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
@@ -64,13 +67,25 @@ interface UserData {
   hasCompletedOnboarding: boolean;
 }
 
-export default function ProfilePage() {
+function GoLiveContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
+
+  // POST/LIVE mode for mobile camera
+  type CameraMode = 'POST' | 'LIVE';
+  const [cameraMode, setCameraMode] = useState<CameraMode>('POST');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const desktopVideoRef = React.useRef<HTMLVideoElement>(null);
+  const previewVideoRef = React.useRef<HTMLVideoElement>(null);
+  const previewStreamRef = React.useRef<MediaStream | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const livekitStreamerRef = React.useRef<LiveKitStreamer | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
@@ -142,9 +157,25 @@ export default function ProfilePage() {
   const inviteTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const invitePollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
+  // Auto-start state for coming from camera page
+  const autoStartTriggeredRef = useRef(false);
+  const [shouldAutoStart, setShouldAutoStart] = useState(false);
+  const handleGoLiveRef = useRef<(() => void) | null>(null);
+
   const user = session?.user as any;
   const userId = user?.id;
   const username = userData?.username || user?.name || 'User';
+
+  // Check for auto-start from camera page (must be before early returns)
+  useEffect(() => {
+    const category = searchParams.get('category');
+    if (category && !autoStartTriggeredRef.current) {
+      // Set the category immediately
+      setStreamCategory(category);
+      // Mark that we should auto-start once everything is loaded
+      setShouldAutoStart(true);
+    }
+  }, [searchParams]);
 
   // Check onboarding status
   useEffect(() => {
@@ -188,6 +219,48 @@ export default function ProfilePage() {
       router.push('/');
     }
   }, [status, router]);
+
+  // Start camera preview for mobile (before going live)
+  useEffect(() => {
+    const startPreview = async () => {
+      // Only start preview on mobile and when not already live
+      if (isLive) return;
+
+      // Check if we're on mobile (window width < 1024)
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+      if (!isMobile) return;
+
+      try {
+        // Stop any existing preview stream
+        if (previewStreamRef.current) {
+          previewStreamRef.current.getTracks().forEach(track => track.stop());
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false, // No audio for preview
+        });
+
+        previewStreamRef.current = stream;
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error('Camera preview access denied:', err);
+      }
+    };
+
+    if (status === 'authenticated' && !isLive) {
+      startPreview();
+    }
+
+    return () => {
+      // Clean up preview stream when going live or unmounting
+      if (previewStreamRef.current) {
+        previewStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [status, isLive]);
 
   // Fetch friends list
   useEffect(() => {
@@ -352,27 +425,78 @@ export default function ProfilePage() {
     }
   }, [isLive, userData?.username]);
 
-  if (status === 'loading' || userLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="text-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto" />
-          <p className="text-gray-400 mt-4">Loading your creator profile...</p>
-        </div>
-      </div>
-    );
-  }
+  // Track if we're still in loading state
+  const isPageLoading = status === 'loading' || userLoading || !session?.user || !userData;
 
-  if (!session?.user || !userData) {
-    return (
-      <div className="min-h-screen bg-[#0e0e10] text-white flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
-          <p className="text-gray-400">Redirecting...</p>
-        </div>
-      </div>
-    );
-  }
+  // Photo capture for POST mode
+  const capturePhoto = () => {
+    if (!previewVideoRef.current || !canvasRef.current) return;
+
+    const video = previewVideoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return;
+
+    // Set canvas size to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Flip horizontally for front camera mirror effect
+    context.translate(canvas.width, 0);
+    context.scale(-1, 1);
+
+    // Draw the video frame
+    context.drawImage(video, 0, 0);
+
+    // Get the image data
+    const imageData = canvas.toDataURL('image/jpeg', 0.9);
+    setCapturedImage(imageData);
+  };
+
+  const retakePhoto = () => {
+    setCapturedImage(null);
+    setCaption('');
+  };
+
+  const postPhoto = async () => {
+    if (!capturedImage) return;
+
+    setIsPosting(true);
+
+    try {
+      // Convert base64 to blob
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
+
+      // Create form data
+      const formData = new FormData();
+      formData.append('file', blob, 'photo.jpg');
+      formData.append('type', 'free');
+      if (caption.trim()) {
+        formData.append('title', caption.trim());
+      }
+
+      // Upload the post
+      const uploadResponse = await fetch('/api/posts/create', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (uploadResponse.ok) {
+        // Success - redirect to home feed
+        router.push('/');
+      } else {
+        const data = await uploadResponse.json();
+        alert(data.error || 'Failed to create post');
+      }
+    } catch (error) {
+      console.error('Error posting photo:', error);
+      alert('Failed to create post');
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const initials = username
     .split(' ')
@@ -604,6 +728,28 @@ export default function ProfilePage() {
       alert('Failed to start stream: ' + (error as Error).message);
     }
   };
+
+  // Store handleGoLive in ref so auto-start can call it
+  handleGoLiveRef.current = handleGoLive;
+
+  // Auto-start stream when coming from camera page with category
+  // This effect triggers the go-live once user data is loaded
+  useEffect(() => {
+    if (shouldAutoStart && !isPageLoading && !isLive && !autoStartTriggeredRef.current) {
+      autoStartTriggeredRef.current = true;
+      setShouldAutoStart(false);
+
+      // Small delay to ensure everything is ready, then trigger go live
+      const timer = setTimeout(() => {
+        if (handleGoLiveRef.current) {
+          console.log('Auto-starting stream...');
+          handleGoLiveRef.current();
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAutoStart, isPageLoading, isLive]);
 
   const handleEndStream = async () => {
     console.log('=== STOPPING STREAM ===');
@@ -1532,6 +1678,19 @@ export default function ProfilePage() {
 
   // TikTok-style mobile layout with full-screen video and overlays
   // Desktop keeps traditional 3-column layout
+
+  // Show loading state while data loads
+  if (isPageLoading) {
+    return (
+      <div className="min-h-screen bg-[#0e0e10] text-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0e0e10] text-white">
       {/* ===== INCOMING INVITE NOTIFICATION ===== */}
@@ -1598,71 +1757,198 @@ export default function ProfilePage() {
 
       {/* ===== MOBILE LAYOUT (< lg) - Full screen video with overlays ===== */}
       <div className="lg:hidden fixed inset-0 bg-black z-[60]">
-        {/* Full-screen Video Background - Mobile only */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`absolute inset-0 w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
-        />
-
-        {/* Offline State - Full screen */}
+        {/* Camera Preview (before going live) */}
         {!isLive && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e10]">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-gray-600 mb-6">OFFLINE</div>
+          <video
+            ref={previewVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
+          />
+        )}
 
-              {/* Category Selection */}
-              <div className="mb-6">
-                <p className="text-gray-400 text-sm mb-3">Select a category</p>
+        {/* Live Video (when streaming) */}
+        {isLive && (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+
+        {/* Hidden canvas for photo capture */}
+        <canvas ref={canvasRef} className="hidden" />
+
+        {/* Offline State - Camera preview with POST/LIVE modes */}
+        {!isLive && (
+          <>
+            {/* Captured image overlay (for POST mode) */}
+            {capturedImage && (
+              <img
+                src={capturedImage}
+                alt="Captured"
+                className="absolute inset-0 w-full h-full object-cover z-10"
+              />
+            )}
+
+            {/* Semi-transparent overlay for LIVE mode */}
+            {cameraMode === 'LIVE' && !capturedImage && (
+              <div className="absolute inset-0 bg-black/40" />
+            )}
+
+            {/* Top bar with close button */}
+            <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 pt-safe">
+              <Link href="/" className="p-2">
+                <X className="h-7 w-7 text-white" />
+              </Link>
+              <div className="flex items-center gap-4">
+                {!capturedImage && (
+                  <button className="p-2">
+                    <Settings className="h-6 w-6 text-white" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* LIVE Mode - Category selector in center */}
+            {cameraMode === 'LIVE' && !capturedImage && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                <div className="text-3xl font-bold text-white tracking-wider mb-2">OFFLINE</div>
+                <p className="text-gray-300 text-base mb-6">Select a category</p>
+
+                {/* Category Selection */}
                 <div className="flex gap-3 justify-center">
                   <button
                     onClick={() => setStreamCategory('IRL')}
-                    className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-all ${
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
                       streamCategory === 'IRL'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        ? 'bg-purple-600 ring-2 ring-purple-400'
+                        : 'bg-gray-800/80'
                     }`}
                   >
-                    <Camera className="h-6 w-6" />
-                    <span className="text-sm font-medium">IRL</span>
+                    <Camera className="w-7 h-7 text-white mb-1" />
+                    <span className="text-white text-xs font-medium">IRL</span>
                   </button>
                   <button
                     onClick={() => setStreamCategory('Gaming')}
-                    className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-all ${
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
                       streamCategory === 'Gaming'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        ? 'bg-purple-600 ring-2 ring-purple-400'
+                        : 'bg-gray-800/80'
                     }`}
                   >
-                    <Gamepad2 className="h-6 w-6" />
-                    <span className="text-sm font-medium">Gaming</span>
+                    <Gamepad2 className="w-7 h-7 text-white mb-1" />
+                    <span className="text-white text-xs font-medium">Gaming</span>
                   </button>
                   <button
                     onClick={() => setStreamCategory('Music')}
-                    className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-all ${
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
                       streamCategory === 'Music'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        ? 'bg-purple-600 ring-2 ring-purple-400'
+                        : 'bg-gray-800/80'
                     }`}
                   >
-                    <Music className="h-6 w-6" />
-                    <span className="text-sm font-medium">Music</span>
+                    <Music className="w-7 h-7 text-white mb-1" />
+                    <span className="text-white text-xs font-medium">Music</span>
                   </button>
                 </div>
               </div>
+            )}
 
-              <Button
-                onClick={handleGoLive}
-                disabled={!streamCategory}
-                className="bg-purple-600 hover:bg-purple-700 text-lg px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Radio className="h-5 w-5 mr-2" />
-                Go Live
-              </Button>
+            {/* Bottom controls */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black via-black/80 to-transparent">
+              {capturedImage ? (
+                /* Post Preview Controls */
+                <div className="p-4 pb-12 space-y-4">
+                  {/* Caption Input */}
+                  <input
+                    type="text"
+                    placeholder="Write a caption..."
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 rounded-xl border border-white/20 focus:outline-none focus:border-purple-500"
+                  />
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-between gap-4">
+                    <button
+                      onClick={retakePhoto}
+                      className="flex-1 py-3 text-white font-semibold rounded-xl bg-white/20"
+                    >
+                      Retake
+                    </button>
+                    <button
+                      onClick={postPhoto}
+                      disabled={isPosting}
+                      className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+                    >
+                      {isPosting ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <>
+                          <Zap className="h-5 w-5" />
+                          Post
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Camera Controls */
+                <div className="p-4 pb-12">
+                  {/* Action Button - changes based on mode */}
+                  <div className="flex items-center justify-center mb-6">
+                    {cameraMode === 'POST' ? (
+                      /* Capture Button for POST */
+                      <button
+                        onClick={capturePhoto}
+                        className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center"
+                      >
+                        <div className="w-16 h-16 rounded-full bg-white" />
+                      </button>
+                    ) : (
+                      /* Go Live Button for LIVE - only enabled when category is selected */
+                      <button
+                        onClick={handleGoLive}
+                        disabled={!streamCategory}
+                        className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all ${
+                          streamCategory
+                            ? 'border-red-500 bg-red-500/20'
+                            : 'border-gray-500 bg-gray-500/20 opacity-50'
+                        }`}
+                      >
+                        <Radio className={`w-10 h-10 ${streamCategory ? 'text-red-500' : 'text-gray-500'}`} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Mode Tabs */}
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      onClick={() => setCameraMode('POST')}
+                      className={`px-4 py-2 text-base font-semibold transition-colors ${
+                        cameraMode === 'POST' ? 'text-white' : 'text-gray-500'
+                      }`}
+                    >
+                      POST
+                    </button>
+                    <button
+                      onClick={() => setCameraMode('LIVE')}
+                      className={`px-4 py-2 text-base font-semibold transition-colors ${
+                        cameraMode === 'LIVE' ? 'text-white' : 'text-gray-500'
+                      }`}
+                    >
+                      LIVE
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          </>
         )}
 
         {/* Gradient overlays for better text readability */}
@@ -2293,6 +2579,7 @@ export default function ProfilePage() {
                     <Button
                       onClick={handleGoLive}
                       disabled={!streamCategory}
+                      data-go-live-button
                       className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Radio className="h-4 w-4 mr-2" />
@@ -2483,5 +2770,17 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <GoLiveContent />
+    </Suspense>
   );
 }

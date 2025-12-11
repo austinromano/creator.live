@@ -46,15 +46,15 @@ function getTemplateIcon(template: string | null) {
 
 export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryClick }: StoriesRowProps) {
   return (
-    <div className="lg:sticky lg:top-14 z-40 bg-[#0f0a15] border-b border-gray-800 pt-3 pb-4">
-      <div className="flex gap-4 overflow-x-auto px-4 scrollbar-hide">
+    <div className="lg:sticky lg:top-14 z-40 bg-[#0f0a15] border-b border-gray-800">
+      <div className="flex gap-3 overflow-x-auto px-4 pt-2 pb-2 scrollbar-hide">
         {/* Your Story / Add Room */}
         <button
           onClick={onAddStoryClick}
           className="flex flex-col items-center gap-1 flex-shrink-0"
         >
           <div className="relative">
-            <Avatar className="h-16 w-16 ring-2 ring-gray-700">
+            <Avatar className="h-[60px] w-[60px] ring-2 ring-gray-700">
               <AvatarImage src={currentUserAvatar || undefined} />
               <AvatarFallback className="bg-gray-700 text-white">
                 You
@@ -64,7 +64,7 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
               <Plus className="h-3 w-3 text-white" />
             </div>
           </div>
-          <span className="text-xs text-gray-400 max-w-[64px] truncate">
+          <span className="text-[10px] text-gray-400 max-w-[60px] truncate">
             Make room
           </span>
         </button>
@@ -77,19 +77,19 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
             className="flex flex-col items-center gap-1 flex-shrink-0"
           >
             <div className="relative">
-              <div className="absolute inset-0 rounded-2xl p-[2px] bg-purple-500">
-                <div className="w-full h-full rounded-2xl bg-black p-[2px]">
-                  <div className="w-full h-full rounded-xl overflow-hidden flex items-center justify-center bg-[#1a1225]">
+              <div className="absolute inset-0 rounded-xl p-[2px] bg-purple-500">
+                <div className="w-full h-full rounded-xl bg-black p-[2px]">
+                  <div className="w-full h-full rounded-lg overflow-hidden flex items-center justify-center bg-[#1a1225]">
                     {room.icon ? (
-                      <Avatar className="h-full w-full rounded-xl">
-                        <AvatarImage src={room.icon} className="rounded-xl" />
-                        <AvatarFallback className="bg-[#1a1225] text-white rounded-xl">
+                      <Avatar className="h-full w-full rounded-lg">
+                        <AvatarImage src={room.icon} className="rounded-lg" />
+                        <AvatarFallback className="bg-[#1a1225] text-white rounded-lg">
                           {room.name[0]?.toUpperCase() || '?'}
                         </AvatarFallback>
                       </Avatar>
                     ) : (
                       getTemplateIcon(room.template) || (
-                        <span className="text-xl font-bold text-white">
+                        <span className="text-lg font-bold text-white">
                           {room.name[0]?.toUpperCase() || '?'}
                         </span>
                       )
@@ -98,9 +98,9 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
                 </div>
               </div>
               {/* Spacer to maintain size */}
-              <div className="w-16 h-16" />
+              <div className="w-[60px] h-[60px]" />
             </div>
-            <span className="text-xs text-gray-400 max-w-[64px] truncate">
+            <span className="text-[10px] text-gray-400 max-w-[60px] truncate">
               {room.name}
             </span>
           </Link>
@@ -138,11 +138,11 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
                 </div>
               </div>
               {/* Spacer to maintain size */}
-              <div className="w-16 h-16" />
+              <div className="w-[60px] h-[60px]" />
 
               {/* Live badge */}
               {user.isLive && (
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-red-500 rounded text-[10px] font-bold text-white uppercase">
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-red-500 rounded text-[8px] font-bold text-white uppercase">
                   Live
                 </div>
               )}
@@ -157,7 +157,7 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
                 </div>
               )}
             </div>
-            <span className="text-xs text-gray-400 max-w-[64px] truncate">
+            <span className="text-[10px] text-gray-400 max-w-[60px] truncate">
               {user.username}
             </span>
           </Link>
