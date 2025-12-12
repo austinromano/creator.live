@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Heart } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Heart, Volume2, VolumeX } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export interface FeedPostData {
@@ -53,6 +53,47 @@ export function FeedPost({ post }: FeedPostProps) {
   const [saved, setSaved] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const contentUrl = post.contentUrl || post.thumbnailUrl;
+  const isVideo = isVideoUrl(contentUrl);
+
+  // Detect when post enters viewport
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          setIsInView(entry.isIntersecting);
+        });
+      },
+      { threshold: 0.3 }
+    );
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Play/pause video based on viewport
+  useEffect(() => {
+    if (!isVideo || !videoRef.current) return;
+
+    const video = videoRef.current;
+
+    if (isInView && videoLoaded) {
+      video.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  }, [isVideo, isInView, videoLoaded]);
 
   const handleSpark = async () => {
     if (isLoading) return;
@@ -137,11 +178,28 @@ export function FeedPost({ post }: FeedPostProps) {
     }
   };
 
-  const contentUrl = post.contentUrl || post.thumbnailUrl;
-  const isVideo = isVideoUrl(contentUrl);
+  // Video controls
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
 
   return (
-    <article className="border-b border-gray-800">
+    <article ref={containerRef} className="border-b border-gray-800">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-1">
         <Link href={`/profile/${post.user.username}`} className="flex items-center gap-3">
@@ -175,13 +233,60 @@ export function FeedPost({ post }: FeedPostProps) {
       >
         {contentUrl && !imageError ? (
           isVideo ? (
-            <video
-              src={contentUrl}
-              className="w-full max-h-[600px] object-contain"
-              controls
-              playsInline
-              preload="metadata"
-            />
+            <div
+              className="relative w-full cursor-pointer bg-black"
+              style={{ aspectRatio: '16/9' }}
+              onClick={togglePlayPause}
+            >
+              {/* Thumbnail shows instantly if available */}
+              {post.thumbnailUrl && !videoLoaded && (
+                <Image
+                  src={post.thumbnailUrl}
+                  alt={post.title || 'Video thumbnail'}
+                  fill
+                  className="object-contain"
+                  sizes="(max-width: 768px) 100vw, 600px"
+                  priority
+                />
+              )}
+              {/* Loading indicator when no thumbnail */}
+              {!post.thumbnailUrl && !videoLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                </div>
+              )}
+              {/* Video - always render but hide until loaded if we have thumbnail */}
+              <video
+                ref={videoRef}
+                src={contentUrl}
+                className={`absolute inset-0 w-full h-full object-contain ${post.thumbnailUrl ? (videoLoaded ? 'opacity-100' : 'opacity-0') : 'opacity-100'}`}
+                loop
+                muted
+                playsInline
+                preload="auto"
+                autoPlay={!post.thumbnailUrl}
+                onCanPlay={() => setVideoLoaded(true)}
+              />
+              {/* Mute/unmute button */}
+              <button
+                onClick={toggleMute}
+                className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center z-10"
+              >
+                {isMuted ? (
+                  <VolumeX className="h-4 w-4 text-white" />
+                ) : (
+                  <Volume2 className="h-4 w-4 text-white" />
+                )}
+              </button>
+              {/* Play/pause indicator */}
+              {!isPlaying && videoLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
+                    <div className="w-0 h-0 border-l-[20px] border-l-white border-y-[12px] border-y-transparent ml-1" />
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="relative w-full" style={{ aspectRatio: '4/5' }}>
               <Image

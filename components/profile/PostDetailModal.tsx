@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Trash2, Lock, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { X, Trash2, Lock, Loader2, Volume2, VolumeX } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ContentGridItem } from './ContentGrid';
+
+function isVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.includes('.mov') || url.includes('video');
+}
 
 interface PostDetailModalProps {
   post: ContentGridItem | null;
@@ -23,10 +28,59 @@ export function PostDetailModal({
 }: PostDetailModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Try to play with sound when modal opens (user already interacted by tapping)
+  useEffect(() => {
+    if (isOpen && videoRef.current) {
+      const video = videoRef.current;
+      video.muted = false;
+      setIsMuted(false);
+
+      video.play().catch(() => {
+        // If autoplay with sound fails, fallback to muted
+        video.muted = true;
+        setIsMuted(true);
+        video.play().catch(() => {});
+      });
+    }
+  }, [isOpen, post?.id]);
+
+  // Reset states when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsMuted(false);
+      setIsPlaying(true);
+      setShowDeleteConfirm(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen || !post) return null;
 
   const isLocked = post.type === 'locked' || post.type === 'paid';
+  const isVideo = isVideoUrl(post.contentUrl);
+  const mediaUrl = post.contentUrl || post.thumbnailUrl;
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
 
   const handleDelete = async () => {
     if (!post) return;
@@ -72,8 +126,40 @@ export function PostDetailModal({
         </button>
 
         {/* Post content */}
-        <div className="relative aspect-[3/4] w-full rounded-2xl overflow-hidden bg-[#1a1a1d]">
-          {post.thumbnailUrl ? (
+        <div className={`relative w-full rounded-2xl overflow-hidden bg-[#1a1a1d] ${isVideo ? 'aspect-video' : 'aspect-[3/4]'}`}>
+          {isVideo && mediaUrl ? (
+            <div className="relative w-full h-full cursor-pointer" onClick={togglePlayPause}>
+              <video
+                ref={videoRef}
+                src={mediaUrl}
+                className={`w-full h-full object-contain ${isLocked ? 'blur-xl scale-110' : ''}`}
+                loop
+                playsInline
+                preload="auto"
+              />
+              {/* Mute/unmute button */}
+              {!isLocked && (
+                <button
+                  onClick={toggleMute}
+                  className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center"
+                >
+                  {isMuted ? (
+                    <VolumeX className="h-5 w-5 text-white" />
+                  ) : (
+                    <Volume2 className="h-5 w-5 text-white" />
+                  )}
+                </button>
+              )}
+              {/* Play/pause indicator */}
+              {!isPlaying && !isLocked && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
+                    <div className="w-0 h-0 border-l-[20px] border-l-white border-y-[12px] border-y-transparent ml-1" />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : post.thumbnailUrl ? (
             <Image
               src={post.thumbnailUrl}
               alt={post.title || ''}

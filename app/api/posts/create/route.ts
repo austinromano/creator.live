@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     // Parse form data
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const thumbnail = formData.get('thumbnail') as File | null;
     const type = formData.get('type') as string || 'free';
     const title = formData.get('title') as string || null;
     const priceStr = formData.get('price') as string | null;
@@ -121,13 +122,35 @@ export async function POST(request: NextRequest) {
       .from(POSTS_BUCKET)
       .getPublicUrl(fileName);
 
+    // Upload thumbnail if provided (for videos)
+    let thumbnailUrl: string | null = null;
+    if (isVideo && thumbnail) {
+      const thumbFileName = `${sanitizedUserId}/${nanoid()}_thumb.jpg`;
+      const thumbBuffer = await thumbnail.arrayBuffer();
+
+      const { error: thumbError } = await supabase.storage
+        .from(POSTS_BUCKET)
+        .upload(thumbFileName, thumbBuffer, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (!thumbError) {
+        const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
+          .from(POSTS_BUCKET)
+          .getPublicUrl(thumbFileName);
+        thumbnailUrl = thumbPublicUrl;
+      }
+    }
+
     // Create post in database
     const post = await prisma.post.create({
       data: {
         userId,
         type,
         title: title?.trim() || null,
-        thumbnailUrl: isImage ? publicUrl : null, // Use image as thumbnail, video needs separate thumbnail
+        thumbnailUrl: isImage ? publicUrl : thumbnailUrl, // Use image as thumbnail, or uploaded thumbnail for videos
         contentUrl: publicUrl,
         price,
         isPublished: true,

@@ -34,6 +34,8 @@ import {
   Zap,
   FlipHorizontal,
   Settings,
+  Scissors,
+  CircleDot,
 } from 'lucide-react';
 import Link from 'next/link';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
@@ -74,13 +76,34 @@ function GoLiveContent() {
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
 
-  // POST/LIVE mode for mobile camera
-  type CameraMode = 'POST' | 'LIVE';
-  const [cameraMode, setCameraMode] = useState<CameraMode>('POST');
+  // VIDEO/PHOTO/LIVE mode for mobile camera
+  type CameraMode = 'VIDEO' | 'PHOTO' | 'LIVE';
+  const [cameraMode, setCameraMode] = useState<CameraMode>('PHOTO');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedVideo, setCapturedVideo] = useState<Blob | null>(null);
+  const [capturedVideoUrl, setCapturedVideoUrl] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = React.useRef<Blob[]>([]);
+  const recordingTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const [caption, setCaption] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  // Live stream clipping state
+  const [isClipping, setIsClipping] = useState(false);
+  const [clipTime, setClipTime] = useState(0);
+  const [showClipModal, setShowClipModal] = useState(false);
+  const [clipBlob, setClipBlob] = useState<Blob | null>(null);
+  const [clipVideoUrl, setClipVideoUrl] = useState<string | null>(null);
+  const [clipCaption, setClipCaption] = useState('');
+  const [clipPrice, setClipPrice] = useState('');
+  const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
+  const [isPostingClip, setIsPostingClip] = useState(false);
+  const clipRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const clipChunksRef = React.useRef<Blob[]>([]);
+  const clipTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const desktopVideoRef = React.useRef<HTMLVideoElement>(null);
@@ -92,6 +115,8 @@ function GoLiveContent() {
   const cameraEnabledRef = React.useRef(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [desktopAudioEnabled, setDesktopAudioEnabled] = useState(true);
+  const desktopAudioTrackRef = React.useRef<MediaStreamTrack | null>(null);
   const screenStreamRef = React.useRef<MediaStream | null>(null);
   const pipVideoRef = React.useRef<HTMLVideoElement>(null);
   const compositeCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -99,6 +124,8 @@ function GoLiveContent() {
   const mixedAudioContextRef = React.useRef<AudioContext | null>(null);
   const mixedAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
   const originalMicTrackRef = React.useRef<MediaStreamTrack | null>(null);
+  const screenAudioSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
+  const screenAudioGainRef = React.useRef<GainNode | null>(null);
 
   // PiP position and size state (for 1080p canvas)
   const [pipPosition, setPipPosition] = useState({ x: 1440, y: 30 }); // top-right default
@@ -236,9 +263,10 @@ function GoLiveContent() {
           previewStreamRef.current.getTracks().forEach(track => track.stop());
         }
 
+        // Request audio too for video recording mode
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
-          audio: false, // No audio for preview
+          audio: true, // Include audio for video recording
         });
 
         previewStreamRef.current = stream;
@@ -247,6 +275,19 @@ function GoLiveContent() {
         }
       } catch (err) {
         console.error('Camera preview access denied:', err);
+        // Try again without audio if permission denied
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false,
+          });
+          previewStreamRef.current = stream;
+          if (previewVideoRef.current) {
+            previewVideoRef.current.srcObject = stream;
+          }
+        } catch (err2) {
+          console.error('Camera access completely denied:', err2);
+        }
       }
     };
 
@@ -496,6 +537,424 @@ function GoLiveContent() {
     } finally {
       setIsPosting(false);
     }
+  };
+
+  // Video recording functions
+  const startRecording = () => {
+    if (!previewStreamRef.current) return;
+
+    recordedChunksRef.current = [];
+    setRecordingTime(0);
+
+    // Get supported MIME type
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
+      : 'video/mp4';
+
+    const mediaRecorder = new MediaRecorder(previewStreamRef.current, {
+      mimeType,
+      videoBitsPerSecond: 2500000, // 2.5 Mbps
+    });
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+      setCapturedVideo(blob);
+      setCapturedVideoUrl(URL.createObjectURL(blob));
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+
+    mediaRecorderRef.current = mediaRecorder;
+    mediaRecorder.start(1000); // Collect data every second
+    setIsRecording(true);
+
+    // Start recording timer
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingTime((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    }
+  };
+
+  const retakeVideo = () => {
+    if (capturedVideoUrl) {
+      URL.revokeObjectURL(capturedVideoUrl);
+    }
+    setCapturedVideo(null);
+    setCapturedVideoUrl(null);
+    setCaption('');
+    setRecordingTime(0);
+  };
+
+  const postVideo = async () => {
+    if (!capturedVideo || !capturedVideoUrl) return;
+
+    setIsPosting(true);
+
+    try {
+      // Generate thumbnail from the video (may be null if it fails)
+      const thumbnail = await generateThumbnail(capturedVideoUrl);
+
+      // Create form data - keep original video dimensions
+      const formData = new FormData();
+      formData.append('file', capturedVideo, 'video.webm');
+      if (thumbnail) {
+        formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
+      }
+      formData.append('type', 'free');
+      if (caption.trim()) {
+        formData.append('title', caption.trim());
+      }
+
+      // Upload the post
+      const uploadResponse = await fetch('/api/posts/create', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (uploadResponse.ok) {
+        // Success - redirect to home feed
+        router.push('/');
+      } else {
+        const data = await uploadResponse.json();
+        alert(data.error || 'Failed to create post');
+      }
+    } catch (error) {
+      console.error('Error posting video:', error);
+      alert('Failed to create post');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Generate thumbnail from video
+  const generateThumbnail = (videoUrl: string): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.src = videoUrl;
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
+
+      const captureFrame = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 1280;
+          canvas.height = video.videoHeight || 720;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          ctx.drawImage(video, 0, 0);
+          canvas.toBlob(
+            (blob) => {
+              resolve(blob);
+            },
+            'image/jpeg',
+            0.8
+          );
+        } catch (e) {
+          console.error('Error capturing thumbnail frame:', e);
+          resolve(null);
+        }
+      };
+
+      video.onloadeddata = () => {
+        // Seek to 0.1 seconds then capture
+        video.currentTime = 0.1;
+      };
+
+      video.onseeked = () => {
+        captureFrame();
+      };
+
+      video.onerror = () => {
+        console.error('Failed to load video for thumbnail');
+        resolve(null); // Return null instead of rejecting
+      };
+
+      // Timeout fallback - if video doesn't load in 5 seconds, skip thumbnail
+      setTimeout(() => {
+        if (video.readyState >= 2) {
+          captureFrame();
+        } else {
+          resolve(null);
+        }
+      }, 5000);
+
+      video.load();
+    });
+  };
+
+  // Live stream clipping functions
+  const startClip = () => {
+    // Determine which stream to record from
+    let recordStream: MediaStream | null = null;
+
+    if (screenSharing && compositeCanvasRef.current) {
+      // When screen sharing, capture from the composite canvas
+      const canvasStream = compositeCanvasRef.current.captureStream(30);
+
+      // Use the mixed audio destination if available (includes desktop audio + mic)
+      if (mixedAudioDestinationRef.current) {
+        const mixedAudioTrack = mixedAudioDestinationRef.current.stream.getAudioTracks()[0];
+        if (mixedAudioTrack) {
+          canvasStream.addTrack(mixedAudioTrack.clone());
+          console.log('Added mixed audio (desktop + mic) to clip');
+        }
+      } else {
+        // Fallback to mic only if no mixed audio
+        const audioTrack = streamRef.current?.getAudioTracks()[0];
+        if (audioTrack) {
+          canvasStream.addTrack(audioTrack.clone());
+          console.log('Added mic audio to clip (no mixed audio available)');
+        }
+      }
+
+      recordStream = canvasStream;
+      console.log('Recording from composite canvas stream');
+    } else if (streamRef.current) {
+      // Normal camera mode - record from camera stream
+      recordStream = streamRef.current;
+      console.log('Recording from camera stream');
+    }
+
+    if (!recordStream) {
+      console.error('No stream available for recording');
+      return;
+    }
+
+    clipChunksRef.current = [];
+    setClipTime(0);
+
+    // Get supported MIME type
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
+      : 'video/mp4';
+
+    const clipRecorder = new MediaRecorder(recordStream, {
+      mimeType,
+      videoBitsPerSecond: 2500000,
+    });
+
+    clipRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        clipChunksRef.current.push(event.data);
+      }
+    };
+
+    clipRecorder.onstop = () => {
+      const blob = new Blob(clipChunksRef.current, { type: mimeType });
+      setClipBlob(blob);
+      setClipVideoUrl(URL.createObjectURL(blob));
+      setShowClipModal(true);
+      if (clipTimerRef.current) {
+        clearInterval(clipTimerRef.current);
+      }
+    };
+
+    clipRecorderRef.current = clipRecorder;
+    clipRecorder.start(1000);
+    setIsClipping(true);
+
+    // Start clip timer
+    clipTimerRef.current = setInterval(() => {
+      setClipTime((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const stopClip = () => {
+    if (clipRecorderRef.current && isClipping) {
+      clipRecorderRef.current.stop();
+      setIsClipping(false);
+      if (clipTimerRef.current) {
+        clearInterval(clipTimerRef.current);
+      }
+    }
+  };
+
+  const cancelClip = () => {
+    if (clipVideoUrl) {
+      URL.revokeObjectURL(clipVideoUrl);
+    }
+    setClipBlob(null);
+    setClipVideoUrl(null);
+    setClipCaption('');
+    setClipPrice('');
+    setClipPostType('free');
+    setShowClipModal(false);
+  };
+
+  const postClip = async () => {
+    if (!clipBlob || !clipVideoUrl) return;
+
+    setIsPostingClip(true);
+
+    try {
+      // Generate thumbnail from the clip (may be null if it fails)
+      const thumbnail = await generateThumbnail(clipVideoUrl);
+
+      // Keep original video dimensions
+      const formData = new FormData();
+      formData.append('file', clipBlob, 'clip.webm');
+      if (thumbnail) {
+        formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
+      }
+      formData.append('type', clipPostType);
+      if (clipCaption.trim()) {
+        formData.append('title', clipCaption.trim());
+      }
+      if (clipPostType === 'paid' && clipPrice) {
+        formData.append('price', clipPrice);
+      }
+
+      const uploadResponse = await fetch('/api/posts/create', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (uploadResponse.ok) {
+        // Success - close modal and reset
+        cancelClip();
+        alert('Clip posted successfully!');
+      } else {
+        const data = await uploadResponse.json();
+        alert(data.error || 'Failed to post clip');
+      }
+    } catch (error) {
+      console.error('Error posting clip:', error);
+      alert('Failed to post clip');
+    } finally {
+      setIsPostingClip(false);
+    }
+  };
+
+  // Convert video to portrait format (3:4 aspect ratio) by cropping center
+  const convertToPortrait = (videoUrl: string): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.src = videoUrl;
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        const sourceWidth = video.videoWidth;
+        const sourceHeight = video.videoHeight;
+        const sourceAspect = sourceWidth / sourceHeight;
+
+        // Target portrait dimensions (3:4 aspect ratio)
+        const targetWidth = 720;
+        const targetHeight = 960;
+        const targetAspect = targetWidth / targetHeight; // 0.75
+
+        let cropX = 0;
+        let cropY = 0;
+        let cropWidth = sourceWidth;
+        let cropHeight = sourceHeight;
+
+        if (sourceAspect > targetAspect) {
+          // Source is wider than target (landscape) - crop sides
+          cropWidth = sourceHeight * targetAspect;
+          cropX = (sourceWidth - cropWidth) / 2;
+        } else if (sourceAspect < targetAspect) {
+          // Source is taller than target - crop top/bottom
+          cropHeight = sourceWidth / targetAspect;
+          cropY = (sourceHeight - cropHeight) / 2;
+        }
+        // If aspects match, no cropping needed
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        // Get supported MIME type
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : 'video/mp4';
+
+        const stream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: 2500000,
+        });
+
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: mimeType });
+          resolve(blob);
+        };
+
+        recorder.onerror = (e) => reject(e);
+
+        // Start recording and play video
+        recorder.start();
+        video.play();
+
+        // Draw frames to canvas
+        const drawFrame = () => {
+          if (video.ended || video.paused) {
+            recorder.stop();
+            return;
+          }
+          // Draw cropped center portion to fill portrait canvas
+          ctx.drawImage(
+            video,
+            cropX, cropY, cropWidth, cropHeight, // Source: center crop
+            0, 0, targetWidth, targetHeight       // Destination: full canvas
+          );
+          requestAnimationFrame(drawFrame);
+        };
+
+        video.onplay = () => {
+          drawFrame();
+        };
+
+        video.onended = () => {
+          setTimeout(() => recorder.stop(), 100);
+        };
+      };
+
+      video.onerror = () => reject(new Error('Failed to load video'));
+      video.load();
+    });
   };
 
   const initials = username
@@ -856,6 +1315,15 @@ function GoLiveContent() {
     }
   };
 
+  const toggleDesktopAudio = () => {
+    if (screenAudioGainRef.current) {
+      const newEnabled = !desktopAudioEnabled;
+      screenAudioGainRef.current.gain.value = newEnabled ? 1 : 0;
+      setDesktopAudioEnabled(newEnabled);
+      console.log(`Desktop audio ${newEnabled ? 'enabled' : 'disabled'}`);
+    }
+  };
+
   const stopCompositeStream = () => {
     if (compositeAnimationRef.current) {
       clearInterval(compositeAnimationRef.current);
@@ -1010,6 +1478,8 @@ function GoLiveContent() {
         mixedAudioContextRef.current.close();
         mixedAudioContextRef.current = null;
       }
+      screenAudioSourceRef.current = null;
+      screenAudioGainRef.current = null;
 
       // Restore original microphone audio
       if (originalMicTrackRef.current && livekitStreamerRef.current) {
@@ -1063,12 +1533,20 @@ function GoLiveContent() {
           const destination = audioContext.createMediaStreamDestination();
           mixedAudioDestinationRef.current = destination;
 
-          // Add system audio if available
+          // Add system audio if available (with gain control for muting)
           if (screenAudioTrack) {
             const screenAudioStream = new MediaStream([screenAudioTrack]);
             const screenSource = audioContext.createMediaStreamSource(screenAudioStream);
-            screenSource.connect(destination);
-            console.log('Added system audio to mix');
+            screenAudioSourceRef.current = screenSource;
+
+            // Create gain node for desktop audio control
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = desktopAudioEnabled ? 1 : 0;
+            screenAudioGainRef.current = gainNode;
+
+            screenSource.connect(gainNode);
+            gainNode.connect(destination);
+            console.log('Added system audio to mix with gain control');
           }
 
           // Add microphone audio if available and enabled
@@ -1112,6 +1590,8 @@ function GoLiveContent() {
             mixedAudioContextRef.current.close();
             mixedAudioContextRef.current = null;
           }
+          screenAudioSourceRef.current = null;
+          screenAudioGainRef.current = null;
 
           // Restore original microphone audio
           if (originalMicTrackRef.current && livekitStreamerRef.current) {
@@ -1786,7 +2266,7 @@ function GoLiveContent() {
         {/* Offline State - Camera preview with POST/LIVE modes */}
         {!isLive && (
           <>
-            {/* Captured image overlay (for POST mode) */}
+            {/* Captured image overlay (for PHOTO mode) */}
             {capturedImage && (
               <img
                 src={capturedImage}
@@ -1795,8 +2275,21 @@ function GoLiveContent() {
               />
             )}
 
+            {/* Captured video overlay (for VIDEO mode) */}
+            {capturedVideoUrl && (
+              <video
+                src={capturedVideoUrl}
+                autoPlay
+                loop
+                playsInline
+                muted
+                className="absolute inset-0 w-full h-full object-cover z-10"
+                style={{ transform: 'scaleX(-1)' }}
+              />
+            )}
+
             {/* Semi-transparent overlay for LIVE mode */}
-            {cameraMode === 'LIVE' && !capturedImage && (
+            {cameraMode === 'LIVE' && !capturedImage && !capturedVideoUrl && (
               <div className="absolute inset-0 bg-black/40" />
             )}
 
@@ -1806,7 +2299,7 @@ function GoLiveContent() {
                 <X className="h-7 w-7 text-white" />
               </Link>
               <div className="flex items-center gap-4">
-                {!capturedImage && (
+                {!capturedImage && !capturedVideoUrl && (
                   <button className="p-2">
                     <Settings className="h-6 w-6 text-white" />
                   </button>
@@ -1862,7 +2355,7 @@ function GoLiveContent() {
             {/* Bottom controls */}
             <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black via-black/80 to-transparent">
               {capturedImage ? (
-                /* Post Preview Controls */
+                /* Photo Post Preview Controls */
                 <div className="p-4 pb-12 space-y-4">
                   {/* Caption Input */}
                   <input
@@ -1897,13 +2390,75 @@ function GoLiveContent() {
                     </button>
                   </div>
                 </div>
+              ) : capturedVideoUrl ? (
+                /* Video Post Preview Controls */
+                <div className="p-4 pb-12 space-y-4">
+                  {/* Caption Input */}
+                  <input
+                    type="text"
+                    placeholder="Write a caption..."
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 rounded-xl border border-white/20 focus:outline-none focus:border-purple-500"
+                  />
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-between gap-4">
+                    <button
+                      onClick={retakeVideo}
+                      className="flex-1 py-3 text-white font-semibold rounded-xl bg-white/20"
+                    >
+                      Retake
+                    </button>
+                    <button
+                      onClick={postVideo}
+                      disabled={isPosting}
+                      className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+                    >
+                      {isPosting ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <>
+                          <Zap className="h-5 w-5" />
+                          Post
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 /* Camera Controls */
                 <div className="p-4 pb-12">
+                  {/* Recording time indicator */}
+                  {isRecording && (
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="flex items-center gap-2 bg-red-500/80 px-3 py-1 rounded-full">
+                        <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        <span className="text-white font-semibold text-sm">{formatRecordingTime(recordingTime)}</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Action Button - changes based on mode */}
                   <div className="flex items-center justify-center mb-6">
-                    {cameraMode === 'POST' ? (
-                      /* Capture Button for POST */
+                    {cameraMode === 'VIDEO' ? (
+                      /* Record Button for VIDEO */
+                      <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all ${
+                          isRecording
+                            ? 'border-red-500 bg-red-500/20'
+                            : 'border-red-500 bg-transparent'
+                        }`}
+                      >
+                        {isRecording ? (
+                          <div className="w-8 h-8 rounded-sm bg-red-500" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-red-500" />
+                        )}
+                      </button>
+                    ) : cameraMode === 'PHOTO' ? (
+                      /* Capture Button for PHOTO */
                       <button
                         onClick={capturePhoto}
                         className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center"
@@ -1929,12 +2484,20 @@ function GoLiveContent() {
                   {/* Mode Tabs */}
                   <div className="flex items-center justify-center gap-4">
                     <button
-                      onClick={() => setCameraMode('POST')}
+                      onClick={() => setCameraMode('VIDEO')}
                       className={`px-4 py-2 text-base font-semibold transition-colors ${
-                        cameraMode === 'POST' ? 'text-white' : 'text-gray-500'
+                        cameraMode === 'VIDEO' ? 'text-white' : 'text-gray-500'
                       }`}
                     >
-                      POST
+                      VIDEO
+                    </button>
+                    <button
+                      onClick={() => setCameraMode('PHOTO')}
+                      className={`px-4 py-2 text-base font-semibold transition-colors ${
+                        cameraMode === 'PHOTO' ? 'text-white' : 'text-gray-500'
+                      }`}
+                    >
+                      PHOTO
                     </button>
                     <button
                       onClick={() => setCameraMode('LIVE')}
@@ -2625,6 +3188,39 @@ function GoLiveContent() {
                     {screenSharing ? 'Sharing' : 'Share Screen'}
                   </Button>
 
+                  {/* Desktop Audio Button - only show when screen sharing */}
+                  {screenSharing && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleDesktopAudio}
+                      className={`${desktopAudioEnabled ? 'text-blue-400 border-blue-400' : 'text-gray-400 border-gray-400'}`}
+                    >
+                      {desktopAudioEnabled ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
+                      {desktopAudioEnabled ? 'Desktop Audio' : 'Desktop Muted'}
+                    </Button>
+                  )}
+
+                  {/* Clip Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={isClipping ? stopClip : startClip}
+                    className={`${isClipping ? 'text-red-400 border-red-400 animate-pulse' : 'text-orange-400 border-orange-400'}`}
+                  >
+                    {isClipping ? (
+                      <>
+                        <CircleDot className="h-4 w-4 mr-1" />
+                        {formatRecordingTime(clipTime)}
+                      </>
+                    ) : (
+                      <>
+                        <Scissors className="h-4 w-4 mr-1" />
+                        Clip
+                      </>
+                    )}
+                  </Button>
+
                   <Button
                     onClick={handleEndStream}
                     variant="destructive"
@@ -2769,6 +3365,118 @@ function GoLiveContent() {
           </div>
         </div>
       </div>
+
+      {/* Clip Post Modal */}
+      {showClipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={cancelClip} />
+          <div className="relative bg-[#1a1a1d] rounded-2xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={cancelClip}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <h2 className="text-xl font-bold text-white mb-4">Post Your Clip</h2>
+
+            {/* Video Preview */}
+            {clipVideoUrl && (
+              <div className="relative aspect-video rounded-lg overflow-hidden mb-4 bg-black">
+                <video
+                  src={clipVideoUrl}
+                  className="w-full h-full object-contain"
+                  controls
+                  autoPlay
+                  loop
+                  muted
+                />
+              </div>
+            )}
+
+            {/* Caption Input */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Caption</label>
+              <input
+                type="text"
+                value={clipCaption}
+                onChange={(e) => setClipCaption(e.target.value)}
+                placeholder="Add a caption..."
+                className="w-full bg-[#0e0e10] border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            {/* Post Type Selection */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Post Type</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setClipPostType('free')}
+                  className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                    clipPostType === 'free'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-[#0e0e10] text-gray-400 border border-gray-700 hover:border-purple-500'
+                  }`}
+                >
+                  Free
+                </button>
+                <button
+                  onClick={() => setClipPostType('paid')}
+                  className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                    clipPostType === 'paid'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-[#0e0e10] text-gray-400 border border-gray-700 hover:border-purple-500'
+                  }`}
+                >
+                  Paid
+                </button>
+              </div>
+            </div>
+
+            {/* Price Input (only for paid) */}
+            {clipPostType === 'paid' && (
+              <div className="mb-4">
+                <label className="block text-sm text-gray-400 mb-2">Price ($)</label>
+                <input
+                  type="number"
+                  value={clipPrice}
+                  onChange={(e) => setClipPrice(e.target.value)}
+                  placeholder="Enter price"
+                  min="1"
+                  step="0.01"
+                  className="w-full bg-[#0e0e10] border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                onClick={cancelClip}
+                variant="outline"
+                className="flex-1 border-gray-600 text-gray-400 hover:text-white"
+                disabled={isPostingClip}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={postClip}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+                disabled={isPostingClip || (clipPostType === 'paid' && !clipPrice)}
+              >
+                {isPostingClip ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  'Post Clip'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

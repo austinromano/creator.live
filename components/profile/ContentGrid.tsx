@@ -9,7 +9,13 @@ export interface ContentGridItem {
   price?: number;
   viewerCount?: number;
   thumbnailUrl?: string | null;
+  contentUrl?: string | null;
   title?: string | null;
+}
+
+function isVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.includes('.mov') || url.includes('video');
 }
 
 interface ContentGridProps {
@@ -37,14 +43,34 @@ function ContentGridItemComponent({
   onClick?: () => void;
 }) {
   const isLocked = item.type === 'locked' || item.type === 'paid';
+  const mediaUrl = item.thumbnailUrl || item.contentUrl;
+  const isVideo = isVideoUrl(item.contentUrl);
 
   return (
     <button
       onClick={onClick}
-      className="relative aspect-[3/4] w-full rounded-lg overflow-hidden bg-[#1a1a1d] group focus:outline-none focus:ring-2 focus:ring-purple-500"
+      className="relative w-full rounded-lg overflow-hidden bg-[#1a1a1d] group focus:outline-none focus:ring-2 focus:ring-purple-500 aspect-[3/4]"
     >
-      {/* Thumbnail */}
-      {item.thumbnailUrl ? (
+      {/* Thumbnail or Video preview */}
+      {isVideo && item.contentUrl ? (
+        item.thumbnailUrl ? (
+          <Image
+            src={item.thumbnailUrl}
+            alt={item.title || ''}
+            fill
+            className={`object-cover ${isLocked ? 'blur-lg scale-110' : ''}`}
+            sizes="(max-width: 768px) 33vw, 200px"
+          />
+        ) : (
+          <video
+            src={`${item.contentUrl}#t=0.1`}
+            className={`absolute inset-0 w-full h-full object-cover ${isLocked ? 'blur-lg scale-110' : ''}`}
+            muted
+            playsInline
+            preload="metadata"
+          />
+        )
+      ) : item.thumbnailUrl ? (
         <Image
           src={item.thumbnailUrl}
           alt={item.title || ''}
@@ -54,6 +80,13 @@ function ContentGridItemComponent({
         />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-gray-900" />
+      )}
+
+      {/* Video play icon indicator */}
+      {isVideo && !isLocked && (
+        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center">
+          <Play className="h-3 w-3 text-white fill-white" />
+        </div>
       )}
 
       {/* Dark overlay for locked content */}
