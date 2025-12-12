@@ -36,8 +36,11 @@ import {
   Settings,
   Scissors,
   CircleDot,
+  Smartphone,
 } from 'lucide-react';
 import Link from 'next/link';
+import { QRCodeSVG } from 'qrcode.react';
+import { RoomEvent } from 'livekit-client';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
 
@@ -171,6 +174,9 @@ function GoLiveContent() {
   const [guestAudioMuted, setGuestAudioMuted] = useState(false);
   const guestAudioContextRef = React.useRef<AudioContext | null>(null);
   const guestAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
+
+  // Remote control state broadcasting
+  const remoteStateBroadcastRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Incoming invite notification state
   interface IncomingInvite {
@@ -1671,6 +1677,111 @@ function GoLiveContent() {
       console.error('Failed to send broadcaster message:', error);
     }
   };
+
+  // Broadcast remote state to mobile remote control clients
+  const broadcastRemoteState = () => {
+    if (!livekitStreamerRef.current || !isLive) return;
+
+    const room = livekitStreamerRef.current.getRoom();
+    if (!room?.localParticipant) return;
+
+    const state = {
+      type: 'remote_state',
+      state: {
+        cameraEnabled,
+        microphoneEnabled,
+        screenSharing,
+        desktopAudioEnabled,
+        isClipping,
+        clipTime,
+        isLive,
+        viewerCount,
+        sessionTime,
+      },
+    };
+
+    const data = new TextEncoder().encode(JSON.stringify(state));
+    room.localParticipant.publishData(data, { reliable: false }); // Use unreliable for frequent state updates
+  };
+
+  // Handle remote control commands from mobile
+  const handleRemoteCommand = (command: string, payload?: any) => {
+    console.log('Remote command received:', command, payload);
+
+    switch (command) {
+      case 'toggle_camera':
+        toggleCamera();
+        break;
+      case 'toggle_microphone':
+        toggleMicrophone();
+        break;
+      case 'toggle_screen_share':
+        toggleScreenShare();
+        break;
+      case 'toggle_desktop_audio':
+        toggleDesktopAudio();
+        break;
+      case 'start_clip':
+        startClip();
+        break;
+      case 'stop_clip':
+        stopClip();
+        break;
+      case 'stop_stream':
+        handleEndStream();
+        break;
+      case 'invite_friend':
+        if (payload?.friendId && payload?.username) {
+          // Handle friend invite from remote
+          const friend = friends.find(f => f.id === payload.friendId);
+          if (friend) {
+            handleInviteFriend(friend);
+          }
+        }
+        break;
+      default:
+        console.warn('Unknown remote command:', command);
+    }
+  };
+
+  // Set up remote command listener when LiveKit is connected
+  useEffect(() => {
+    if (!isLive || !livekitStreamerRef.current) return;
+
+    const room = livekitStreamerRef.current.getRoom();
+    if (!room) return;
+
+    const handleDataReceived = (data: Uint8Array, participant: any) => {
+      try {
+        const message = JSON.parse(new TextDecoder().decode(data));
+        if (message.type === 'remote_command') {
+          handleRemoteCommand(message.command, message.payload);
+        }
+      } catch (e) {
+        // Ignore non-JSON messages
+      }
+    };
+
+    room.on(RoomEvent.DataReceived, handleDataReceived);
+
+    // Start broadcasting state periodically
+    remoteStateBroadcastRef.current = setInterval(broadcastRemoteState, 1000);
+
+    return () => {
+      room.off(RoomEvent.DataReceived, handleDataReceived);
+      if (remoteStateBroadcastRef.current) {
+        clearInterval(remoteStateBroadcastRef.current);
+        remoteStateBroadcastRef.current = null;
+      }
+    };
+  }, [isLive, cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, isClipping, clipTime, viewerCount, sessionTime]);
+
+  // Immediately broadcast state when control states change (no 1-second delay)
+  useEffect(() => {
+    if (isLive && livekitStreamerRef.current) {
+      broadcastRemoteState();
+    }
+  }, [cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, isClipping]);
 
   // Start guest composite stream (camera + guest PiP) for broadcast
   // Instead of canvas compositing (CPU intensive), we send guest info via data channel
@@ -3296,6 +3407,37 @@ function GoLiveContent() {
                   </div>
                 </div>
               </div>
+
+              {/* Remote Control QR Code */}
+              {isLive && (
+                <div className="mt-4 flex items-center justify-center gap-4 p-3 bg-gray-800/50 rounded-lg">
+                  <div className="bg-white p-2 rounded-lg">
+                    <QRCodeSVG
+                      value={typeof window !== 'undefined'
+                        ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                          ? 'https://creator-fun-ruby.vercel.app/remote'
+                          : `${window.location.origin}/remote`)
+                        : '/remote'}
+                      size={80}
+                      level="M"
+                    />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white">
+                      <Smartphone className="h-4 w-4 text-purple-400" />
+                      Remote Control
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Scan with your phone to control<br />your stream remotely
+                    </p>
+                    {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                      <p className="text-xs text-yellow-400 mt-1">
+                        Using production URL for QR
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

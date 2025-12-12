@@ -1,0 +1,1118 @@
+'use client';
+
+import React, { useEffect, useState, useRef, Suspense } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  Square,
+  Volume2,
+  VolumeX,
+  Scissors,
+  CircleDot,
+  Send,
+  Users,
+  Activity,
+  MessageSquare,
+  Loader2,
+  Wifi,
+  WifiOff,
+  UserPlus,
+  Heart,
+  Zap,
+  X,
+  DollarSign,
+  Lock,
+  Globe,
+} from 'lucide-react';
+import { Room, RoomEvent, RemoteTrack, RemoteParticipant } from 'livekit-client';
+import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
+import { ChatMessage } from '@/lib/types';
+
+interface Friend {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatar: string | null;
+  isVerified: boolean;
+}
+
+interface RemoteState {
+  cameraEnabled: boolean;
+  microphoneEnabled: boolean;
+  screenSharing: boolean;
+  desktopAudioEnabled: boolean;
+  isClipping: boolean;
+  clipTime: number;
+  isLive: boolean;
+  viewerCount: number;
+  sessionTime: number;
+}
+
+function RemoteContent() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const user = session?.user;
+
+  // Connection state
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [streamActive, setStreamActive] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const roomRef = useRef<Room | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
+  const connectionStateRef = useRef<'idle' | 'connecting' | 'connected'>('idle');
+
+  // Remote state (synced from desktop)
+  const [remoteState, setRemoteState] = useState<RemoteState>({
+    cameraEnabled: true,
+    microphoneEnabled: true,
+    screenSharing: false,
+    desktopAudioEnabled: true,
+    isClipping: false,
+    clipTime: 0,
+    isLive: false,
+    viewerCount: 0,
+    sessionTime: 0,
+  });
+
+  // Local state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [activityEvents, setActivityEvents] = useState<LiveKitActivityEvent[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
+  const [chatInput, setChatInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'chat' | 'activity' | 'friends'>('chat');
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [userData, setUserData] = useState<any>(null);
+
+  // Local clipping state (records the received stream on mobile)
+  const [isClipping, setIsClipping] = useState(false);
+  const [clipTime, setClipTime] = useState(0);
+  const [showClipModal, setShowClipModal] = useState(false);
+  const [clipBlob, setClipBlob] = useState<Blob | null>(null);
+  const [clipVideoUrl, setClipVideoUrl] = useState<string | null>(null);
+  const [clipCaption, setClipCaption] = useState('');
+  const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
+  const [clipPrice, setClipPrice] = useState('');
+  const [isPostingClip, setIsPostingClip] = useState(false);
+  const clipRecorderRef = useRef<MediaRecorder | null>(null);
+  const clipChunksRef = useRef<Blob[]>([]);
+  const clipTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const receivedStreamRef = useRef<MediaStream | null>(null);
+
+  const username = user?.name || 'Creator';
+
+  // Fetch user data
+  useEffect(() => {
+    if (status === 'authenticated' && user) {
+      fetch('/api/user/profile')
+        .then(res => res.json())
+        .then(data => {
+          if (data.user) {
+            setUserData(data.user);
+          }
+        })
+        .catch(err => console.error('Error fetching user profile:', err));
+    }
+  }, [status, user]);
+
+  // Fetch friends
+  useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        const response = await fetch('/api/user/friends');
+        if (response.ok) {
+          const data = await response.json();
+          setFriends(data.friends || []);
+        }
+      } catch (error) {
+        console.error('Error fetching friends:', error);
+      } finally {
+        setFriendsLoading(false);
+      }
+    };
+
+    fetchFriends();
+    const interval = setInterval(fetchFriends, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check if user has an active stream
+  useEffect(() => {
+    const checkStream = async () => {
+      console.log('[Remote] Checking for active stream, userData:', userData?.username);
+      if (!userData?.username) {
+        console.log('[Remote] No username available yet');
+        return;
+      }
+
+      try {
+        console.log('[Remote] Fetching /api/streams/active');
+        const response = await fetch(`/api/streams/active?username=${userData.username}`);
+        console.log('[Remote] Response status:', response.status);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Remote] API response:', data);
+          if (data.stream) {
+            console.log('[Remote] Found active stream:', data.stream.roomName);
+            setStreamActive(true);
+            connectToStream(data.stream.roomName);
+          } else {
+            console.log('[Remote] No active stream in response');
+          }
+        } else {
+          console.log('[Remote] Response not OK:', response.status);
+        }
+      } catch (error) {
+        console.error('[Remote] Error checking stream:', error);
+      }
+    };
+
+    if (userData?.username) {
+      checkStream();
+      const interval = setInterval(checkStream, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [userData?.username]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
+      connectionStateRef.current = 'idle';
+    };
+  }, []);
+
+  // Connect to stream for remote control
+  const connectToStream = async (roomName: string) => {
+    console.log('[Remote] connectToStream called with roomName:', roomName);
+    console.log('[Remote] Current state ref:', connectionStateRef.current);
+
+    // Use ref to prevent stale closure issues with interval callbacks
+    if (connectionStateRef.current !== 'idle') {
+      console.log('[Remote] Already connecting or connected, skipping');
+      return;
+    }
+
+    connectionStateRef.current = 'connecting';
+    setConnecting(true);
+    console.log('[Remote] Starting connection to room:', roomName);
+    try {
+      // Get token for remote control (viewer with data channel access)
+      const tokenResponse = await fetch('/api/livekit/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomName,
+          identity: `${username}_remote`,
+          isPublisher: false,
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to get token');
+      }
+
+      const { token } = await tokenResponse.json();
+
+      const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+      if (!livekitUrl) {
+        throw new Error('NEXT_PUBLIC_LIVEKIT_URL not configured');
+      }
+
+      // Create room and connect directly
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
+      roomRef.current = room;
+      setCurrentRoomName(roomName);
+
+      // Handle video/audio track subscriptions
+      room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.log(`[Remote] Subscribed to track: ${track.kind} from ${participant.identity}`);
+
+        if (track.kind === 'video' && videoRef.current) {
+          track.attach(videoRef.current);
+          videoRef.current.muted = true;
+          videoRef.current.play()
+            .then(() => {
+              console.log('[Remote] Video playback started');
+              setVideoLoaded(true);
+            })
+            .catch(err => console.error('[Remote] Failed to play video:', err));
+
+          // Capture the stream for clipping
+          const mediaStreamTrack = track.mediaStreamTrack;
+          if (mediaStreamTrack) {
+            if (!receivedStreamRef.current) {
+              receivedStreamRef.current = new MediaStream();
+            }
+            receivedStreamRef.current.addTrack(mediaStreamTrack);
+            console.log('[Remote] Added video track to receivedStream for clipping');
+          }
+        } else if (track.kind === 'audio' && videoRef.current) {
+          // Attach audio but keep video muted (user can unmute)
+          track.attach(videoRef.current);
+          console.log('[Remote] Attached audio track');
+
+          // Also add audio to the clipping stream
+          const mediaStreamTrack = track.mediaStreamTrack;
+          if (mediaStreamTrack) {
+            if (!receivedStreamRef.current) {
+              receivedStreamRef.current = new MediaStream();
+            }
+            receivedStreamRef.current.addTrack(mediaStreamTrack);
+            console.log('[Remote] Added audio track to receivedStream for clipping');
+          }
+        }
+      });
+
+      room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        console.log(`[Remote] Unsubscribed from track: ${track.kind}`);
+        track.detach();
+        if (track.kind === 'video') {
+          setVideoLoaded(false);
+        }
+      });
+
+      // Set up data channel listener for messages
+      room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant) => {
+        try {
+          const message = JSON.parse(new TextDecoder().decode(payload));
+
+          if (message.type === 'remote_state') {
+            setRemoteState(message.state);
+          } else if (message.type === 'chat') {
+            const msg = message.payload as LiveKitChatMessage;
+            const chatMessage: ChatMessage = {
+              id: msg.id,
+              user: msg.user,
+              message: msg.message,
+              avatar: msg.avatar,
+              tip: msg.tip,
+              timestamp: new Date(msg.timestamp),
+              isCreator: msg.isCreator,
+            };
+            setChatMessages(prev => [...prev, chatMessage]);
+          } else if (message.type === 'activity') {
+            setActivityEvents(prev => [...prev, message.payload as LiveKitActivityEvent]);
+          }
+        } catch (e) {
+          // Ignore non-JSON messages
+        }
+      });
+
+      room.on(RoomEvent.Disconnected, () => {
+        console.log('Disconnected from room');
+        connectionStateRef.current = 'idle';
+        setConnected(false);
+        setRemoteState(prev => ({ ...prev, isLive: false }));
+      });
+
+      await room.connect(livekitUrl, token);
+      console.log('Connected to LiveKit room as remote control');
+      connectionStateRef.current = 'connected';
+      setConnected(true);
+      setRemoteState(prev => ({ ...prev, isLive: true }));
+
+      // Check for existing tracks from participants already in the room
+      room.remoteParticipants.forEach((participant) => {
+        participant.trackPublications.forEach((publication) => {
+          if (publication.track && publication.isSubscribed) {
+            const track = publication.track;
+            if (track.kind === 'video' && videoRef.current) {
+              track.attach(videoRef.current);
+              videoRef.current.muted = true;
+              videoRef.current.play()
+                .then(() => {
+                  console.log('[Remote] Attached existing video track');
+                  setVideoLoaded(true);
+                })
+                .catch(err => console.error('[Remote] Failed to play existing video:', err));
+            } else if (track.kind === 'audio' && videoRef.current) {
+              track.attach(videoRef.current);
+              console.log('[Remote] Attached existing audio track');
+            }
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error connecting to stream:', error);
+      connectionStateRef.current = 'idle';
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // Send control command to desktop
+  const sendCommand = async (command: string, payload?: any) => {
+    if (!roomRef.current?.localParticipant) return;
+
+    const message = {
+      type: 'remote_command',
+      command,
+      payload,
+      timestamp: Date.now(),
+    };
+
+    const data = new TextEncoder().encode(JSON.stringify(message));
+    await roomRef.current.localParticipant.publishData(data, { reliable: true });
+  };
+
+  // Control handlers
+  const toggleCamera = () => sendCommand('toggle_camera');
+  const toggleMicrophone = () => sendCommand('toggle_microphone');
+  const toggleDesktopAudio = () => sendCommand('toggle_desktop_audio');
+  const stopStream = () => sendCommand('stop_stream');
+
+  // Local clipping functions - records the received stream on mobile
+  const startClip = () => {
+    let streamToRecord: MediaStream | null = receivedStreamRef.current;
+
+    if (!streamToRecord || streamToRecord.getTracks().length === 0) {
+      console.error('[Remote] No stream available for clipping');
+      // Try to get stream from video element as fallback
+      if (videoRef.current && (videoRef.current as any).captureStream) {
+        streamToRecord = (videoRef.current as any).captureStream();
+        receivedStreamRef.current = streamToRecord;
+        console.log('[Remote] Using captureStream from video element');
+      } else {
+        return;
+      }
+    }
+
+    if (!streamToRecord) {
+      console.error('[Remote] Failed to get stream for clipping');
+      return;
+    }
+
+    clipChunksRef.current = [];
+    setClipTime(0);
+
+    // Find supported mime type
+    const mimeTypes = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4',
+    ];
+    let mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+
+    try {
+      clipRecorderRef.current = new MediaRecorder(streamToRecord, {
+        mimeType,
+        videoBitsPerSecond: 2500000,
+      });
+    } catch (e) {
+      console.error('[Remote] MediaRecorder error:', e);
+      clipRecorderRef.current = new MediaRecorder(streamToRecord);
+    }
+
+    clipRecorderRef.current.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        clipChunksRef.current.push(e.data);
+      }
+    };
+
+    clipRecorderRef.current.onstop = () => {
+      const mimeType = clipRecorderRef.current?.mimeType || 'video/webm';
+      const blob = new Blob(clipChunksRef.current, { type: mimeType });
+      setClipBlob(blob);
+      setClipVideoUrl(URL.createObjectURL(blob));
+      setShowClipModal(true);
+      if (clipTimerRef.current) {
+        clearInterval(clipTimerRef.current);
+      }
+    };
+
+    clipRecorderRef.current.start(1000);
+    setIsClipping(true);
+
+    // Start clip timer
+    clipTimerRef.current = setInterval(() => {
+      setClipTime((prev) => prev + 1);
+    }, 1000);
+
+    console.log('[Remote] Clip recording started');
+  };
+
+  const stopClip = () => {
+    if (clipRecorderRef.current && isClipping) {
+      clipRecorderRef.current.stop();
+      setIsClipping(false);
+      if (clipTimerRef.current) {
+        clearInterval(clipTimerRef.current);
+      }
+      console.log('[Remote] Clip recording stopped');
+    }
+  };
+
+  const cancelClip = () => {
+    if (clipVideoUrl) {
+      URL.revokeObjectURL(clipVideoUrl);
+    }
+    setClipBlob(null);
+    setClipVideoUrl(null);
+    setClipCaption('');
+    setClipPrice('');
+    setClipPostType('free');
+    setShowClipModal(false);
+    setClipTime(0);
+  };
+
+  const postClip = async () => {
+    if (!clipBlob) return;
+
+    setIsPostingClip(true);
+    try {
+      // Create post with clip - /api/posts/create handles both upload and post creation
+      const formData = new FormData();
+      formData.append('file', clipBlob, `clip-${Date.now()}.webm`);
+      formData.append('type', clipPostType); // 'free' or 'paid'
+      formData.append('title', clipCaption || '🎬 Live stream clip!');
+      if (clipPostType === 'paid' && clipPrice) {
+        formData.append('price', clipPrice);
+      }
+
+      const response = await fetch('/api/posts/create', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create post');
+      }
+
+      console.log('[Remote] Clip posted successfully!');
+      cancelClip();
+    } catch (error) {
+      console.error('[Remote] Error posting clip:', error);
+    } finally {
+      setIsPostingClip(false);
+    }
+  };
+
+  // Invite friend
+  const inviteFriend = (friend: Friend) => {
+    sendCommand('invite_friend', { friendId: friend.id, username: friend.username });
+  };
+
+  // Send chat message
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || !roomRef.current?.localParticipant) return;
+
+    const messageText = chatInput.trim();
+    setChatInput('');
+
+    const avatar = userData?.avatar || user?.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+
+    const chatMessage: ChatMessage = {
+      id: `creator-${Date.now()}`,
+      user: username,
+      message: messageText,
+      avatar: avatar,
+      isCreator: true,
+      timestamp: new Date(),
+    };
+
+    setChatMessages(prev => [...prev, chatMessage]);
+
+    // Send via LiveKit data channel
+    const wireMessage: LiveKitChatMessage = {
+      id: chatMessage.id,
+      user: username,
+      message: messageText,
+      avatar: avatar?.startsWith('data:') ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}` : avatar,
+      isCreator: true,
+      timestamp: Date.now(),
+    };
+
+    const data = new TextEncoder().encode(JSON.stringify({
+      type: 'chat',
+      payload: wireMessage,
+    }));
+    await roomRef.current.localParticipant.publishData(data, { reliable: true });
+  };
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // Format time
+  const formatTime = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatClipTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    router.push('/login');
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={userData?.avatar || user?.image || undefined} />
+            <AvatarFallback className="bg-purple-600">
+              {username[0]?.toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="font-semibold">{username}</div>
+            <div className="flex items-center gap-2">
+              {connected ? (
+                <Badge className="bg-green-600 text-xs">
+                  <Wifi className="h-3 w-3 mr-1" />
+                  Connected
+                </Badge>
+              ) : connecting ? (
+                <Badge className="bg-yellow-600 text-xs">
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Connecting...
+                </Badge>
+              ) : (
+                <Badge className="bg-gray-600 text-xs">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Not Connected
+                </Badge>
+              )}
+              {remoteState.isLive && (
+                <Badge className="bg-red-600 text-xs">LIVE</Badge>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm text-gray-400">Session</div>
+          <div className="font-mono">{formatTime(remoteState.sessionTime)}</div>
+        </div>
+      </div>
+
+      {/* Stats Bar */}
+      {remoteState.isLive && (
+        <div className="flex items-center justify-center gap-6 py-2 border-b border-gray-800 bg-gray-900/50">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-blue-400" />
+            <span className="font-semibold">{remoteState.viewerCount}</span>
+            <span className="text-gray-400 text-sm">viewers</span>
+          </div>
+        </div>
+      )}
+
+      {/* Live Stream Preview */}
+      <div className="px-4 py-3">
+        <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-contain"
+            playsInline
+            muted
+            autoPlay
+          />
+          {!videoLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              {connecting ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                  <span className="text-gray-400 text-sm">Connecting to stream...</span>
+                </div>
+              ) : connected && remoteState.isLive ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                  <span className="text-gray-400 text-sm">Loading video...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Video className="h-8 w-8 text-gray-600" />
+                  <span className="text-gray-500 text-sm">
+                    {remoteState.isLive ? 'Waiting for video...' : 'No active stream'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          {remoteState.isLive && videoLoaded && (
+            <div className="absolute top-2 left-2">
+              <Badge className="bg-red-600 text-xs animate-pulse">● LIVE</Badge>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Big Clip Button */}
+      <div className="px-4 py-4">
+        <Button
+          onClick={isClipping ? stopClip : startClip}
+          disabled={!connected || !remoteState.isLive}
+          className={`w-full h-20 text-xl font-bold rounded-2xl transition-all ${
+            isClipping
+              ? 'bg-red-600 hover:bg-red-700 animate-pulse'
+              : 'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600'
+          }`}
+        >
+          {isClipping ? (
+            <>
+              <CircleDot className="h-8 w-8 mr-3" />
+              Recording {formatClipTime(clipTime)}
+            </>
+          ) : (
+            <>
+              <Scissors className="h-8 w-8 mr-3" />
+              Start Clip
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Control Buttons Grid */}
+      <div className="px-4 pb-4">
+        <div className="grid grid-cols-3 gap-3">
+          {/* Camera */}
+          <Button
+            variant="outline"
+            onClick={toggleCamera}
+            disabled={!connected}
+            className={`h-16 flex flex-col items-center justify-center gap-1 ${
+              remoteState.cameraEnabled
+                ? 'text-green-400 border-green-400'
+                : 'text-red-400 border-red-400'
+            }`}
+          >
+            {remoteState.cameraEnabled ? (
+              <Video className="h-6 w-6" />
+            ) : (
+              <VideoOff className="h-6 w-6" />
+            )}
+            <span className="text-xs">Camera</span>
+          </Button>
+
+          {/* Microphone */}
+          <Button
+            variant="outline"
+            onClick={toggleMicrophone}
+            disabled={!connected}
+            className={`h-16 flex flex-col items-center justify-center gap-1 ${
+              remoteState.microphoneEnabled
+                ? 'text-green-400 border-green-400'
+                : 'text-red-400 border-red-400'
+            }`}
+          >
+            {remoteState.microphoneEnabled ? (
+              <Mic className="h-6 w-6" />
+            ) : (
+              <MicOff className="h-6 w-6" />
+            )}
+            <span className="text-xs">Mic</span>
+          </Button>
+
+          {/* Desktop Audio (only when screen sharing) */}
+          {remoteState.screenSharing && (
+            <Button
+              variant="outline"
+              onClick={toggleDesktopAudio}
+              disabled={!connected}
+              className={`h-16 flex flex-col items-center justify-center gap-1 ${
+                remoteState.desktopAudioEnabled
+                  ? 'text-blue-400 border-blue-400'
+                  : 'text-gray-400 border-gray-400'
+              }`}
+            >
+              {remoteState.desktopAudioEnabled ? (
+                <Volume2 className="h-6 w-6" />
+              ) : (
+                <VolumeX className="h-6 w-6" />
+              )}
+              <span className="text-xs">Desktop</span>
+            </Button>
+          )}
+
+          {/* Stop Stream */}
+          <Button
+            variant="outline"
+            onClick={stopStream}
+            disabled={!connected || !remoteState.isLive}
+            className="h-16 flex flex-col items-center justify-center gap-1 text-red-500 border-red-500 col-span-2"
+          >
+            <Square className="h-6 w-6" />
+            <span className="text-xs">Stop Stream</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex border-b border-gray-800">
+        <button
+          onClick={() => setActiveTab('chat')}
+          className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+            activeTab === 'chat'
+              ? 'text-white border-b-2 border-purple-500'
+              : 'text-gray-400'
+          }`}
+        >
+          <MessageSquare className="h-4 w-4 inline mr-2" />
+          Chat
+        </button>
+        <button
+          onClick={() => setActiveTab('activity')}
+          className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+            activeTab === 'activity'
+              ? 'text-white border-b-2 border-purple-500'
+              : 'text-gray-400'
+          }`}
+        >
+          <Activity className="h-4 w-4 inline mr-2" />
+          Activity
+        </button>
+        <button
+          onClick={() => setActiveTab('friends')}
+          className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+            activeTab === 'friends'
+              ? 'text-white border-b-2 border-purple-500'
+              : 'text-gray-400'
+          }`}
+        >
+          <Users className="h-4 w-4 inline mr-2" />
+          Friends
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Chat Tab */}
+        {activeTab === 'chat' && (
+          <>
+            <div
+              ref={chatContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-3"
+            >
+              {chatMessages.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  No messages yet
+                </div>
+              ) : (
+                chatMessages.slice(-50).map((msg, index) => (
+                  <div
+                    key={msg.id || index}
+                    className={`flex items-start gap-2 ${
+                      msg.isCreator ? 'flex-row-reverse' : ''
+                    }`}
+                  >
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                      <AvatarImage src={msg.avatar} />
+                      <AvatarFallback className="bg-gray-700 text-xs">
+                        {msg.user?.[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-3 py-2 ${
+                        msg.isCreator
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-800 text-white'
+                      }`}
+                    >
+                      <div className="text-xs text-gray-300 mb-1">
+                        {msg.user}
+                        {msg.tip && (
+                          <span className="ml-2 text-yellow-400">
+                            <Zap className="h-3 w-3 inline" /> ${msg.tip}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm break-words">{msg.message}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Chat Input */}
+            <div className="p-4 border-t border-gray-800">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                  placeholder="Send a message..."
+                  className="flex-1 bg-gray-800 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <Button
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim()}
+                  size="icon"
+                  className="rounded-full bg-purple-600 hover:bg-purple-700"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Activity Tab */}
+        {activeTab === 'activity' && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {activityEvents.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                No activity yet
+              </div>
+            ) : (
+              [...activityEvents].reverse().slice(0, 50).map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg"
+                >
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={event.avatar} />
+                    <AvatarFallback className="bg-gray-700">
+                      {event.user?.[0]?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm">{event.user}</div>
+                    <div className="text-xs text-gray-400">
+                      {event.type === 'follow' && 'Started following you'}
+                      {event.type === 'like' && 'Liked your stream'}
+                      {event.type === 'tip' && (
+                        <span className="text-yellow-400">
+                          Sent ${event.amount}
+                        </span>
+                      )}
+                      {event.type === 'join' && 'Joined the stream'}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {event.type === 'follow' && (
+                      <Heart className="h-5 w-5 text-pink-500" />
+                    )}
+                    {event.type === 'like' && (
+                      <Heart className="h-5 w-5 text-red-500 fill-red-500" />
+                    )}
+                    {event.type === 'tip' && (
+                      <Zap className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                    )}
+                    {event.type === 'join' && (
+                      <Users className="h-5 w-5 text-blue-400" />
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Friends Tab */}
+        {activeTab === 'friends' && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {friendsLoading ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-purple-500" />
+              </div>
+            ) : friends.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                No friends yet
+              </div>
+            ) : (
+              friends.map((friend) => (
+                <div
+                  key={friend.id}
+                  className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg"
+                >
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={friend.avatar || undefined} />
+                    <AvatarFallback className="bg-gray-700">
+                      {friend.username?.[0]?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm">
+                      {friend.displayName || friend.username}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      @{friend.username}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => inviteFriend(friend)}
+                    disabled={!connected || !remoteState.isLive}
+                    className="text-purple-400 border-purple-400"
+                  >
+                    <UserPlus className="h-4 w-4 mr-1" />
+                    Invite
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Clip Post Modal */}
+      {showClipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={cancelClip} />
+          <div className="relative bg-[#1a1a1d] rounded-2xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={cancelClip}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <h2 className="text-xl font-bold mb-4">Post Clip</h2>
+
+            {/* Video Preview */}
+            {clipVideoUrl && (
+              <div className="mb-4 rounded-lg overflow-hidden bg-black">
+                <video
+                  src={clipVideoUrl}
+                  controls
+                  className="w-full max-h-64 object-contain"
+                  playsInline
+                />
+              </div>
+            )}
+
+            {/* Caption Input */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Caption</label>
+              <textarea
+                value={clipCaption}
+                onChange={(e) => setClipCaption(e.target.value)}
+                placeholder="Add a caption to your clip..."
+                className="w-full bg-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                rows={3}
+              />
+            </div>
+
+            {/* Post Type Selection */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Post Type</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setClipPostType('free')}
+                  className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                    clipPostType === 'free'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  <Globe className="h-4 w-4" />
+                  Free
+                </button>
+                <button
+                  onClick={() => setClipPostType('paid')}
+                  className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                    clipPostType === 'paid'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  <Lock className="h-4 w-4" />
+                  Paid
+                </button>
+              </div>
+            </div>
+
+            {/* Price Input (for paid posts) */}
+            {clipPostType === 'paid' && (
+              <div className="mb-4">
+                <label className="block text-sm text-gray-400 mb-2">Price (USD)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                  <input
+                    type="number"
+                    value={clipPrice}
+                    onChange={(e) => setClipPrice(e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-full bg-gray-800 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                onClick={cancelClip}
+                variant="outline"
+                className="flex-1"
+                disabled={isPostingClip}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={postClip}
+                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                disabled={isPostingClip}
+              >
+                {isPostingClip ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  'Post Clip'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function RemotePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+        </div>
+      }
+    >
+      <RemoteContent />
+    </Suspense>
+  );
+}

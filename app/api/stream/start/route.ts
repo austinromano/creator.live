@@ -5,8 +5,10 @@ import { startStreamSchema } from '@/lib/validations';
 
 export const POST = createRoute(
   async (_req, { userId }, body) => {
+    console.log('[/api/stream/start] Starting stream for userId:', userId);
+
     // Auto-cleanup any stale streams for this user before starting a new one
-    await prisma.stream.updateMany({
+    const cleaned = await prisma.stream.updateMany({
       where: {
         userId: userId!,
         isLive: true,
@@ -16,6 +18,7 @@ export const POST = createRoute(
         endedAt: new Date(),
       },
     });
+    console.log('[/api/stream/start] Cleaned up stale streams:', cleaned.count);
 
     // Generate a unique stream key
     const streamKey = nanoid(32);
@@ -31,9 +34,11 @@ export const POST = createRoute(
         startedAt: new Date(),
       },
     });
+    console.log('[/api/stream/start] Created stream:', stream.id, 'isLive:', stream.isLive);
 
     // Generate user-based room name for LiveKit
     const roomName = `user-${userId}`;
+    console.log('[/api/stream/start] Room name:', roomName);
 
     return {
       success: true,
