@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
-import { Loader2, Camera } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import { Loader2, Camera, Settings, LogOut } from 'lucide-react';
 import {
   ProfileAvatar,
   ProfileActions,
@@ -64,6 +64,7 @@ export default function ProfilePage() {
   const [currentUserUsername, setCurrentUserUsername] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'posts' | 'replays' | 'liked'>('posts');
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Fetch current user's username from database
   useEffect(() => {
@@ -259,6 +260,40 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#0f0a15]">
+      {/* Settings Icon - Top Left (only on own profile) */}
+      {isOwnProfile && (
+        <div className="absolute top-4 left-4 z-50">
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
+          >
+            <Settings className="h-5 w-5 text-white" />
+          </button>
+
+          {/* Settings Dropdown */}
+          {showSettings && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowSettings(false)}
+              />
+              <div className="absolute top-12 left-0 z-50 bg-[#1a1a1d] rounded-lg shadow-xl border border-gray-800 overflow-hidden min-w-[180px]">
+                <button
+                  onClick={async () => {
+                    setShowSettings(false);
+                    await signOut({ callbackUrl: '/' });
+                  }}
+                  className="w-full px-4 py-3 flex items-center gap-3 text-red-400 hover:bg-gray-800 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Avatar section with cover image */}
       <ProfileAvatar
         avatarUrl={profile.avatar}

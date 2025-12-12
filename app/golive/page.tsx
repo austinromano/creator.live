@@ -104,6 +104,7 @@ function GoLiveContent() {
   const [clipPrice, setClipPrice] = useState('');
   const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
   const [isPostingClip, setIsPostingClip] = useState(false);
+  const [isUploadingClip, setIsUploadingClip] = useState(false);
   const clipRecorderRef = React.useRef<MediaRecorder | null>(null);
   const clipChunksRef = React.useRef<Blob[]>([]);
   const clipTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -117,6 +118,8 @@ function GoLiveContent() {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const cameraEnabledRef = React.useRef(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
   const [screenSharing, setScreenSharing] = useState(false);
   const [desktopAudioEnabled, setDesktopAudioEnabled] = useState(true);
   const desktopAudioTrackRef = React.useRef<MediaStreamTrack | null>(null);
@@ -129,6 +132,7 @@ function GoLiveContent() {
   const originalMicTrackRef = React.useRef<MediaStreamTrack | null>(null);
   const screenAudioSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
   const screenAudioGainRef = React.useRef<GainNode | null>(null);
+  const micAudioGainRef = React.useRef<GainNode | null>(null);
 
   // PiP position and size state (for 1080p canvas)
   const [pipPosition, setPipPosition] = useState({ x: 1440, y: 30 }); // top-right default
@@ -198,6 +202,33 @@ function GoLiveContent() {
   const user = session?.user as any;
   const userId = user?.id;
   const username = userData?.username || user?.name || 'User';
+
+  // Enumerate audio devices
+  useEffect(() => {
+    const getAudioDevices = async () => {
+      try {
+        // Request permission first to get device labels
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        setAudioDevices(audioInputs);
+        // Set default device if not already selected
+        if (!selectedAudioDevice && audioInputs.length > 0) {
+          setSelectedAudioDevice(audioInputs[0].deviceId);
+        }
+      } catch (error) {
+        console.error('Error enumerating audio devices:', error);
+      }
+    };
+
+    getAudioDevices();
+
+    // Listen for device changes (e.g., plugging in headphones)
+    navigator.mediaDevices.addEventListener('devicechange', getAudioDevices);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', getAudioDevices);
+    };
+  }, []);
 
   // Check for auto-start from camera page (must be before early returns)
   useEffect(() => {
@@ -272,7 +303,9 @@ function GoLiveContent() {
         // Request audio too for video recording mode
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
-          audio: true, // Include audio for video recording
+          audio: selectedAudioDevice
+            ? { deviceId: { exact: selectedAudioDevice } }
+            : true,
         });
 
         previewStreamRef.current = stream;
@@ -307,7 +340,7 @@ function GoLiveContent() {
         previewStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [status, isLive]);
+  }, [status, isLive, selectedAudioDevice]);
 
   // Fetch friends list
   useEffect(() => {
@@ -716,57 +749,103 @@ function GoLiveContent() {
     });
   };
 
-  // Live stream clipping functions
+  // Ref to store cloned stream for recording
+  const clipStreamRef = React.useRef<MediaStream | null>(null);
+
+  // Live stream clipping functions - records from original high-quality streams
   const startClip = () => {
-    // Determine which stream to record from
-    let recordStream: MediaStream | null = null;
+    // Build a recording stream from original sources (not WebRTC compressed)
+    let recordStream = new MediaStream();
 
     if (screenSharing && compositeCanvasRef.current) {
       // When screen sharing, capture from the composite canvas
       const canvasStream = compositeCanvasRef.current.captureStream(30);
+      canvasStream.getVideoTracks().forEach(track => {
+        recordStream.addTrack(track.clone());
+      });
+      console.log('[Clip] Added video from composite canvas');
 
-      // Use the mixed audio destination if available (includes desktop audio + mic)
-      if (mixedAudioDestinationRef.current) {
-        const mixedAudioTrack = mixedAudioDestinationRef.current.stream.getAudioTracks()[0];
-        if (mixedAudioTrack) {
-          canvasStream.addTrack(mixedAudioTrack.clone());
-          console.log('Added mixed audio (desktop + mic) to clip');
-        }
-      } else {
-        // Fallback to mic only if no mixed audio
-        const audioTrack = streamRef.current?.getAudioTracks()[0];
-        if (audioTrack) {
-          canvasStream.addTrack(audioTrack.clone());
-          console.log('Added mic audio to clip (no mixed audio available)');
-        }
+      // Add mic audio (cloned)
+      const micTrack = streamRef.current?.getAudioTracks()[0];
+      if (micTrack) {
+        recordStream.addTrack(micTrack.clone());
+        console.log('[Clip] Added mic audio');
       }
 
-      recordStream = canvasStream;
-      console.log('Recording from composite canvas stream');
+      // Add desktop audio if available (cloned)
+      if (desktopAudioTrackRef.current) {
+        recordStream.addTrack(desktopAudioTrackRef.current.clone());
+        console.log('[Clip] Added desktop audio');
+      }
     } else if (streamRef.current) {
-      // Normal camera mode - record from camera stream
-      recordStream = streamRef.current;
-      console.log('Recording from camera stream');
+      // Normal camera mode - clone tracks from camera stream
+      streamRef.current.getTracks().forEach(track => {
+        recordStream.addTrack(track.clone());
+      });
+      console.log('[Clip] Recording from camera stream (cloned)');
     }
 
-    if (!recordStream) {
-      console.error('No stream available for recording');
+    if (recordStream.getTracks().length === 0) {
+      console.error('[Clip] No tracks available for recording');
       return;
     }
 
+    // If multiple audio tracks, mix them into one using Web Audio API
+    const audioTracks = recordStream.getAudioTracks();
+    // Keep track of source tracks to stop after recording (NOT before - that kills the audio)
+    const sourceAudioTracks: MediaStreamTrack[] = [];
+
+    if (audioTracks.length > 1) {
+      console.log(`[Clip] Mixing ${audioTracks.length} audio tracks into one`);
+      try {
+        const audioContext = new AudioContext();
+        const destination = audioContext.createMediaStreamDestination();
+
+        audioTracks.forEach((track) => {
+          const source = audioContext.createMediaStreamSource(new MediaStream([track]));
+          const gain = audioContext.createGain();
+          gain.gain.value = 0.7; // Reduce gain to prevent clipping when mixing
+          source.connect(gain);
+          gain.connect(destination);
+          // Store track for later cleanup - DON'T stop it yet!
+          sourceAudioTracks.push(track);
+        });
+
+        // Remove original audio tracks from record stream (but keep them alive for the AudioContext sources!)
+        audioTracks.forEach(track => {
+          recordStream.removeTrack(track);
+          // DON'T call track.stop() here - the AudioContext sources need these tracks alive
+        });
+        recordStream.addTrack(destination.stream.getAudioTracks()[0]);
+        console.log('[Clip] Audio tracks mixed successfully');
+      } catch (e) {
+        console.error('[Clip] Audio mixing failed:', e);
+      }
+    }
+
+    // Store for cleanup
+    clipStreamRef.current = recordStream;
     clipChunksRef.current = [];
     setClipTime(0);
 
-    // Get supported MIME type
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : MediaRecorder.isTypeSupported('video/webm')
-      ? 'video/webm'
-      : 'video/mp4';
+    // Log final recording stream
+    console.log(`[Clip] Final stream: ${recordStream.getVideoTracks().length} video, ${recordStream.getAudioTracks().length} audio`);
+
+    // Get supported MIME type - prefer VP9 with Opus
+    const mimeTypes = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9',
+      'video/webm',
+      'video/mp4',
+    ];
+    const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+    console.log('[Clip] Using mime type:', mimeType);
 
     const clipRecorder = new MediaRecorder(recordStream, {
       mimeType,
-      videoBitsPerSecond: 2500000,
+      videoBitsPerSecond: 4000000,  // 4 Mbps for high quality
+      audioBitsPerSecond: 128000,   // 128 kbps audio
     });
 
     clipRecorder.ondataavailable = (event) => {
@@ -775,19 +854,92 @@ function GoLiveContent() {
       }
     };
 
-    clipRecorder.onstop = () => {
+    clipRecorder.onstop = async () => {
       const blob = new Blob(clipChunksRef.current, { type: mimeType });
-      setClipBlob(blob);
-      setClipVideoUrl(URL.createObjectURL(blob));
-      setShowClipModal(true);
+      console.log(`[Clip] Recording complete: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+
       if (clipTimerRef.current) {
         clearInterval(clipTimerRef.current);
+      }
+
+      // Clean up cloned stream
+      if (clipStreamRef.current) {
+        clipStreamRef.current.getTracks().forEach(track => track.stop());
+        clipStreamRef.current = null;
+      }
+
+      // Upload clip to server and send URL to remote
+      setIsUploadingClip(true);
+      try {
+        // Create local URL for preview
+        const localUrl = URL.createObjectURL(blob);
+
+        // Generate thumbnail
+        const thumbnail = await generateThumbnail(localUrl);
+
+        // Upload to server
+        const formData = new FormData();
+        formData.append('file', blob, 'clip.webm');
+        if (thumbnail) {
+          formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
+        }
+
+        const uploadResponse = await fetch('/api/clips/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (uploadResponse.ok) {
+          const { mediaUrl, thumbnailUrl } = await uploadResponse.json();
+          console.log('[Clip] Uploaded successfully:', mediaUrl);
+
+          // Send clip data to remote via LiveKit data channel
+          if (livekitStreamerRef.current && isLive) {
+            const room = livekitStreamerRef.current.getRoom();
+            if (room?.localParticipant) {
+              const clipData = {
+                type: 'clip_ready',
+                payload: {
+                  mediaUrl,
+                  thumbnailUrl,
+                  localUrl, // Keep local URL for desktop preview
+                  duration: clipTime,
+                },
+              };
+              const data = new TextEncoder().encode(JSON.stringify(clipData));
+              await room.localParticipant.publishData(data, { reliable: true });
+              console.log('[Clip] Sent clip URL to remote');
+            }
+          }
+
+          // Also set local state for desktop fallback
+          setClipBlob(blob);
+          setClipVideoUrl(localUrl);
+          // Don't show modal on desktop - remote will handle it
+          // But if no remote is connected, show it on desktop
+          // setShowClipModal(true);
+        } else {
+          console.error('[Clip] Upload failed');
+          // Fallback: show modal on desktop
+          setClipBlob(blob);
+          setClipVideoUrl(URL.createObjectURL(blob));
+          setShowClipModal(true);
+        }
+      } catch (error) {
+        console.error('[Clip] Error uploading:', error);
+        // Fallback: show modal on desktop
+        setClipBlob(blob);
+        setClipVideoUrl(URL.createObjectURL(blob));
+        setShowClipModal(true);
+      } finally {
+        setIsUploadingClip(false);
       }
     };
 
     clipRecorderRef.current = clipRecorder;
-    clipRecorder.start(1000);
+    clipRecorder.start(100); // 100ms timeslice for smooth audio
     setIsClipping(true);
+    console.log('[Clip] Recording started with 100ms timeslice');
 
     // Start clip timer
     clipTimerRef.current = setInterval(() => {
@@ -802,6 +954,7 @@ function GoLiveContent() {
       if (clipTimerRef.current) {
         clearInterval(clipTimerRef.current);
       }
+      console.log('[Clip] Recording stopped');
     }
   };
 
@@ -979,13 +1132,15 @@ function GoLiveContent() {
         throw new Error('getUserMedia is not supported in this browser');
       }
 
-      // Request both video and audio
+      // Request both video and audio with selected device
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
-        audio: true
+        audio: selectedAudioDevice
+          ? { deviceId: { exact: selectedAudioDevice } }
+          : true
       });
 
       console.log('✅ Stream obtained successfully');
@@ -1315,16 +1470,61 @@ function GoLiveContent() {
     if (streamRef.current) {
       const audioTrack = streamRef.current.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setMicrophoneEnabled(audioTrack.enabled);
+        const newEnabled = !audioTrack.enabled;
+        audioTrack.enabled = newEnabled;
+        setMicrophoneEnabled(newEnabled);
+        console.log('Microphone', newEnabled ? 'enabled' : 'disabled');
       }
     }
   };
 
+  // Switch microphone while streaming
+  const switchMicrophone = async (deviceId: string) => {
+    try {
+      setSelectedAudioDevice(deviceId);
+
+      // If not streaming, just update state - getUserMedia will use it later
+      if (!streamRef.current || !isLive) return;
+
+      // Get new audio track with selected device
+      const newAudioStream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId } }
+      });
+      const newAudioTrack = newAudioStream.getAudioTracks()[0];
+
+      // Get old audio track
+      const oldAudioTrack = streamRef.current.getAudioTracks()[0];
+
+      // Replace in the local stream ref
+      if (oldAudioTrack) {
+        streamRef.current.removeTrack(oldAudioTrack);
+        oldAudioTrack.stop();
+      }
+      streamRef.current.addTrack(newAudioTrack);
+
+      // Update original mic track ref
+      originalMicTrackRef.current = newAudioTrack;
+
+      // Preserve enabled state
+      newAudioTrack.enabled = microphoneEnabled;
+
+      // Update LiveKit directly (no mixing needed - desktop audio is separate track)
+      if (livekitStreamerRef.current) {
+        await livekitStreamerRef.current.replaceAudioTrack(newAudioTrack);
+      }
+
+      console.log('Switched microphone to:', newAudioTrack.label);
+    } catch (error) {
+      console.error('Error switching microphone:', error);
+    }
+  };
+
   const toggleDesktopAudio = () => {
-    if (screenAudioGainRef.current) {
-      const newEnabled = !desktopAudioEnabled;
-      screenAudioGainRef.current.gain.value = newEnabled ? 1 : 0;
+    const newEnabled = !desktopAudioEnabled;
+
+    // Use the direct track enabled property (no Web Audio mixing)
+    if (desktopAudioTrackRef.current) {
+      desktopAudioTrackRef.current.enabled = newEnabled;
       setDesktopAudioEnabled(newEnabled);
       console.log(`Desktop audio ${newEnabled ? 'enabled' : 'disabled'}`);
     }
@@ -1479,19 +1679,12 @@ function GoLiveContent() {
         screenStreamRef.current = null;
       }
 
-      // Clean up audio mixing
-      if (mixedAudioContextRef.current) {
-        mixedAudioContextRef.current.close();
-        mixedAudioContextRef.current = null;
+      // Unpublish desktop audio track
+      if (livekitStreamerRef.current) {
+        await livekitStreamerRef.current.unpublishAdditionalAudioTrack('desktop-audio');
+        console.log('Unpublished desktop audio track');
       }
-      screenAudioSourceRef.current = null;
-      screenAudioGainRef.current = null;
-
-      // Restore original microphone audio
-      if (originalMicTrackRef.current && livekitStreamerRef.current) {
-        await livekitStreamerRef.current.replaceAudioTrack(originalMicTrackRef.current);
-        console.log('Restored original microphone track');
-      }
+      desktopAudioTrackRef.current = null;
 
       // Switch back to camera in preview
       if (streamRef.current && desktopVideoRef.current) {
@@ -1523,53 +1716,26 @@ function GoLiveContent() {
         });
         screenStreamRef.current = screenStream;
 
-        // Mix system audio with microphone audio
+        // Handle audio: publish desktop audio as additional track (no Web Audio mixing - avoids buffer issues)
         const screenAudioTrack = screenStream.getAudioTracks()[0];
         const micAudioTrack = streamRef.current?.getAudioTracks()[0];
 
-        if (screenAudioTrack || micAudioTrack) {
-          // Save original mic track for restoration later
-          if (micAudioTrack) {
-            originalMicTrackRef.current = micAudioTrack;
-          }
-
-          // Create audio context for mixing
-          const audioContext = new AudioContext();
-          mixedAudioContextRef.current = audioContext;
-          const destination = audioContext.createMediaStreamDestination();
-          mixedAudioDestinationRef.current = destination;
-
-          // Add system audio if available (with gain control for muting)
-          if (screenAudioTrack) {
-            const screenAudioStream = new MediaStream([screenAudioTrack]);
-            const screenSource = audioContext.createMediaStreamSource(screenAudioStream);
-            screenAudioSourceRef.current = screenSource;
-
-            // Create gain node for desktop audio control
-            const gainNode = audioContext.createGain();
-            gainNode.gain.value = desktopAudioEnabled ? 1 : 0;
-            screenAudioGainRef.current = gainNode;
-
-            screenSource.connect(gainNode);
-            gainNode.connect(destination);
-            console.log('Added system audio to mix with gain control');
-          }
-
-          // Add microphone audio if available and enabled
-          if (micAudioTrack && microphoneEnabled) {
-            const micStream = new MediaStream([micAudioTrack]);
-            const micSource = audioContext.createMediaStreamSource(micStream);
-            micSource.connect(destination);
-            console.log('Added microphone to mix');
-          }
-
-          // Replace audio track in LiveKit with mixed audio
-          const mixedAudioTrack = destination.stream.getAudioTracks()[0];
-          if (mixedAudioTrack && livekitStreamerRef.current) {
-            await livekitStreamerRef.current.replaceAudioTrack(mixedAudioTrack);
-            console.log('Published mixed audio track');
-          }
+        if (micAudioTrack) {
+          originalMicTrackRef.current = micAudioTrack;
         }
+
+        // Publish desktop audio as a separate track if available
+        if (screenAudioTrack && livekitStreamerRef.current) {
+          // Store the desktop audio track for muting control
+          desktopAudioTrackRef.current = screenAudioTrack;
+          screenAudioTrack.enabled = desktopAudioEnabled;
+
+          // Publish desktop audio as additional audio track
+          await livekitStreamerRef.current.publishAdditionalAudioTrack(screenAudioTrack, 'desktop-audio');
+          console.log('Published desktop audio as separate track');
+        }
+
+        // Keep mic running as-is (already published)
 
         // Create composite stream with screen + camera PiP
         if (streamRef.current) {
@@ -1591,19 +1757,12 @@ function GoLiveContent() {
         screenStream.getVideoTracks()[0].onended = async () => {
           stopCompositeStream();
 
-          // Clean up audio mixing
-          if (mixedAudioContextRef.current) {
-            mixedAudioContextRef.current.close();
-            mixedAudioContextRef.current = null;
+          // Unpublish desktop audio track
+          if (livekitStreamerRef.current) {
+            await livekitStreamerRef.current.unpublishAdditionalAudioTrack('desktop-audio');
+            console.log('Unpublished desktop audio track');
           }
-          screenAudioSourceRef.current = null;
-          screenAudioGainRef.current = null;
-
-          // Restore original microphone audio
-          if (originalMicTrackRef.current && livekitStreamerRef.current) {
-            await livekitStreamerRef.current.replaceAudioTrack(originalMicTrackRef.current);
-            console.log('Restored original microphone track');
-          }
+          desktopAudioTrackRef.current = null;
 
           if (streamRef.current && desktopVideoRef.current) {
             desktopVideoRef.current.srcObject = streamRef.current;
@@ -1697,6 +1856,8 @@ function GoLiveContent() {
         isLive,
         viewerCount,
         sessionTime,
+        audioDevices: audioDevices.map(d => ({ deviceId: d.deviceId, label: d.label })),
+        selectedAudioDevice,
       },
     };
 
@@ -1737,6 +1898,11 @@ function GoLiveContent() {
           if (friend) {
             handleInviteFriend(friend);
           }
+        }
+        break;
+      case 'switch_microphone':
+        if (payload?.deviceId) {
+          switchMicrophone(payload.deviceId);
         }
         break;
       default:
@@ -1781,7 +1947,7 @@ function GoLiveContent() {
     if (isLive && livekitStreamerRef.current) {
       broadcastRemoteState();
     }
-  }, [cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, isClipping]);
+  }, [cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, isClipping, clipTime, selectedAudioDevice]);
 
   // Start guest composite stream (camera + guest PiP) for broadcast
   // Instead of canvas compositing (CPU intensive), we send guest info via data channel
@@ -3250,6 +3416,24 @@ function GoLiveContent() {
                       </div>
                     </div>
 
+                    {/* Microphone Selector */}
+                    {audioDevices.length > 0 && (
+                      <div className="mb-4 w-full max-w-xs">
+                        <label className="block text-xs text-gray-400 mb-1">Microphone</label>
+                        <select
+                          value={selectedAudioDevice}
+                          onChange={(e) => switchMicrophone(e.target.value)}
+                          className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-purple-500"
+                        >
+                          {audioDevices.map((device) => (
+                            <option key={device.deviceId} value={device.deviceId}>
+                              {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <Button
                       onClick={handleGoLive}
                       disabled={!streamCategory}
@@ -3344,6 +3528,24 @@ function GoLiveContent() {
                 </div>
               )}
 
+              {/* Microphone Selector during live */}
+              {isLive && audioDevices.length > 1 && (
+                <div className="mb-4 flex items-center justify-center gap-2">
+                  <Mic className="h-4 w-4 text-gray-400" />
+                  <select
+                    value={selectedAudioDevice}
+                    onChange={(e) => switchMicrophone(e.target.value)}
+                    className="bg-gray-800 text-white text-xs rounded-lg px-2 py-1 border border-gray-700 focus:outline-none focus:border-purple-500"
+                  >
+                    {audioDevices.map((device) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Profile Card + Stats Bar */}
               <div className="flex items-center justify-center gap-6">
                 {/* Profile Card */}
@@ -3409,14 +3611,14 @@ function GoLiveContent() {
               </div>
 
               {/* Remote Control QR Code */}
-              {isLive && (
+              {isLive && currentRoomName && (
                 <div className="mt-4 flex items-center justify-center gap-4 p-3 bg-gray-800/50 rounded-lg">
                   <div className="bg-white p-2 rounded-lg">
                     <QRCodeSVG
                       value={typeof window !== 'undefined'
                         ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                          ? 'https://creator-fun-ruby.vercel.app/remote'
-                          : `${window.location.origin}/remote`)
+                          ? `https://creator-fun-ruby.vercel.app/remote?room=${encodeURIComponent(currentRoomName)}`
+                          : `${window.location.origin}/remote?room=${encodeURIComponent(currentRoomName)}`)
                         : '/remote'}
                       size={80}
                       level="M"

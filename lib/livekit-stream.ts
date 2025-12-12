@@ -555,6 +555,36 @@ export class LiveKitStreamer {
     console.log(`[${this.streamId}] Published new audio track`);
   }
 
+  // Publish an additional audio track (e.g., desktop audio alongside mic)
+  async publishAdditionalAudioTrack(audioTrack: MediaStreamTrack, name: string): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot publish additional audio track: not connected to room');
+      return;
+    }
+
+    const localAudioTrack = new LocalAudioTrack(audioTrack);
+    await this.room.localParticipant.publishTrack(localAudioTrack, {
+      name: name,
+    });
+    console.log(`[${this.streamId}] Published additional audio track: ${name}`);
+  }
+
+  // Unpublish an additional audio track by name
+  async unpublishAdditionalAudioTrack(name: string): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot unpublish audio track: not connected to room');
+      return;
+    }
+
+    const audioPublication = Array.from(this.room.localParticipant.trackPublications.values())
+      .find(pub => pub.track?.kind === 'audio' && pub.trackName === name);
+
+    if (audioPublication && audioPublication.track) {
+      await this.room.localParticipant.unpublishTrack(audioPublication.track);
+      console.log(`[${this.streamId}] Unpublished audio track: ${name}`);
+    }
+  }
+
   stopBroadcast(): void {
     if (this.room) {
       this.room.localParticipant.trackPublications.forEach((publication) => {

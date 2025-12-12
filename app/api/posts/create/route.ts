@@ -38,29 +38,15 @@ export async function POST(request: NextRequest) {
     const type = formData.get('type') as string || 'free';
     const title = formData.get('title') as string || null;
     const priceStr = formData.get('price') as string | null;
+    // Support pre-uploaded media URL (for remote clip posting)
+    const mediaUrl = formData.get('mediaUrl') as string | null;
+    const thumbnailUrl = formData.get('thumbnailUrl') as string | null;
+    const mediaType = formData.get('mediaType') as string | null; // 'video' or 'image'
 
-    if (!file) {
+    // Either file or mediaUrl must be provided
+    if (!file && !mediaUrl) {
       return NextResponse.json(
-        { error: 'No file uploaded' },
-        { status: 400 }
-      );
-    }
-
-    // Validate file type
-    const isImage = file.type.startsWith('image/');
-    const isVideo = file.type.startsWith('video/');
-
-    if (!isImage && !isVideo) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Only images and videos are allowed.' },
-        { status: 400 }
-      );
-    }
-
-    // Validate file size (50MB max)
-    if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: 'File too large. Maximum size is 50MB.' },
+        { error: 'No file uploaded or media URL provided' },
         { status: 400 }
       );
     }
@@ -92,56 +78,93 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate unique filename - sanitize the path
-    const fileExt = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || (isImage ? 'jpg' : 'mp4');
-    const sanitizedUserId = userId.replace(/[^a-zA-Z0-9-_]/g, '');
-    const fileName = `${sanitizedUserId}/${nanoid()}.${fileExt}`;
+    let publicUrl: string;
+    let finalThumbnailUrl: string | null = null;
+    let isVideo: boolean;
+    let isImage: boolean;
 
-    // Upload to Supabase Storage
-    const supabase = createServerSupabaseClient();
-    const fileBuffer = await file.arrayBuffer();
+    if (mediaUrl) {
+      // Using pre-uploaded media URL (from desktop clip recording)
+      publicUrl = mediaUrl;
+      finalThumbnailUrl = thumbnailUrl;
+      isVideo = mediaType === 'video';
+      isImage = mediaType === 'image';
+    } else if (file) {
+      // Validate file type
+      isImage = file.type.startsWith('image/');
+      isVideo = file.type.startsWith('video/');
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(POSTS_BUCKET)
-      .upload(fileName, fileBuffer, {
-        contentType: file.type,
-        cacheControl: '3600',
-        upsert: false,
-      });
+      if (!isImage && !isVideo) {
+        return NextResponse.json(
+          { error: 'Invalid file type. Only images and videos are allowed.' },
+          { status: 400 }
+        );
+      }
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return NextResponse.json(
-        { error: 'Failed to upload file' },
-        { status: 500 }
-      );
-    }
+      // Validate file size (50MB max)
+      if (file.size > 50 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: 'File too large. Maximum size is 50MB.' },
+          { status: 400 }
+        );
+      }
 
-    // Get public URL for the uploaded file
-    const { data: { publicUrl } } = supabase.storage
-      .from(POSTS_BUCKET)
-      .getPublicUrl(fileName);
+      // Generate unique filename - sanitize the path
+      const fileExt = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || (isImage ? 'jpg' : 'mp4');
+      const sanitizedUserId = userId.replace(/[^a-zA-Z0-9-_]/g, '');
+      const fileName = `${sanitizedUserId}/${nanoid()}.${fileExt}`;
 
-    // Upload thumbnail if provided (for videos)
-    let thumbnailUrl: string | null = null;
-    if (isVideo && thumbnail) {
-      const thumbFileName = `${sanitizedUserId}/${nanoid()}_thumb.jpg`;
-      const thumbBuffer = await thumbnail.arrayBuffer();
+      // Upload to Supabase Storage
+      const supabase = createServerSupabaseClient();
+      const fileBuffer = await file.arrayBuffer();
 
-      const { error: thumbError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from(POSTS_BUCKET)
-        .upload(thumbFileName, thumbBuffer, {
-          contentType: 'image/jpeg',
+        .upload(fileName, fileBuffer, {
+          contentType: file.type,
           cacheControl: '3600',
           upsert: false,
         });
 
-      if (!thumbError) {
-        const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
-          .from(POSTS_BUCKET)
-          .getPublicUrl(thumbFileName);
-        thumbnailUrl = thumbPublicUrl;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return NextResponse.json(
+          { error: 'Failed to upload file' },
+          { status: 500 }
+        );
       }
+
+      // Get public URL for the uploaded file
+      const { data: { publicUrl: uploadedUrl } } = supabase.storage
+        .from(POSTS_BUCKET)
+        .getPublicUrl(fileName);
+      publicUrl = uploadedUrl;
+
+      // Upload thumbnail if provided (for videos)
+      if (isVideo && thumbnail) {
+        const thumbFileName = `${sanitizedUserId}/${nanoid()}_thumb.jpg`;
+        const thumbBuffer = await thumbnail.arrayBuffer();
+
+        const { error: thumbError } = await supabase.storage
+          .from(POSTS_BUCKET)
+          .upload(thumbFileName, thumbBuffer, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (!thumbError) {
+          const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
+            .from(POSTS_BUCKET)
+            .getPublicUrl(thumbFileName);
+          finalThumbnailUrl = thumbPublicUrl;
+        }
+      }
+    } else {
+      return NextResponse.json(
+        { error: 'No file or media URL provided' },
+        { status: 400 }
+      );
     }
 
     // Create post in database
@@ -150,7 +173,7 @@ export async function POST(request: NextRequest) {
         userId,
         type,
         title: title?.trim() || null,
-        thumbnailUrl: isImage ? publicUrl : thumbnailUrl, // Use image as thumbnail, or uploaded thumbnail for videos
+        thumbnailUrl: isImage ? publicUrl : finalThumbnailUrl, // Use image as thumbnail, or uploaded thumbnail for videos
         contentUrl: publicUrl,
         price,
         isPublished: true,

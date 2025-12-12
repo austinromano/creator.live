@@ -31,7 +31,7 @@ import {
   Lock,
   Globe,
 } from 'lucide-react';
-import { Room, RoomEvent, RemoteTrack, RemoteParticipant } from 'livekit-client';
+import { Room, RoomEvent } from 'livekit-client';
 import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
 
@@ -41,6 +41,11 @@ interface Friend {
   displayName: string | null;
   avatar: string | null;
   isVerified: boolean;
+}
+
+interface AudioDeviceInfo {
+  deviceId: string;
+  label: string;
 }
 
 interface RemoteState {
@@ -53,6 +58,8 @@ interface RemoteState {
   isLive: boolean;
   viewerCount: number;
   sessionTime: number;
+  audioDevices: AudioDeviceInfo[];
+  selectedAudioDevice: string;
 }
 
 function RemoteContent() {
@@ -66,6 +73,7 @@ function RemoteContent() {
   const [connecting, setConnecting] = useState(false);
   const [streamActive, setStreamActive] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(true);
   const roomRef = useRef<Room | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
@@ -82,6 +90,8 @@ function RemoteContent() {
     isLive: false,
     viewerCount: 0,
     sessionTime: 0,
+    audioDevices: [],
+    selectedAudioDevice: '',
   });
 
   // Local state
@@ -94,22 +104,26 @@ function RemoteContent() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [userData, setUserData] = useState<any>(null);
 
-  // Local clipping state (records the received stream on mobile)
-  const [isClipping, setIsClipping] = useState(false);
-  const [clipTime, setClipTime] = useState(0);
+  // Clip state comes from desktop via remoteState (no local recording anymore)
+  // Recording happens on desktop for better quality
+  // Clip modal state (shown when desktop sends clip_ready)
   const [showClipModal, setShowClipModal] = useState(false);
-  const [clipBlob, setClipBlob] = useState<Blob | null>(null);
-  const [clipVideoUrl, setClipVideoUrl] = useState<string | null>(null);
+  const [clipMediaUrl, setClipMediaUrl] = useState<string | null>(null);
+  const [clipThumbnailUrl, setClipThumbnailUrl] = useState<string | null>(null);
   const [clipCaption, setClipCaption] = useState('');
-  const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
   const [clipPrice, setClipPrice] = useState('');
+  const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
   const [isPostingClip, setIsPostingClip] = useState(false);
-  const clipRecorderRef = useRef<MediaRecorder | null>(null);
-  const clipChunksRef = useRef<Blob[]>([]);
-  const clipTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const receivedStreamRef = useRef<MediaStream | null>(null);
 
   const username = user?.name || 'Creator';
+  const roomFromUrl = searchParams.get('room');
+
+  // Redirect to home if not authenticated and no room in URL
+  useEffect(() => {
+    if (status === 'unauthenticated' && !roomFromUrl) {
+      router.push('/');
+    }
+  }, [status, roomFromUrl, router]);
 
   // Fetch user data
   useEffect(() => {
@@ -146,8 +160,26 @@ function RemoteContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Check if user has an active stream
+  // Get room from URL params (for unauthenticated access)
+  const roomFromParams = searchParams.get('room');
+  const connectionAttemptedRef = useRef(false);
+
+  // Connect directly if room is provided in URL
+  // Connect immediately - don't wait for auth status as it can cause issues with wallet auth
   useEffect(() => {
+    if (roomFromParams && !connectionAttemptedRef.current && connectionStateRef.current === 'idle') {
+      console.log('[Remote] Room provided in URL, connecting immediately:', roomFromParams);
+      connectionAttemptedRef.current = true;
+      setStreamActive(true);
+      // Use a stable identity that doesn't depend on auth state
+      connectToStream(roomFromParams);
+    }
+  }, [roomFromParams]);
+
+  // Check if user has an active stream (only if no room in URL and user is authenticated)
+  useEffect(() => {
+    if (roomFromParams) return; // Skip if room is in URL
+
     const checkStream = async () => {
       console.log('[Remote] Checking for active stream, userData:', userData?.username);
       if (!userData?.username) {
@@ -182,7 +214,7 @@ function RemoteContent() {
       const interval = setInterval(checkStream, 10000);
       return () => clearInterval(interval);
     }
-  }, [userData?.username]);
+  }, [userData?.username, roomFromParams]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -194,6 +226,47 @@ function RemoteContent() {
       connectionStateRef.current = 'idle';
     };
   }, []);
+
+  // Re-attach tracks to video element when auth status changes (after sign-in)
+  // This fixes the issue where video disappears after signing in
+  useEffect(() => {
+    if (connected && roomRef.current && videoRef.current) {
+      // Small delay to let the DOM settle after re-render
+      const timeoutId = setTimeout(() => {
+        if (!roomRef.current || !videoRef.current) return;
+
+        console.log('[Remote] Re-checking track attachments after status change:', status);
+        // Check all remote participants for existing tracks
+        roomRef.current.remoteParticipants.forEach((participant) => {
+          participant.trackPublications.forEach((publication) => {
+            if (publication.track && publication.isSubscribed) {
+              const track = publication.track;
+              if (track.kind === 'video') {
+                console.log('[Remote] Re-attaching video track');
+                track.attach(videoRef.current!);
+                videoRef.current!.muted = true;
+                videoRef.current!.play().catch(err =>
+                  console.error('[Remote] Failed to play re-attached video:', err)
+                );
+                setVideoLoaded(true);
+              } else if (track.kind === 'audio') {
+                console.log('[Remote] Re-attaching audio track');
+                track.attach(videoRef.current!);
+              }
+            }
+          });
+        });
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [status, connected]);
+
+  // Generate a stable remote identity that persists across auth changes
+  const remoteIdentityRef = useRef<string | null>(null);
+  if (!remoteIdentityRef.current) {
+    remoteIdentityRef.current = `remote_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  }
 
   // Connect to stream for remote control
   const connectToStream = async (roomName: string) => {
@@ -211,12 +284,16 @@ function RemoteContent() {
     console.log('[Remote] Starting connection to room:', roomName);
     try {
       // Get token for remote control (viewer with data channel access)
+      // Use a stable identity that doesn't change across auth state changes
+      const remoteIdentity = remoteIdentityRef.current!;
+      console.log('[Remote] Using identity:', remoteIdentity);
+
       const tokenResponse = await fetch('/api/livekit/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roomName,
-          identity: `${username}_remote`,
+          identity: remoteIdentity,
           isPublisher: false,
         }),
       });
@@ -242,50 +319,28 @@ function RemoteContent() {
 
       // Handle video/audio track subscriptions
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        console.log(`[Remote] Subscribed to track: ${track.kind} from ${participant.identity}`);
+        console.log(`[Remote] Subscribed to track: ${track.kind} source: ${publication.source} from ${participant.identity}`);
 
         if (track.kind === 'video' && videoRef.current) {
+          // Attach the new track - LiveKit handles replacing the old one
           track.attach(videoRef.current);
+          setVideoLoaded(true);
+
+          // Start muted for autoplay, user can unmute
           videoRef.current.muted = true;
           videoRef.current.play()
-            .then(() => {
-              console.log('[Remote] Video playback started');
-              setVideoLoaded(true);
-            })
+            .then(() => console.log('[Remote] Video playback started'))
             .catch(err => console.error('[Remote] Failed to play video:', err));
-
-          // Capture the stream for clipping
-          const mediaStreamTrack = track.mediaStreamTrack;
-          if (mediaStreamTrack) {
-            if (!receivedStreamRef.current) {
-              receivedStreamRef.current = new MediaStream();
-            }
-            receivedStreamRef.current.addTrack(mediaStreamTrack);
-            console.log('[Remote] Added video track to receivedStream for clipping');
-          }
         } else if (track.kind === 'audio' && videoRef.current) {
           // Attach audio but keep video muted (user can unmute)
           track.attach(videoRef.current);
-          console.log('[Remote] Attached audio track');
-
-          // Also add audio to the clipping stream
-          const mediaStreamTrack = track.mediaStreamTrack;
-          if (mediaStreamTrack) {
-            if (!receivedStreamRef.current) {
-              receivedStreamRef.current = new MediaStream();
-            }
-            receivedStreamRef.current.addTrack(mediaStreamTrack);
-            console.log('[Remote] Added audio track to receivedStream for clipping');
-          }
+          console.log(`[Remote] Attached audio track: ${publication.trackName || 'unknown'}`);
         }
       });
 
-      room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-        console.log(`[Remote] Unsubscribed from track: ${track.kind}`);
-        track.detach();
-        if (track.kind === 'video') {
-          setVideoLoaded(false);
-        }
+      room.on(RoomEvent.TrackUnsubscribed, (track, publication) => {
+        console.log(`[Remote] Unsubscribed from track: ${track.kind} source: ${publication.source}`);
+        // Don't detach or set videoLoaded to false - the new track will replace it automatically
       });
 
       // Set up data channel listener for messages
@@ -309,6 +364,12 @@ function RemoteContent() {
             setChatMessages(prev => [...prev, chatMessage]);
           } else if (message.type === 'activity') {
             setActivityEvents(prev => [...prev, message.payload as LiveKitActivityEvent]);
+          } else if (message.type === 'clip_ready') {
+            // Desktop finished recording and uploading clip, show post modal
+            console.log('[Remote] Received clip_ready:', message.payload);
+            setClipMediaUrl(message.payload.mediaUrl);
+            setClipThumbnailUrl(message.payload.thumbnailUrl);
+            setShowClipModal(true);
           }
         } catch (e) {
           // Ignore non-JSON messages
@@ -377,134 +438,12 @@ function RemoteContent() {
   const toggleMicrophone = () => sendCommand('toggle_microphone');
   const toggleDesktopAudio = () => sendCommand('toggle_desktop_audio');
   const stopStream = () => sendCommand('stop_stream');
+  const switchMicrophone = (deviceId: string) => sendCommand('switch_microphone', { deviceId });
 
-  // Local clipping functions - records the received stream on mobile
-  const startClip = () => {
-    let streamToRecord: MediaStream | null = receivedStreamRef.current;
-
-    if (!streamToRecord || streamToRecord.getTracks().length === 0) {
-      console.error('[Remote] No stream available for clipping');
-      // Try to get stream from video element as fallback
-      if (videoRef.current && (videoRef.current as any).captureStream) {
-        streamToRecord = (videoRef.current as any).captureStream();
-        receivedStreamRef.current = streamToRecord;
-        console.log('[Remote] Using captureStream from video element');
-      } else {
-        return;
-      }
-    }
-
-    if (!streamToRecord) {
-      console.error('[Remote] Failed to get stream for clipping');
-      return;
-    }
-
-    clipChunksRef.current = [];
-    setClipTime(0);
-
-    // Find supported mime type
-    const mimeTypes = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-      'video/mp4',
-    ];
-    let mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
-
-    try {
-      clipRecorderRef.current = new MediaRecorder(streamToRecord, {
-        mimeType,
-        videoBitsPerSecond: 2500000,
-      });
-    } catch (e) {
-      console.error('[Remote] MediaRecorder error:', e);
-      clipRecorderRef.current = new MediaRecorder(streamToRecord);
-    }
-
-    clipRecorderRef.current.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        clipChunksRef.current.push(e.data);
-      }
-    };
-
-    clipRecorderRef.current.onstop = () => {
-      const mimeType = clipRecorderRef.current?.mimeType || 'video/webm';
-      const blob = new Blob(clipChunksRef.current, { type: mimeType });
-      setClipBlob(blob);
-      setClipVideoUrl(URL.createObjectURL(blob));
-      setShowClipModal(true);
-      if (clipTimerRef.current) {
-        clearInterval(clipTimerRef.current);
-      }
-    };
-
-    clipRecorderRef.current.start(1000);
-    setIsClipping(true);
-
-    // Start clip timer
-    clipTimerRef.current = setInterval(() => {
-      setClipTime((prev) => prev + 1);
-    }, 1000);
-
-    console.log('[Remote] Clip recording started');
-  };
-
-  const stopClip = () => {
-    if (clipRecorderRef.current && isClipping) {
-      clipRecorderRef.current.stop();
-      setIsClipping(false);
-      if (clipTimerRef.current) {
-        clearInterval(clipTimerRef.current);
-      }
-      console.log('[Remote] Clip recording stopped');
-    }
-  };
-
-  const cancelClip = () => {
-    if (clipVideoUrl) {
-      URL.revokeObjectURL(clipVideoUrl);
-    }
-    setClipBlob(null);
-    setClipVideoUrl(null);
-    setClipCaption('');
-    setClipPrice('');
-    setClipPostType('free');
-    setShowClipModal(false);
-    setClipTime(0);
-  };
-
-  const postClip = async () => {
-    if (!clipBlob) return;
-
-    setIsPostingClip(true);
-    try {
-      // Create post with clip - /api/posts/create handles both upload and post creation
-      const formData = new FormData();
-      formData.append('file', clipBlob, `clip-${Date.now()}.webm`);
-      formData.append('type', clipPostType); // 'free' or 'paid'
-      formData.append('title', clipCaption || '🎬 Live stream clip!');
-      if (clipPostType === 'paid' && clipPrice) {
-        formData.append('price', clipPrice);
-      }
-
-      const response = await fetch('/api/posts/create', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to create post');
-      }
-
-      console.log('[Remote] Clip posted successfully!');
-      cancelClip();
-    } catch (error) {
-      console.error('[Remote] Error posting clip:', error);
-    } finally {
-      setIsPostingClip(false);
-    }
-  };
+  // Clipping is now handled on the desktop for better quality
+  // Remote just sends commands, desktop records from original streams
+  const startClip = () => sendCommand('start_clip');
+  const stopClip = () => sendCommand('stop_clip');
 
   // Invite friend
   const inviteFriend = (friend: Friend) => {
@@ -548,6 +487,55 @@ function RemoteContent() {
     await roomRef.current.localParticipant.publishData(data, { reliable: true });
   };
 
+  // Clip posting functions
+  const postClip = async () => {
+    if (!clipMediaUrl) return;
+
+    setIsPostingClip(true);
+    try {
+      const formData = new FormData();
+      formData.append('mediaUrl', clipMediaUrl);
+      if (clipThumbnailUrl) {
+        formData.append('thumbnailUrl', clipThumbnailUrl);
+      }
+      formData.append('mediaType', 'video');
+      formData.append('type', clipPostType);
+      if (clipCaption.trim()) {
+        formData.append('title', clipCaption.trim());
+      }
+      if (clipPostType === 'paid' && clipPrice) {
+        formData.append('price', clipPrice);
+      }
+
+      const response = await fetch('/api/posts/create', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        cancelClip();
+        alert('Clip posted successfully!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to post clip');
+      }
+    } catch (error) {
+      console.error('Error posting clip:', error);
+      alert('Failed to post clip');
+    } finally {
+      setIsPostingClip(false);
+    }
+  };
+
+  const cancelClip = () => {
+    setClipMediaUrl(null);
+    setClipThumbnailUrl(null);
+    setClipCaption('');
+    setClipPrice('');
+    setClipPostType('free');
+    setShowClipModal(false);
+  };
+
   // Auto-scroll chat
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -569,7 +557,8 @@ function RemoteContent() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (status === 'loading') {
+  // Only show loading on initial load, not during auth changes (to preserve video element)
+  if (status === 'loading' && !connected && !roomFromParams) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
@@ -577,9 +566,13 @@ function RemoteContent() {
     );
   }
 
-  if (status === 'unauthenticated') {
-    router.push('/login');
-    return null;
+  // Redirect to home if not authenticated and no room provided
+  if (status === 'unauthenticated' && !roomFromUrl) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      </div>
+    );
   }
 
   return (
@@ -594,8 +587,13 @@ function RemoteContent() {
             </AvatarFallback>
           </Avatar>
           <div>
-            <div className="font-semibold">{username}</div>
+            <div className="font-semibold">{status === 'authenticated' ? (userData?.username || username) : 'Not signed in'}</div>
             <div className="flex items-center gap-2">
+              {status === 'authenticated' ? (
+                <Badge className="bg-purple-600 text-xs">Signed In</Badge>
+              ) : (
+                <Badge className="bg-gray-600 text-xs">Guest</Badge>
+              )}
               {connected ? (
                 <Badge className="bg-green-600 text-xs">
                   <Wifi className="h-3 w-3 mr-1" />
@@ -672,24 +670,43 @@ function RemoteContent() {
               <Badge className="bg-red-600 text-xs animate-pulse">● LIVE</Badge>
             </div>
           )}
+
+          {/* Audio Mute/Unmute Button */}
+          {videoLoaded && (
+            <button
+              onClick={() => {
+                if (videoRef.current) {
+                  videoRef.current.muted = !videoRef.current.muted;
+                  setAudioMuted(videoRef.current.muted);
+                }
+              }}
+              className="absolute bottom-2 right-2 p-2 bg-black/70 rounded-full hover:bg-black/90 transition-colors"
+            >
+              {audioMuted ? (
+                <VolumeX className="h-5 w-5 text-white" />
+              ) : (
+                <Volume2 className="h-5 w-5 text-white" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Big Clip Button */}
       <div className="px-4 py-4">
         <Button
-          onClick={isClipping ? stopClip : startClip}
+          onClick={remoteState.isClipping ? stopClip : startClip}
           disabled={!connected || !remoteState.isLive}
           className={`w-full h-20 text-xl font-bold rounded-2xl transition-all ${
-            isClipping
+            remoteState.isClipping
               ? 'bg-red-600 hover:bg-red-700 animate-pulse'
               : 'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600'
           }`}
         >
-          {isClipping ? (
+          {remoteState.isClipping ? (
             <>
               <CircleDot className="h-8 w-8 mr-3" />
-              Recording {formatClipTime(clipTime)}
+              Recording {formatClipTime(remoteState.clipTime)}
             </>
           ) : (
             <>
@@ -773,6 +790,25 @@ function RemoteContent() {
             <span className="text-xs">Stop Stream</span>
           </Button>
         </div>
+
+        {/* Microphone Selector */}
+        {remoteState.audioDevices.length > 1 && (
+          <div className="mt-3 flex items-center gap-2">
+            <Mic className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            <select
+              value={remoteState.selectedAudioDevice}
+              onChange={(e) => switchMicrophone(e.target.value)}
+              disabled={!connected}
+              className="flex-1 bg-gray-800 text-white text-xs rounded-lg px-2 py-2 border border-gray-700 focus:outline-none focus:border-purple-500"
+            >
+              {remoteState.audioDevices.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -1000,10 +1036,10 @@ function RemoteContent() {
             <h2 className="text-xl font-bold mb-4">Post Clip</h2>
 
             {/* Video Preview */}
-            {clipVideoUrl && (
+            {clipMediaUrl && (
               <div className="mb-4 rounded-lg overflow-hidden bg-black">
                 <video
-                  src={clipVideoUrl}
+                  src={clipMediaUrl}
                   controls
                   className="w-full max-h-64 object-contain"
                   playsInline
@@ -1071,6 +1107,15 @@ function RemoteContent() {
               </div>
             )}
 
+            {/* Sign in message if not authenticated */}
+            {status !== 'authenticated' && (
+              <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+                <p className="text-yellow-400 text-sm">
+                  You need to sign in to post clips.
+                </p>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex gap-3">
               <Button
@@ -1084,13 +1129,15 @@ function RemoteContent() {
               <Button
                 onClick={postClip}
                 className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                disabled={isPostingClip}
+                disabled={isPostingClip || status !== 'authenticated'}
               >
                 {isPostingClip ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Posting...
                   </>
+                ) : status !== 'authenticated' ? (
+                  'Sign in to Post'
                 ) : (
                   'Post Clip'
                 )}
