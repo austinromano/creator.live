@@ -6,8 +6,9 @@ import { signInWithPhantom } from '@/lib/phantom-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Mail, ExternalLink, Home } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, Home, Plus } from 'lucide-react';
 import { HomeFeed } from '@/components/feed/HomeFeed';
+import Link from 'next/link';
 
 // Detect if user is on mobile device (not in Phantom browser)
 function isMobileDevice(): boolean {
@@ -172,7 +173,44 @@ export function Homepage() {
   // Show feed for authenticated users
   if (status === 'authenticated') {
     return (
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col">
+        {/* Instagram-style Top Navbar */}
+        <header className="sticky top-0 z-40 bg-[#0f0a15] border-b border-gray-800/50">
+          <div className="flex items-center justify-between px-4 py-3">
+            {/* Left - Plus Icon */}
+            <Link href="/camera" className="p-1">
+              <Plus className="h-7 w-7 text-white" strokeWidth={1.5} />
+            </Link>
+
+            {/* Center - Osho Logo (Script Font) */}
+            <h1 className="text-3xl text-white tracking-wide font-[family-name:var(--font-pacifico)]">
+              Osho
+            </h1>
+
+            {/* Right - Remote Control Icon */}
+            <Link href="/remote" className="p-1">
+              <svg
+                className="h-7 w-7 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {/* Remote control icon */}
+                <rect x="6" y="2" width="12" height="20" rx="3" />
+                <circle cx="12" cy="7" r="2" />
+                <line x1="10" y1="12" x2="10" y2="12.01" />
+                <line x1="14" y1="12" x2="14" y2="12.01" />
+                <line x1="10" y1="15" x2="10" y2="15.01" />
+                <line x1="14" y1="15" x2="14" y2="15.01" />
+                <line x1="12" y1="18" x2="12" y2="18.01" />
+              </svg>
+            </Link>
+          </div>
+        </header>
+
         <HomeFeed />
       </div>
     );
