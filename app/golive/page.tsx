@@ -832,22 +832,29 @@ function GoLiveContent() {
     // Log final recording stream
     console.log(`[Clip] Final stream: ${recordStream.getVideoTracks().length} video, ${recordStream.getAudioTracks().length} audio`);
 
-    // Get supported MIME type - prefer VP9 with Opus
+    // Get supported MIME type - prefer hardware-accelerated codecs first
+    // H.264 (via mp4) often has hardware encoding support
+    // VP8 is faster than VP9 for encoding (less CPU)
     const mimeTypes = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm;codecs=vp9',
+      'video/webm;codecs=h264,opus', // H.264 often has HW encoding
+      'video/webm;codecs=vp8,opus',  // VP8 is faster than VP9
+      'video/webm;codecs=vp9,opus',  // VP9 higher quality but slower
+      'video/webm;codecs=vp8',
       'video/webm',
       'video/mp4',
     ];
     const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
     console.log('[Clip] Using mime type:', mimeType);
 
+    // Create MediaRecorder with optimized settings for smooth recording
     const clipRecorder = new MediaRecorder(recordStream, {
       mimeType,
-      videoBitsPerSecond: 4000000,  // 4 Mbps for high quality
-      audioBitsPerSecond: 128000,   // 128 kbps audio
+      videoBitsPerSecond: 6_000_000, // 6 Mbps for high quality clips
+      audioBitsPerSecond: 128_000,   // 128 kbps audio
     });
+
+    // Pre-allocate array capacity for smoother memory allocation
+    clipChunksRef.current = [];
 
     clipRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
@@ -930,9 +937,11 @@ function GoLiveContent() {
     };
 
     clipRecorderRef.current = clipRecorder;
-    clipRecorder.start(100); // 100ms timeslice for smooth audio
+    // 250ms timeslice - balances low CPU overhead with good audio sync
+    // Smaller = better audio sync but more CPU, Larger = less CPU but potential sync drift
+    clipRecorder.start(250);
     setIsClipping(true);
-    console.log('[Clip] Recording started with 100ms timeslice');
+    console.log('[Clip] Recording started with optimized 250ms timeslice');
 
     // Start clip timer
     clipTimerRef.current = setInterval(() => {
@@ -1125,15 +1134,27 @@ function GoLiveContent() {
         throw new Error('getUserMedia is not supported in this browser');
       }
 
-      // Request both video and audio with selected device
+      // Request both video and audio with optimized settings for streaming
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          frameRate: { ideal: 30, min: 24 },
+          // Hint for hardware acceleration
+          facingMode: 'user',
         },
         audio: selectedAudioDevice
-          ? { deviceId: { exact: selectedAudioDevice } }
-          : true
+          ? {
+              deviceId: { exact: selectedAudioDevice },
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          : {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
       });
 
       console.log('✅ Stream obtained successfully');
@@ -1525,7 +1546,7 @@ function GoLiveContent() {
 
   const stopCompositeStream = () => {
     if (compositeAnimationRef.current) {
-      clearInterval(compositeAnimationRef.current);
+      cancelAnimationFrame(compositeAnimationRef.current);
       compositeAnimationRef.current = null;
     }
     compositeStreamRef.current = null;
@@ -1537,8 +1558,18 @@ function GoLiveContent() {
     canvas.width = 1920;
     canvas.height = 1080;
     compositeCanvasRef.current = canvas;
-    const ctx = canvas.getContext('2d');
+
+    // Get 2D context with hardware acceleration hints
+    const ctx = canvas.getContext('2d', {
+      alpha: false, // No transparency needed - improves performance
+      desynchronized: true, // Lower latency - don't wait for vsync
+      willReadFrequently: false, // We only write to canvas, never read pixels
+    });
     if (!ctx) return null;
+
+    // Enable image smoothing for high quality scaling
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Create video elements to draw from
     const screenVideo = document.createElement('video');
@@ -1599,65 +1630,81 @@ function GoLiveContent() {
       ctx.closePath();
     };
 
-    // Use setInterval instead of requestAnimationFrame for consistent frame rate
-    // 30fps for smooth video
-    const frameInterval = setInterval(() => {
-      // Clear canvas first to prevent artifacts
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Use requestAnimationFrame for smoother rendering synced to display
+    // This provides better frame pacing than setInterval
+    let animationFrameId: number;
+    let lastFrameTime = 0;
+    const targetFrameInterval = 1000 / 30; // Target 30fps (33.33ms per frame)
 
-      // Draw screen share as background (full canvas)
-      if (screenVideo.readyState >= 2 && screenVideo.videoWidth > 0) {
-        ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
-      }
+    const renderFrame = (currentTime: number) => {
+      // Throttle to ~30fps to avoid wasting CPU while maintaining smoothness
+      const elapsed = currentTime - lastFrameTime;
+      if (elapsed >= targetFrameInterval) {
+        lastFrameTime = currentTime - (elapsed % targetFrameInterval);
 
-      // Draw guest PiP if active (draw first so camera PiP appears on top)
-      const guestVideo = guestVideoRef.current;
-      if (guestVideo && guestVideo.readyState >= 2 && guestVideo.videoWidth > 0) {
-        const guestX = guestPipPositionRef.current.x;
-        const guestY = guestPipPositionRef.current.y;
-        const guestWidth = guestPipSizeRef.current.width;
-        const guestHeight = guestPipSizeRef.current.height;
-
-        // Draw rounded border for guest PiP (green)
-        ctx.fillStyle = '#22c55e';
-        roundRect(guestX - 4, guestY - 4, guestWidth + 8, guestHeight + 8, 12);
-        ctx.fill();
-
-        // Draw guest feed with rounded corners (clip)
-        ctx.save();
-        roundRect(guestX, guestY, guestWidth, guestHeight, 8);
-        ctx.clip();
-        ctx.drawImage(guestVideo, guestX, guestY, guestWidth, guestHeight);
-        ctx.restore();
-      }
-
-      // Only draw camera PiP if camera is enabled
-      if (cameraEnabledRef.current) {
-        // Get current PiP position and size from refs (updated by drag/resize)
-        const pipX = pipPositionRef.current.x;
-        const pipY = pipPositionRef.current.y;
-        const pipWidth = pipSizeRef.current.width;
-        const pipHeight = pipSizeRef.current.height;
-
-        // Draw rounded border for PiP
-        ctx.fillStyle = '#8b5cf6';
-        roundRect(pipX - 4, pipY - 4, pipWidth + 8, pipHeight + 8, 12);
-        ctx.fill();
-
-        // Draw camera feed with rounded corners (clip)
-        ctx.save();
-        roundRect(pipX, pipY, pipWidth, pipHeight, 8);
-        ctx.clip();
-        if (cameraVideo.readyState >= 2 && cameraVideo.videoWidth > 0) {
-          ctx.drawImage(cameraVideo, pipX, pipY, pipWidth, pipHeight);
+        // Draw screen share as background (full canvas) - no need to clear if we fill entire canvas
+        if (screenVideo.readyState >= 2 && screenVideo.videoWidth > 0) {
+          ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
+        } else {
+          // Only clear if no screen video yet
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-        ctx.restore();
-      }
-    }, 33); // ~30fps
 
-    // Store interval ID for cleanup
-    compositeAnimationRef.current = frameInterval as unknown as number;
+        // Draw guest PiP if active (draw first so camera PiP appears on top)
+        const guestVideo = guestVideoRef.current;
+        if (guestVideo && guestVideo.readyState >= 2 && guestVideo.videoWidth > 0) {
+          const guestX = guestPipPositionRef.current.x;
+          const guestY = guestPipPositionRef.current.y;
+          const guestWidth = guestPipSizeRef.current.width;
+          const guestHeight = guestPipSizeRef.current.height;
+
+          // Draw rounded border for guest PiP (green)
+          ctx.fillStyle = '#22c55e';
+          roundRect(guestX - 4, guestY - 4, guestWidth + 8, guestHeight + 8, 12);
+          ctx.fill();
+
+          // Draw guest feed with rounded corners (clip)
+          ctx.save();
+          roundRect(guestX, guestY, guestWidth, guestHeight, 8);
+          ctx.clip();
+          ctx.drawImage(guestVideo, guestX, guestY, guestWidth, guestHeight);
+          ctx.restore();
+        }
+
+        // Only draw camera PiP if camera is enabled
+        if (cameraEnabledRef.current) {
+          // Get current PiP position and size from refs (updated by drag/resize)
+          const pipX = pipPositionRef.current.x;
+          const pipY = pipPositionRef.current.y;
+          const pipWidth = pipSizeRef.current.width;
+          const pipHeight = pipSizeRef.current.height;
+
+          // Draw rounded border for PiP
+          ctx.fillStyle = '#8b5cf6';
+          roundRect(pipX - 4, pipY - 4, pipWidth + 8, pipHeight + 8, 12);
+          ctx.fill();
+
+          // Draw camera feed with rounded corners (clip)
+          ctx.save();
+          roundRect(pipX, pipY, pipWidth, pipHeight, 8);
+          ctx.clip();
+          if (cameraVideo.readyState >= 2 && cameraVideo.videoWidth > 0) {
+            ctx.drawImage(cameraVideo, pipX, pipY, pipWidth, pipHeight);
+          }
+          ctx.restore();
+        }
+      }
+
+      // Continue the render loop
+      animationFrameId = requestAnimationFrame(renderFrame);
+    };
+
+    // Start the render loop
+    animationFrameId = requestAnimationFrame(renderFrame);
+
+    // Store animation frame ID for cleanup (cast to number for compat)
+    compositeAnimationRef.current = animationFrameId;
 
     // Get stream from canvas at 30fps - store it so we can reuse for clipping
     const compositeStream = canvas.captureStream(30);
@@ -1705,9 +1752,16 @@ function GoLiveContent() {
           video: {
             width: { ideal: 1920 },
             height: { ideal: 1080 },
-            frameRate: { ideal: 30 }
-          },
-          audio: true // Capture system audio
+            frameRate: { ideal: 30, max: 30 },
+            // Request cursor and preferCurrentTab for better UX
+            cursor: 'always',
+          } as MediaTrackConstraints,
+          audio: {
+            // Optimize desktop audio capture
+            echoCancellation: false, // Don't process desktop audio
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
         });
         screenStreamRef.current = screenStream;
 

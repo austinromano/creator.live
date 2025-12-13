@@ -229,12 +229,17 @@ export class LiveKitStreamer {
     // Get publisher token
     const token = await this.getToken(`broadcaster-${Date.now()}`, true);
 
-    // Create and connect to room with optimized settings for smooth streaming
+    // Create and connect to room with optimized settings for ultra-smooth streaming
     this.room = new Room({
       adaptiveStream: false, // Disable adaptive for consistent quality
       dynacast: false, // Disable dynacast for lower latency
       videoCaptureDefaults: {
-        resolution: VideoPresets.h720.resolution,
+        resolution: VideoPresets.h1080.resolution, // 1080p for high quality
+      },
+      publishDefaults: {
+        videoSimulcastLayers: [], // No simulcast - single high quality stream
+        stopMicTrackOnMute: false, // Keep mic track alive when muted
+        videoCodec: 'vp8', // VP8 for best compatibility and low latency
       },
     });
 
@@ -257,7 +262,7 @@ export class LiveKitStreamer {
     // Setup data channel for chat
     this.setupDataListener();
 
-    // Publish the local tracks
+    // Publish the local tracks with optimized encoding
     const videoTrack = stream.getVideoTracks()[0];
     const audioTrack = stream.getAudioTracks()[0];
 
@@ -267,22 +272,26 @@ export class LiveKitStreamer {
         name: 'camera',
         simulcast: false, // Disable simulcast for smoother streaming
         videoEncoding: {
-          maxBitrate: 2_500_000, // 2.5 Mbps for smooth 720p
+          maxBitrate: 4_000_000, // 4 Mbps for smooth 1080p
           maxFramerate: 30,
+          priority: 'high', // High priority for video
         },
       });
-      console.log(`[${this.streamId}] Published video track (optimized)`);
+      console.log(`[${this.streamId}] Published video track (1080p optimized, 4Mbps)`);
     }
 
     if (audioTrack) {
       const localAudioTrack = new LocalAudioTrack(audioTrack);
       await this.room.localParticipant.publishTrack(localAudioTrack, {
         name: 'microphone',
+        audioPreset: {
+          maxBitrate: 64_000, // 64kbps for clear audio
+        },
       });
-      console.log(`[${this.streamId}] Published audio track`);
+      console.log(`[${this.streamId}] Published audio track (64kbps)`);
     }
 
-    console.log(`[${this.streamId}] Broadcast started`);
+    console.log(`[${this.streamId}] Broadcast started with optimized settings`);
   }
 
   private onNeedsInteractionCallback?: () => void;
@@ -520,18 +529,19 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Unpublished old video track`);
     }
 
-    // Publish the new track with optimized settings for composite streams
-    // Disable simulcast for composite - it causes quality issues with canvas streams
+    // Publish the new track with optimized settings for composite/screen share streams
+    // Higher bitrate for canvas/screen content which has more detail
     const localVideoTrack = new LocalVideoTrack(newVideoTrack);
     await this.room.localParticipant.publishTrack(localVideoTrack, {
       name: 'camera',
       simulcast: false, // Disable simulcast for composite streams - single high quality layer
       videoEncoding: {
-        maxBitrate: 2_500_000, // 2.5 Mbps for 720p - good balance of quality and bandwidth
+        maxBitrate: 5_000_000, // 5 Mbps for 1080p screen share with high detail
         maxFramerate: 30,
+        priority: 'high',
       },
     });
-    console.log(`[${this.streamId}] Published new video track (720p optimized, no simulcast)`);
+    console.log(`[${this.streamId}] Published new video track (1080p optimized, 5Mbps, no simulcast)`);
   }
 
   // Replace or add an audio track (for screen share audio mixing)
