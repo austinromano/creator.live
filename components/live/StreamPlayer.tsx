@@ -1,9 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Creator } from '@/lib/types';
+import { StreamCreator } from '@/lib/types';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
 import {
   Play,
@@ -26,7 +24,7 @@ interface GuestPipInfo {
 }
 
 interface StreamPlayerProps {
-  creator: Creator;
+  creator: StreamCreator;
   isLive: boolean;
   viewers: number;
   className?: string;

@@ -1,22 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createServerSupabaseClient, POSTS_BUCKET } from '@/lib/supabase';
 import { nanoid } from 'nanoid';
+import {
+  requireAuthId,
+  errorResponse,
+  successResponse,
+  BadRequestError,
+  NotFoundError,
+} from '@/lib/api/middleware';
 
 // POST /api/clips/upload - Upload a clip and return URLs (without creating a post)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as any)?.id;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const userId = await requireAuthId();
 
     // Verify user exists
     const user = await prisma.user.findUnique({
@@ -25,10 +22,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      throw new NotFoundError('User not found');
     }
 
     // Parse form data
@@ -37,26 +31,17 @@ export async function POST(request: NextRequest) {
     const thumbnail = formData.get('thumbnail') as File | null;
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'No file uploaded' },
-        { status: 400 }
-      );
+      throw new BadRequestError('No file uploaded');
     }
 
     // Validate file type (video only for clips)
     if (!file.type.startsWith('video/')) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Only videos are allowed.' },
-        { status: 400 }
-      );
+      throw new BadRequestError('Invalid file type. Only videos are allowed.');
     }
 
     // Validate file size (100MB max for clips)
     if (file.size > 100 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: 'File too large. Maximum size is 100MB.' },
-        { status: 400 }
-      );
+      throw new BadRequestError('File too large. Maximum size is 100MB.');
     }
 
     // Generate unique filename
@@ -77,11 +62,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return NextResponse.json(
-        { error: 'Failed to upload file' },
-        { status: 500 }
-      );
+      throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
 
     // Get public URL for the uploaded file
@@ -111,16 +92,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    return successResponse({
       mediaUrl,
       thumbnailUrl,
       mediaType: 'video',
     });
   } catch (error) {
-    console.error('Error uploading clip:', error);
-    return NextResponse.json(
-      { error: 'Failed to upload clip' },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

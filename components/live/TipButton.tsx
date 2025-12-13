@@ -16,7 +16,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useWallet } from '@/hooks/useWallet';
-import { Creator } from '@/lib/types';
+import { StreamCreator } from '@/lib/types';
 import { sendTip, TIP_AMOUNT_SOL, getExplorerUrl } from '@/lib/solana/tip';
 import {
   Heart,
@@ -30,7 +30,7 @@ import {
 import { LiveKitStreamer } from '@/lib/livekit-stream';
 
 interface TipButtonProps {
-  creator: Creator;
+  creator: StreamCreator;
   onTip: (amount: number, message: string, userName?: string, userAvatar?: string) => Promise<void>;
   className?: string;
   userName?: string;

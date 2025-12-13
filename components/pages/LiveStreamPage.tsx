@@ -2,32 +2,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StreamPlayer } from '@/components/live/StreamPlayer';
 import { LiveChat } from '@/components/live/LiveChat';
 import { TipButton } from '@/components/live/TipButton';
-import { Creator, ChatMessage } from '@/lib/types';
+import { StreamCreator, ChatMessage } from '@/lib/types';
 import { useLiveStream } from '@/hooks/useLiveStream';
-import { LiveKitStreamer, LiveKitActivityEvent } from '@/lib/livekit-stream';
+import { LiveKitStreamer } from '@/lib/livekit-stream';
 import { useSession } from 'next-auth/react';
 import {
-  Eye,
-  Users,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
   Heart,
-  Share2,
-  MoreVertical,
   Star,
   UserPlus,
   UserCheck
 } from 'lucide-react';
 
 interface LiveStreamPageProps {
-  creator: Creator;
+  creator: StreamCreator;
 }
 
 export function LiveStreamPage({ creator }: LiveStreamPageProps) {
@@ -229,8 +220,6 @@ export function LiveStreamPage({ creator }: LiveStreamPageProps) {
       navigator.clipboard.writeText(window.location.href);
     }
   };
-
-  const isPositive = creator.priceChange24h > 0;
 
   return (
     <div className="h-screen lg:h-[calc(100vh-64px)] bg-[#0e0e10] overflow-hidden">

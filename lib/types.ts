@@ -2,6 +2,56 @@ export type BondingCurveType = 'linear' | 'exponential' | 'sigmoid' | 'logarithm
 export type TokenCategory = 'gaming' | 'music' | 'art' | 'sports' | 'education' | 'entertainment' | 'technology' | 'other';
 export type VerificationLevel = 'none' | 'basic' | 'verified' | 'premium';
 
+// ============================================================================
+// Stream Types - For live streaming functionality
+// ============================================================================
+
+/**
+ * Minimal creator data needed for streaming
+ * Used by StreamPlayer, LiveChat, and related components
+ */
+export interface StreamCreator {
+  id: string;
+  name: string;
+  symbol: string; // Room name for LiveKit connection
+  avatar: string;
+  description?: string;
+  isLive: boolean;
+  viewers?: number;
+  isVerified?: boolean;
+}
+
+/**
+ * Helper to create a StreamCreator from user stream data
+ */
+export function createStreamCreator(data: {
+  userId: string;
+  username: string | null;
+  avatar: string | null;
+  roomName: string;
+  title?: string;
+  isLive?: boolean;
+  viewers?: number;
+}): StreamCreator {
+  return {
+    id: data.userId,
+    name: data.username || 'Anonymous',
+    symbol: data.roomName,
+    avatar: data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg',
+    description: data.title,
+    isLive: data.isLive ?? true,
+    viewers: data.viewers ?? 0,
+  };
+}
+
+// ============================================================================
+// Token/Trading Types - For creator token functionality
+// ============================================================================
+
+/**
+ * Full creator token data including trading metrics
+ * @deprecated Consider using StreamCreator for streaming-only features
+ */
 export interface Creator {
   id: string;
   name: string;

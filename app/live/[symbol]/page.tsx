@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { notFound } from 'next/navigation';
 import { LiveStreamPage } from '@/components/pages/LiveStreamPage';
-import { Creator } from '@/lib/types';
+import { createStreamCreator } from '@/lib/types';
 
 interface LivePageProps {
   params: Promise<{
@@ -80,25 +80,16 @@ export default function LivePage({ params }: LivePageProps) {
     notFound();
   }
 
-  // Create a Creator object for the LiveStreamPage
-  const userAsCreator: Creator = {
-    id: userStream.user.id,
-    name: userStream.user.username || 'Anonymous',
-    symbol: userStream.roomName, // Use room name as symbol for LiveKit connection
-    description: userStream.title,
-    avatar: userStream.user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg',
-    price: 0,
-    marketCap: 0,
-    volume24h: 0,
-    priceChange24h: 0,
-    bondingCurve: 0,
-    liquidity: 0,
-    holders: 0,
-    transactions: 0,
+  // Create a StreamCreator for the LiveStreamPage
+  const streamCreator = createStreamCreator({
+    userId: userStream.user.id,
+    username: userStream.user.username,
+    avatar: userStream.user.avatar,
+    roomName: userStream.roomName,
+    title: userStream.title,
     isLive: true,
     viewers: 0,
-    created: new Date().toISOString(),
-  };
+  });
 
-  return <LiveStreamPage creator={userAsCreator} />;
+  return <LiveStreamPage creator={streamCreator} />;
 }
