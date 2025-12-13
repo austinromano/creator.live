@@ -863,9 +863,11 @@ function GoLiveContent() {
         clearInterval(clipTimerRef.current);
       }
 
-      // Clean up cloned stream
+      // Clean up cloned stream - only stop audio tracks, not video
+      // Stopping cloned canvas capture video tracks can freeze the source stream in some browsers
       if (clipStreamRef.current) {
-        clipStreamRef.current.getTracks().forEach(track => track.stop());
+        clipStreamRef.current.getAudioTracks().forEach(track => track.stop());
+        // Don't stop video tracks - let them get garbage collected
         clipStreamRef.current = null;
       }
 
