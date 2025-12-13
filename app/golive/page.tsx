@@ -832,15 +832,15 @@ function GoLiveContent() {
     // Log final recording stream
     console.log(`[Clip] Final stream: ${recordStream.getVideoTracks().length} video, ${recordStream.getAudioTracks().length} audio`);
 
-    // Get supported MIME type - prefer hardware-accelerated codecs first
-    // H.264 (via mp4) often has hardware encoding support
-    // VP8 is faster than VP9 for encoding (less CPU)
+    // Get supported MIME type - VP8 is fastest for encoding, VP9 is higher quality
+    // Note: H.264 requires MP4 container, not WebM
     const mimeTypes = [
-      'video/webm;codecs=h264,opus', // H.264 often has HW encoding
-      'video/webm;codecs=vp8,opus',  // VP8 is faster than VP9
+      'video/webm;codecs=vp8,opus',  // VP8 is fast and well-supported
       'video/webm;codecs=vp9,opus',  // VP9 higher quality but slower
       'video/webm;codecs=vp8',
+      'video/webm;codecs=vp9',
       'video/webm',
+      'video/mp4;codecs=h264,aac',   // H.264 with MP4 container (Safari)
       'video/mp4',
     ];
     const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
