@@ -115,6 +115,9 @@ function RemoteContent() {
   const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
   const [isPostingClip, setIsPostingClip] = useState(false);
 
+  // Toast notification state (non-blocking, mobile-friendly)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
   const username = user?.name || 'Creator';
   const roomFromUrl = searchParams.get('room');
 
@@ -487,6 +490,21 @@ function RemoteContent() {
     await roomRef.current.localParticipant.publishData(data, { reliable: true });
   };
 
+  // Show toast notification (auto-dismiss after 3s)
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Resume video playback after modal closes (mobile browsers can pause it)
+  const resumeVideoPlayback = () => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {
+        // Ignore autoplay errors
+      });
+    }
+  };
+
   // Clip posting functions
   const postClip = async () => {
     if (!clipMediaUrl) return;
@@ -514,14 +532,16 @@ function RemoteContent() {
 
       if (response.ok) {
         cancelClip();
-        alert('Clip posted successfully!');
+        showToast('Clip posted!', 'success');
+        // Resume video after modal closes
+        setTimeout(resumeVideoPlayback, 100);
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to post clip');
+        showToast(data.error || 'Failed to post clip', 'error');
       }
     } catch (error) {
       console.error('Error posting clip:', error);
-      alert('Failed to post clip');
+      showToast('Failed to post clip', 'error');
     } finally {
       setIsPostingClip(false);
     }
@@ -1144,6 +1164,15 @@ function RemoteContent() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg ${
+          toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        } text-white font-medium animate-in fade-in slide-in-from-top-2 duration-200`}>
+          {toast.message}
         </div>
       )}
     </div>
