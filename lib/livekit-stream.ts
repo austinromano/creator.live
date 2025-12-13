@@ -229,10 +229,10 @@ export class LiveKitStreamer {
     // Get publisher token
     const token = await this.getToken(`broadcaster-${Date.now()}`, true);
 
-    // Create and connect to room
+    // Create and connect to room with optimized settings for smooth streaming
     this.room = new Room({
-      adaptiveStream: true,
-      dynacast: true,
+      adaptiveStream: false, // Disable adaptive for consistent quality
+      dynacast: false, // Disable dynacast for lower latency
       videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,
       },
@@ -265,9 +265,13 @@ export class LiveKitStreamer {
       const localVideoTrack = new LocalVideoTrack(videoTrack);
       await this.room.localParticipant.publishTrack(localVideoTrack, {
         name: 'camera',
-        simulcast: true,
+        simulcast: false, // Disable simulcast for smoother streaming
+        videoEncoding: {
+          maxBitrate: 2_500_000, // 2.5 Mbps for smooth 720p
+          maxFramerate: 30,
+        },
       });
-      console.log(`[${this.streamId}] Published video track`);
+      console.log(`[${this.streamId}] Published video track (optimized)`);
     }
 
     if (audioTrack) {
