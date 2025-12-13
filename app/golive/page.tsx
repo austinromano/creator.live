@@ -439,9 +439,9 @@ function GoLiveContent() {
         clearInterval(thumbnailIntervalRef.current);
         thumbnailIntervalRef.current = null;
       }
-      // Clear composite animation interval
+      // Cancel composite animation frame
       if (compositeAnimationRef.current) {
-        clearInterval(compositeAnimationRef.current);
+        cancelAnimationFrame(compositeAnimationRef.current);
         compositeAnimationRef.current = null;
       }
       // Close audio context
@@ -761,41 +761,48 @@ function GoLiveContent() {
     // Build a recording stream from original sources (not WebRTC compressed)
     let recordStream = new MediaStream();
 
+    console.log('[Clip] Starting clip...', {
+      screenSharing,
+      hasCompositeStream: !!compositeStreamRef.current,
+      hasStreamRef: !!streamRef.current,
+    });
+
     if (screenSharing && compositeStreamRef.current) {
       // When screen sharing, reuse the existing composite stream (don't call captureStream again!)
       // Calling captureStream() multiple times on the same canvas can stop the previous stream
       const videoTrack = compositeStreamRef.current.getVideoTracks()[0];
-      if (videoTrack && videoTrack.readyState === 'live') {
+      console.log('[Clip] Composite video track:', videoTrack?.readyState);
+      if (videoTrack) {
         recordStream.addTrack(videoTrack.clone());
         console.log('[Clip] Added video from existing composite stream');
       } else {
-        console.error('[Clip] Composite video track not available or ended');
-        return;
+        console.error('[Clip] Composite video track not available');
       }
 
       // Add mic audio (cloned)
       const micTrack = streamRef.current?.getAudioTracks()[0];
-      if (micTrack && micTrack.readyState === 'live') {
+      console.log('[Clip] Mic track:', micTrack?.readyState);
+      if (micTrack) {
         recordStream.addTrack(micTrack.clone());
         console.log('[Clip] Added mic audio');
       }
 
       // Add desktop audio if available (cloned)
-      if (desktopAudioTrackRef.current && desktopAudioTrackRef.current.readyState === 'live') {
+      console.log('[Clip] Desktop audio track:', desktopAudioTrackRef.current?.readyState);
+      if (desktopAudioTrackRef.current) {
         recordStream.addTrack(desktopAudioTrackRef.current.clone());
         console.log('[Clip] Added desktop audio');
       }
     } else if (streamRef.current) {
       // Normal camera mode - clone tracks from camera stream
-      // Only clone tracks that are live
+      console.log('[Clip] Camera mode - tracks:', streamRef.current.getTracks().map(t => `${t.kind}:${t.readyState}`));
       streamRef.current.getTracks().forEach(track => {
-        if (track.readyState === 'live') {
-          recordStream.addTrack(track.clone());
-        } else {
-          console.warn(`[Clip] Skipping ${track.kind} track - not live`);
-        }
+        recordStream.addTrack(track.clone());
       });
       console.log('[Clip] Recording from camera stream (cloned)');
+    } else {
+      console.error('[Clip] No stream available for recording');
+      return;
     }
 
     if (recordStream.getTracks().length === 0) {
@@ -876,9 +883,12 @@ function GoLiveContent() {
     clipChunksRef.current = [];
 
     clipRecorder.ondataavailable = (event) => {
+      console.log(`[Clip] ondataavailable fired, size: ${event.data.size}`);
       if (event.data.size > 0) {
         clipChunksRef.current.push(event.data);
         console.log(`[Clip] Chunk received: ${(event.data.size / 1024).toFixed(1)} KB, total chunks: ${clipChunksRef.current.length}`);
+      } else {
+        console.warn('[Clip] Empty chunk received - no data being recorded');
       }
     };
 
@@ -900,8 +910,13 @@ function GoLiveContent() {
     });
 
     clipRecorder.onstop = async () => {
+      console.log('[Clip] onstop fired, chunks collected:', clipChunksRef.current.length);
+      if (clipChunksRef.current.length === 0) {
+        console.error('[Clip] No chunks recorded - recording failed');
+        return;
+      }
       const blob = new Blob(clipChunksRef.current, { type: mimeType });
-      console.log(`[Clip] Recording complete: ${(blob.size / 1024 / 1024).toFixed(2)} MB, chunks: ${clipChunksRef.current.length}`);
+      console.log(`[Clip] Recording complete: ${(blob.size / 1024 / 1024).toFixed(2)} MB, type: ${blob.type}`);
 
       if (clipTimerRef.current) {
         clearInterval(clipTimerRef.current);
@@ -995,7 +1010,7 @@ function GoLiveContent() {
     // Smaller = better audio sync but more CPU, Larger = less CPU but potential sync drift
     clipRecorder.start(250);
     setIsClipping(true);
-    console.log('[Clip] Recording started with optimized 250ms timeslice');
+    console.log('[Clip] Recording started, state:', clipRecorder.state, 'mimeType:', mimeType);
 
     // Start clip timer
     // Max clip duration: 60 seconds to prevent memory issues
