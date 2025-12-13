@@ -753,6 +753,9 @@ function GoLiveContent() {
   // Ref to store cloned stream for recording
   const clipStreamRef = React.useRef<MediaStream | null>(null);
 
+  // Ref to store AudioContext during recording (prevent garbage collection)
+  const clipAudioContextRef = React.useRef<AudioContext | null>(null);
+
   // Live stream clipping functions - records from original high-quality streams
   const startClip = () => {
     // Build a recording stream from original sources (not WebRTC compressed)
@@ -761,27 +764,36 @@ function GoLiveContent() {
     if (screenSharing && compositeStreamRef.current) {
       // When screen sharing, reuse the existing composite stream (don't call captureStream again!)
       // Calling captureStream() multiple times on the same canvas can stop the previous stream
-      compositeStreamRef.current.getVideoTracks().forEach(track => {
-        recordStream.addTrack(track.clone());
-      });
-      console.log('[Clip] Added video from existing composite stream');
+      const videoTrack = compositeStreamRef.current.getVideoTracks()[0];
+      if (videoTrack && videoTrack.readyState === 'live') {
+        recordStream.addTrack(videoTrack.clone());
+        console.log('[Clip] Added video from existing composite stream');
+      } else {
+        console.error('[Clip] Composite video track not available or ended');
+        return;
+      }
 
       // Add mic audio (cloned)
       const micTrack = streamRef.current?.getAudioTracks()[0];
-      if (micTrack) {
+      if (micTrack && micTrack.readyState === 'live') {
         recordStream.addTrack(micTrack.clone());
         console.log('[Clip] Added mic audio');
       }
 
       // Add desktop audio if available (cloned)
-      if (desktopAudioTrackRef.current) {
+      if (desktopAudioTrackRef.current && desktopAudioTrackRef.current.readyState === 'live') {
         recordStream.addTrack(desktopAudioTrackRef.current.clone());
         console.log('[Clip] Added desktop audio');
       }
     } else if (streamRef.current) {
       // Normal camera mode - clone tracks from camera stream
+      // Only clone tracks that are live
       streamRef.current.getTracks().forEach(track => {
-        recordStream.addTrack(track.clone());
+        if (track.readyState === 'live') {
+          recordStream.addTrack(track.clone());
+        } else {
+          console.warn(`[Clip] Skipping ${track.kind} track - not live`);
+        }
       });
       console.log('[Clip] Recording from camera stream (cloned)');
     }
@@ -791,15 +803,21 @@ function GoLiveContent() {
       return;
     }
 
+    // Verify we have at least a video track
+    if (recordStream.getVideoTracks().length === 0) {
+      console.error('[Clip] No video track available for recording');
+      return;
+    }
+
     // If multiple audio tracks, mix them into one using Web Audio API
     const audioTracks = recordStream.getAudioTracks();
-    // Keep track of source tracks to stop after recording (NOT before - that kills the audio)
-    const sourceAudioTracks: MediaStreamTrack[] = [];
 
     if (audioTracks.length > 1) {
       console.log(`[Clip] Mixing ${audioTracks.length} audio tracks into one`);
       try {
+        // Store AudioContext in ref to prevent garbage collection during recording
         const audioContext = new AudioContext();
+        clipAudioContextRef.current = audioContext;
         const destination = audioContext.createMediaStreamDestination();
 
         audioTracks.forEach((track) => {
@@ -808,8 +826,6 @@ function GoLiveContent() {
           gain.gain.value = 0.7; // Reduce gain to prevent clipping when mixing
           source.connect(gain);
           gain.connect(destination);
-          // Store track for later cleanup - DON'T stop it yet!
-          sourceAudioTracks.push(track);
         });
 
         // Remove original audio tracks from record stream (but keep them alive for the AudioContext sources!)
@@ -829,8 +845,10 @@ function GoLiveContent() {
     clipChunksRef.current = [];
     setClipTime(0);
 
-    // Log final recording stream
-    console.log(`[Clip] Final stream: ${recordStream.getVideoTracks().length} video, ${recordStream.getAudioTracks().length} audio`);
+    // Log final recording stream with track states
+    const videoTracks = recordStream.getVideoTracks();
+    const finalAudioTracks = recordStream.getAudioTracks();
+    console.log(`[Clip] Final stream: ${videoTracks.length} video (${videoTracks[0]?.readyState}), ${finalAudioTracks.length} audio`);
 
     // Get supported MIME type - VP8 is fastest for encoding, VP9 is higher quality
     // Note: H.264 requires MP4 container, not WebM
@@ -846,28 +864,58 @@ function GoLiveContent() {
     const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
     console.log('[Clip] Using mime type:', mimeType);
 
-    // Create MediaRecorder with optimized settings for smooth recording
+    // Create MediaRecorder with settings optimized for longer clips (up to 60s)
+    // 4 Mbps × 60s = 30MB max, reasonable for upload
     const clipRecorder = new MediaRecorder(recordStream, {
       mimeType,
-      videoBitsPerSecond: 6_000_000, // 6 Mbps for high quality clips
+      videoBitsPerSecond: 4_000_000, // 4 Mbps - good quality, reasonable file size
       audioBitsPerSecond: 128_000,   // 128 kbps audio
     });
 
-    // Pre-allocate array capacity for smoother memory allocation
+    // Pre-allocate array for chunks
     clipChunksRef.current = [];
 
     clipRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
         clipChunksRef.current.push(event.data);
+        console.log(`[Clip] Chunk received: ${(event.data.size / 1024).toFixed(1)} KB, total chunks: ${clipChunksRef.current.length}`);
       }
     };
 
+    // Add error handler to detect recording failures
+    clipRecorder.onerror = (event: Event) => {
+      console.error('[Clip] MediaRecorder error:', event);
+      // Clean up on error
+      setIsClipping(false);
+      if (clipTimerRef.current) {
+        clearInterval(clipTimerRef.current);
+      }
+    };
+
+    // Monitor for track ending during recording
+    recordStream.getTracks().forEach(track => {
+      track.onended = () => {
+        console.warn(`[Clip] Track ${track.kind} ended during recording`);
+      };
+    });
+
     clipRecorder.onstop = async () => {
       const blob = new Blob(clipChunksRef.current, { type: mimeType });
-      console.log(`[Clip] Recording complete: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`[Clip] Recording complete: ${(blob.size / 1024 / 1024).toFixed(2)} MB, chunks: ${clipChunksRef.current.length}`);
 
       if (clipTimerRef.current) {
         clearInterval(clipTimerRef.current);
+      }
+
+      // Clean up AudioContext to prevent memory leaks
+      if (clipAudioContextRef.current) {
+        try {
+          await clipAudioContextRef.current.close();
+          console.log('[Clip] AudioContext closed');
+        } catch (e) {
+          console.warn('[Clip] AudioContext close error:', e);
+        }
+        clipAudioContextRef.current = null;
       }
 
       // Clean up cloned stream - only stop audio tracks, not video
@@ -876,6 +924,12 @@ function GoLiveContent() {
         clipStreamRef.current.getAudioTracks().forEach(track => track.stop());
         // Don't stop video tracks - let them get garbage collected
         clipStreamRef.current = null;
+      }
+
+      // Validate blob before upload
+      if (blob.size < 1000) {
+        console.error('[Clip] Recording failed - blob too small:', blob.size);
+        return;
       }
 
       // Upload clip to server and send URL to remote
@@ -944,14 +998,32 @@ function GoLiveContent() {
     console.log('[Clip] Recording started with optimized 250ms timeslice');
 
     // Start clip timer
+    // Max clip duration: 60 seconds to prevent memory issues
+    const MAX_CLIP_DURATION = 60;
     clipTimerRef.current = setInterval(() => {
-      setClipTime((prev) => prev + 1);
+      setClipTime((prev) => {
+        const newTime = prev + 1;
+        // Auto-stop at max duration
+        if (newTime >= MAX_CLIP_DURATION) {
+          console.log('[Clip] Max duration reached, auto-stopping');
+          stopClip();
+        }
+        return newTime;
+      });
     }, 1000);
   };
 
   const stopClip = () => {
     if (clipRecorderRef.current && isClipping) {
-      clipRecorderRef.current.stop();
+      try {
+        // Request any pending data before stopping to ensure all chunks are captured
+        if (clipRecorderRef.current.state === 'recording') {
+          clipRecorderRef.current.requestData();
+        }
+        clipRecorderRef.current.stop();
+      } catch (e) {
+        console.error('[Clip] Error stopping recorder:', e);
+      }
       setIsClipping(false);
       if (clipTimerRef.current) {
         clearInterval(clipTimerRef.current);
