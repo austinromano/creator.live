@@ -127,6 +127,7 @@ function GoLiveContent() {
   const pipVideoRef = React.useRef<HTMLVideoElement>(null);
   const compositeCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const compositeAnimationRef = React.useRef<number | null>(null);
+  const compositeStreamRef = React.useRef<MediaStream | null>(null); // Store canvas capture stream to avoid multiple captureStream() calls
   const mixedAudioContextRef = React.useRef<AudioContext | null>(null);
   const mixedAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
   const originalMicTrackRef = React.useRef<MediaStreamTrack | null>(null);
@@ -757,13 +758,13 @@ function GoLiveContent() {
     // Build a recording stream from original sources (not WebRTC compressed)
     let recordStream = new MediaStream();
 
-    if (screenSharing && compositeCanvasRef.current) {
-      // When screen sharing, capture from the composite canvas
-      const canvasStream = compositeCanvasRef.current.captureStream(30);
-      canvasStream.getVideoTracks().forEach(track => {
+    if (screenSharing && compositeStreamRef.current) {
+      // When screen sharing, reuse the existing composite stream (don't call captureStream again!)
+      // Calling captureStream() multiple times on the same canvas can stop the previous stream
+      compositeStreamRef.current.getVideoTracks().forEach(track => {
         recordStream.addTrack(track.clone());
       });
-      console.log('[Clip] Added video from composite canvas');
+      console.log('[Clip] Added video from existing composite stream');
 
       // Add mic audio (cloned)
       const micTrack = streamRef.current?.getAudioTracks()[0];
@@ -1535,6 +1536,7 @@ function GoLiveContent() {
       clearInterval(compositeAnimationRef.current);
       compositeAnimationRef.current = null;
     }
+    compositeStreamRef.current = null;
   };
 
   const startCompositeStream = async (screenStream: MediaStream, cameraStream: MediaStream) => {
@@ -1665,8 +1667,9 @@ function GoLiveContent() {
     // Store interval ID for cleanup
     compositeAnimationRef.current = frameInterval as unknown as number;
 
-    // Get stream from canvas at 30fps
+    // Get stream from canvas at 30fps - store it so we can reuse for clipping
     const compositeStream = canvas.captureStream(30);
+    compositeStreamRef.current = compositeStream;
     return compositeStream.getVideoTracks()[0];
   };
 
