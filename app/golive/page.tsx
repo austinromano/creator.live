@@ -43,6 +43,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { RoomEvent } from 'livekit-client';
 import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
+import { supabase, POSTS_BUCKET } from '@/lib/supabase';
 
 // Friend data from /api/user/friends
 interface Friend {
@@ -1011,20 +1012,19 @@ function GoLiveContent() {
             throw new Error(errorData.error || 'Failed to get upload URL');
           }
 
-          const { signedUrl, publicUrl, token } = await signedUrlResponse.json();
+          const { signedUrl, publicUrl, token, path } = await signedUrlResponse.json();
           console.log('[Clip] Got signed URL, uploading directly to Supabase...');
 
-          // Step 2: Upload directly to Supabase (bypasses Vercel limit!)
-          const uploadResponse = await fetch(signedUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': blob.type,
-            },
-            body: blob,
-          });
+          // Step 2: Upload directly to Supabase using the SDK (bypasses Vercel limit!)
+          const { error: uploadError } = await supabase.storage
+            .from(POSTS_BUCKET)
+            .uploadToSignedUrl(path, token, blob, {
+              contentType: blob.type,
+            });
 
-          if (!uploadResponse.ok) {
-            throw new Error(`Direct upload failed: ${uploadResponse.status}`);
+          if (uploadError) {
+            console.error('[Clip] Direct upload error:', uploadError);
+            throw new Error(`Direct upload failed: ${uploadError.message}`);
           }
 
           console.log('[Clip] Direct upload complete:', publicUrl);
