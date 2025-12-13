@@ -989,42 +989,66 @@ function GoLiveContent() {
           console.log('[Clip] clip_ready sent - modal should open on remote');
         }
 
-        // BACKGROUND: Upload while user edits caption/price
+        // BACKGROUND: Upload directly to Supabase (bypasses Vercel's 4.5MB limit)
         setIsUploadingClip(true);
         try {
           // Generate thumbnail from local URL
           const thumbnail = await generateThumbnail(localUrl);
 
-          // Upload to server
-          const formData = new FormData();
-          formData.append('file', blob, 'clip.webm');
-          if (thumbnail) {
-            formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
-          }
-
-          console.log('[Clip] Starting background upload...');
-          const uploadResponse = await fetch('/api/clips/upload', {
+          // Step 1: Get signed URL from our API (small request, no file data)
+          console.log('[Clip] Getting signed URL for direct upload...');
+          const signedUrlResponse = await fetch('/api/clips/signed-url', {
             method: 'POST',
-            body: formData,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileType: blob.type,
+              fileSize: blob.size,
+            }),
           });
 
-          if (uploadResponse.ok) {
-            const { mediaUrl, thumbnailUrl } = await uploadResponse.json();
-            console.log('[Clip] Upload complete:', mediaUrl);
-
-            await sendToRemote({
-              type: 'clip_upload_complete',
-              payload: { mediaUrl, thumbnailUrl, success: true },
-            });
-            console.log('[Clip] Sent upload complete to remote');
-          } else {
-            const errorText = await uploadResponse.text();
-            console.error('[Clip] Upload failed:', uploadResponse.status, errorText);
-            await sendToRemote({
-              type: 'clip_upload_complete',
-              payload: { success: false, error: `Upload failed: ${uploadResponse.status}` },
-            });
+          if (!signedUrlResponse.ok) {
+            const errorData = await signedUrlResponse.json();
+            throw new Error(errorData.error || 'Failed to get upload URL');
           }
+
+          const { signedUrl, publicUrl, token } = await signedUrlResponse.json();
+          console.log('[Clip] Got signed URL, uploading directly to Supabase...');
+
+          // Step 2: Upload directly to Supabase (bypasses Vercel limit!)
+          const uploadResponse = await fetch(signedUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': blob.type,
+            },
+            body: blob,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error(`Direct upload failed: ${uploadResponse.status}`);
+          }
+
+          console.log('[Clip] Direct upload complete:', publicUrl);
+
+          // Step 3: Upload thumbnail through API (it's small, under 4.5MB)
+          let thumbnailUrl: string | null = null;
+          if (thumbnail) {
+            const thumbFormData = new FormData();
+            thumbFormData.append('thumbnail', thumbnail, 'thumbnail.jpg');
+            const thumbResponse = await fetch('/api/clips/upload-thumbnail', {
+              method: 'POST',
+              body: thumbFormData,
+            });
+            if (thumbResponse.ok) {
+              const thumbData = await thumbResponse.json();
+              thumbnailUrl = thumbData.thumbnailUrl;
+            }
+          }
+
+          await sendToRemote({
+            type: 'clip_upload_complete',
+            payload: { mediaUrl: publicUrl, thumbnailUrl, success: true },
+          });
+          console.log('[Clip] Sent upload complete to remote');
         } catch (error) {
           console.error('[Clip] Error uploading:', error);
           await sendToRemote({
