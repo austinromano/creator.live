@@ -112,8 +112,12 @@ function RemoteContent() {
   // Recording happens on desktop for better quality
   // Clip modal state (shown when desktop sends clip_ready)
   const [showClipModal, setShowClipModal] = useState(false);
-  const [clipMediaUrl, setClipMediaUrl] = useState<string | null>(null);
+  const [clipLocalUrl, setClipLocalUrl] = useState<string | null>(null);     // Local blob URL for instant preview
+  const [clipMediaUrl, setClipMediaUrl] = useState<string | null>(null);     // Server URL after upload
   const [clipThumbnailUrl, setClipThumbnailUrl] = useState<string | null>(null);
+  const [clipUploading, setClipUploading] = useState(false);                 // Upload in progress
+  const [clipUploadError, setClipUploadError] = useState<string | null>(null);
+  const [clipFileSize, setClipFileSize] = useState<number>(0);               // File size in MB
   const [clipCaption, setClipCaption] = useState('');
   const [clipPrice, setClipPrice] = useState('');
   const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
@@ -372,11 +376,31 @@ function RemoteContent() {
           } else if (message.type === 'activity') {
             setActivityEvents(prev => [...prev, message.payload as LiveKitActivityEvent]);
           } else if (message.type === 'clip_ready') {
-            // Desktop finished recording and uploading clip, show post modal
-            console.log('[Remote] Received clip_ready:', message.payload);
-            setClipMediaUrl(message.payload.mediaUrl);
-            setClipThumbnailUrl(message.payload.thumbnailUrl);
+            // Desktop recorded clip - show modal IMMEDIATELY with local preview
+            // Instagram/TikTok pattern: preview while uploading in background
+            console.log('[Remote] Received clip_ready (instant preview):', message.payload);
+            setClipLocalUrl(message.payload.localUrl);
+            setClipMediaUrl(message.payload.mediaUrl);  // null initially
+            setClipThumbnailUrl(message.payload.thumbnailUrl);  // null initially
+            setClipUploading(message.payload.uploading || false);
+            setClipFileSize(message.payload.fileSize || 0);
+            setClipUploadError(null);
+            setClipCaption('');
+            setClipPrice('');
+            setClipPostType('free');
             setShowClipModal(true);
+          } else if (message.type === 'clip_upload_complete') {
+            // Desktop finished uploading - enable posting
+            console.log('[Remote] Received clip_upload_complete:', message.payload);
+            if (message.payload.success) {
+              setClipMediaUrl(message.payload.mediaUrl);
+              setClipThumbnailUrl(message.payload.thumbnailUrl);
+              setClipUploading(false);
+              setClipUploadError(null);
+            } else {
+              setClipUploading(false);
+              setClipUploadError(message.payload.error || 'Upload failed');
+            }
           }
         } catch (e) {
           // Ignore non-JSON messages
@@ -552,8 +576,12 @@ function RemoteContent() {
   };
 
   const cancelClip = () => {
+    setClipLocalUrl(null);
     setClipMediaUrl(null);
     setClipThumbnailUrl(null);
+    setClipUploading(false);
+    setClipUploadError(null);
+    setClipFileSize(0);
     setClipCaption('');
     setClipPrice('');
     setClipPostType('free');
@@ -1113,15 +1141,47 @@ function RemoteContent() {
 
             <h2 className="text-xl font-bold mb-4">Post Clip</h2>
 
-            {/* Video Preview */}
-            {clipMediaUrl && (
-              <div className="mb-4 rounded-lg overflow-hidden bg-black">
+            {/* Video Preview - uses localUrl for instant preview */}
+            {clipLocalUrl && (
+              <div className="mb-4 rounded-lg overflow-hidden bg-black relative">
                 <video
-                  src={clipMediaUrl}
+                  src={clipLocalUrl}
                   controls
                   className="w-full max-h-64 object-contain"
                   playsInline
                 />
+                {/* Upload Progress Overlay */}
+                {clipUploading && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-3 py-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                      <span className="text-white">
+                        Uploading {clipFileSize.toFixed(1)} MB...
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse w-2/3" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upload Error Message */}
+            {clipUploadError && (
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                <p className="text-red-400 text-sm">
+                  Upload failed: {clipUploadError}. Please try recording again.
+                </p>
+              </div>
+            )}
+
+            {/* Upload Success Indicator */}
+            {!clipUploading && clipMediaUrl && !clipUploadError && (
+              <div className="mb-4 p-2 bg-green-500/20 border border-green-500/50 rounded-lg">
+                <p className="text-green-400 text-sm text-center">
+                  ✓ Ready to post
+                </p>
               </div>
             )}
 
@@ -1207,15 +1267,24 @@ function RemoteContent() {
               <Button
                 onClick={postClip}
                 className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                disabled={isPostingClip || status !== 'authenticated'}
+                disabled={isPostingClip || status !== 'authenticated' || clipUploading || !clipMediaUrl || !!clipUploadError}
               >
                 {isPostingClip ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Posting...
                   </>
+                ) : clipUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : clipUploadError ? (
+                  'Upload Failed'
                 ) : status !== 'authenticated' ? (
                   'Sign in to Post'
+                ) : !clipMediaUrl ? (
+                  'Waiting...'
                 ) : (
                   'Post Clip'
                 )}
