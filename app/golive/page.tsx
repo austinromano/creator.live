@@ -910,141 +910,145 @@ function GoLiveContent() {
     });
 
     clipRecorder.onstop = async () => {
-      console.log('[Clip] onstop fired, chunks collected:', clipChunksRef.current.length);
-      if (clipChunksRef.current.length === 0) {
-        console.error('[Clip] No chunks recorded - recording failed');
-        return;
-      }
-      const blob = new Blob(clipChunksRef.current, { type: mimeType });
-      console.log(`[Clip] Recording complete: ${(blob.size / 1024 / 1024).toFixed(2)} MB, type: ${blob.type}`);
-
-      if (clipTimerRef.current) {
-        clearInterval(clipTimerRef.current);
-      }
-
-      // Clean up AudioContext to prevent memory leaks
-      if (clipAudioContextRef.current) {
-        try {
-          await clipAudioContextRef.current.close();
-          console.log('[Clip] AudioContext closed');
-        } catch (e) {
-          console.warn('[Clip] AudioContext close error:', e);
-        }
-        clipAudioContextRef.current = null;
-      }
-
-      // Clean up cloned stream - only stop audio tracks, not video
-      // Stopping cloned canvas capture video tracks can freeze the source stream in some browsers
-      if (clipStreamRef.current) {
-        clipStreamRef.current.getAudioTracks().forEach(track => track.stop());
-        // Don't stop video tracks - let them get garbage collected
-        clipStreamRef.current = null;
-      }
-
-      // Validate blob before processing
-      if (blob.size < 1000) {
-        console.error('[Clip] Recording failed - blob too small:', blob.size);
-        return;
-      }
-
-      // Create local URL for preview IMMEDIATELY
-      const localUrl = URL.createObjectURL(blob);
-      const fileSizeMB = blob.size / 1024 / 1024;
-      console.log(`[Clip] Created local preview URL, size: ${fileSizeMB.toFixed(2)} MB`);
-
-      // INSTANT: Send clip_ready with local URL so modal opens immediately
-      // This is the Instagram/TikTok pattern - show preview while uploading
-      if (livekitStreamerRef.current && isLive) {
-        const room = livekitStreamerRef.current.getRoom();
-        if (room?.localParticipant) {
-          const clipData = {
-            type: 'clip_ready',
-            payload: {
-              localUrl,           // Local blob URL for instant preview
-              mediaUrl: null,     // Will be sent in clip_upload_complete
-              thumbnailUrl: null, // Will be sent in clip_upload_complete
-              duration: clipTime,
-              fileSize: fileSizeMB,
-              uploading: true,    // Indicate upload in progress
-            },
-          };
-          const data = new TextEncoder().encode(JSON.stringify(clipData));
-          await room.localParticipant.publishData(data, { reliable: true });
-          console.log('[Clip] Sent instant preview to remote - modal should open now');
-        }
-      }
-
-      // BACKGROUND: Upload while user edits caption/price
-      setIsUploadingClip(true);
+      // Wrap entire handler in try/catch to ensure errors don't silently fail
       try {
-        // Generate thumbnail from local URL
-        const thumbnail = await generateThumbnail(localUrl);
+        console.log('[Clip] onstop fired, chunks collected:', clipChunksRef.current.length);
 
-        // Upload to server
-        const formData = new FormData();
-        formData.append('file', blob, 'clip.webm');
-        if (thumbnail) {
-          formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
+        if (clipTimerRef.current) {
+          clearInterval(clipTimerRef.current);
+          clipTimerRef.current = null;
         }
 
-        console.log('[Clip] Starting background upload...');
-        const uploadResponse = await fetch('/api/clips/upload', {
-          method: 'POST',
-          body: formData,
+        if (clipChunksRef.current.length === 0) {
+          console.error('[Clip] No chunks recorded - recording failed');
+          return;
+        }
+
+        const blob = new Blob(clipChunksRef.current, { type: mimeType });
+        const fileSizeMB = blob.size / 1024 / 1024;
+        console.log(`[Clip] Recording complete: ${fileSizeMB.toFixed(2)} MB, type: ${blob.type}`);
+
+        // Clean up AudioContext to prevent memory leaks
+        if (clipAudioContextRef.current) {
+          try {
+            await clipAudioContextRef.current.close();
+          } catch (e) {
+            console.warn('[Clip] AudioContext close error:', e);
+          }
+          clipAudioContextRef.current = null;
+        }
+
+        // Clean up cloned stream - only stop audio tracks, not video
+        if (clipStreamRef.current) {
+          clipStreamRef.current.getAudioTracks().forEach(track => track.stop());
+          clipStreamRef.current = null;
+        }
+
+        // Validate blob before processing
+        if (blob.size < 1000) {
+          console.error('[Clip] Recording failed - blob too small:', blob.size);
+          return;
+        }
+
+        // Helper to send data via LiveKit - uses ref to avoid stale closure
+        const sendToRemote = async (messageData: object) => {
+          const room = livekitStreamerRef.current?.getRoom();
+          if (room?.localParticipant) {
+            try {
+              const data = new TextEncoder().encode(JSON.stringify(messageData));
+              await room.localParticipant.publishData(data, { reliable: true });
+              return true;
+            } catch (e) {
+              console.error('[Clip] Failed to send to remote:', e);
+              return false;
+            }
+          }
+          console.warn('[Clip] No room/participant to send to');
+          return false;
+        };
+
+        // INSTANT: Send clip_ready so modal opens immediately on remote
+        // Note: localUrl (blob URL) won't work on remote device, but we show it anyway
+        // for desktop preview. Remote will show "uploading" state until mediaUrl arrives.
+        const localUrl = URL.createObjectURL(blob);
+        console.log(`[Clip] Sending clip_ready to remote, size: ${fileSizeMB.toFixed(2)} MB`);
+
+        const sentReady = await sendToRemote({
+          type: 'clip_ready',
+          payload: {
+            localUrl,           // Works on desktop, remote shows placeholder
+            mediaUrl: null,     // Will be sent after upload
+            thumbnailUrl: null,
+            duration: clipTime,
+            fileSize: fileSizeMB,
+            uploading: true,
+          },
         });
 
-        if (uploadResponse.ok) {
-          const { mediaUrl, thumbnailUrl } = await uploadResponse.json();
-          console.log('[Clip] Background upload complete:', mediaUrl);
+        if (sentReady) {
+          console.log('[Clip] clip_ready sent - modal should open on remote');
+        }
 
-          // Send upload complete message to remote
-          if (livekitStreamerRef.current && isLive) {
-            const room = livekitStreamerRef.current.getRoom();
-            if (room?.localParticipant) {
-              const completeData = {
-                type: 'clip_upload_complete',
-                payload: {
-                  mediaUrl,
-                  thumbnailUrl,
-                  success: true,
-                },
-              };
-              const data = new TextEncoder().encode(JSON.stringify(completeData));
-              await room.localParticipant.publishData(data, { reliable: true });
-              console.log('[Clip] Sent upload complete to remote - Post button should enable');
-            }
+        // BACKGROUND: Upload while user edits caption/price
+        setIsUploadingClip(true);
+        try {
+          // Generate thumbnail from local URL
+          const thumbnail = await generateThumbnail(localUrl);
+
+          // Upload to server
+          const formData = new FormData();
+          formData.append('file', blob, 'clip.webm');
+          if (thumbnail) {
+            formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
           }
-        } else {
-          console.error('[Clip] Upload failed');
-          // Notify remote of failure
-          if (livekitStreamerRef.current && isLive) {
-            const room = livekitStreamerRef.current.getRoom();
-            if (room?.localParticipant) {
-              const failData = {
-                type: 'clip_upload_complete',
-                payload: { success: false, error: 'Upload failed' },
-              };
-              const data = new TextEncoder().encode(JSON.stringify(failData));
-              await room.localParticipant.publishData(data, { reliable: true });
-            }
+
+          console.log('[Clip] Starting background upload...');
+          const uploadResponse = await fetch('/api/clips/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (uploadResponse.ok) {
+            const { mediaUrl, thumbnailUrl } = await uploadResponse.json();
+            console.log('[Clip] Upload complete:', mediaUrl);
+
+            await sendToRemote({
+              type: 'clip_upload_complete',
+              payload: { mediaUrl, thumbnailUrl, success: true },
+            });
+            console.log('[Clip] Sent upload complete to remote');
+          } else {
+            const errorText = await uploadResponse.text();
+            console.error('[Clip] Upload failed:', uploadResponse.status, errorText);
+            await sendToRemote({
+              type: 'clip_upload_complete',
+              payload: { success: false, error: `Upload failed: ${uploadResponse.status}` },
+            });
           }
+        } catch (error) {
+          console.error('[Clip] Error uploading:', error);
+          await sendToRemote({
+            type: 'clip_upload_complete',
+            payload: { success: false, error: String(error) },
+          });
+        } finally {
+          setIsUploadingClip(false);
         }
       } catch (error) {
-        console.error('[Clip] Error uploading:', error);
-        // Notify remote of failure
-        if (livekitStreamerRef.current && isLive) {
-          const room = livekitStreamerRef.current.getRoom();
+        console.error('[Clip] CRITICAL: onstop handler failed:', error);
+        // Try to notify remote even if everything else failed
+        try {
+          const room = livekitStreamerRef.current?.getRoom();
           if (room?.localParticipant) {
-            const failData = {
+            const data = new TextEncoder().encode(JSON.stringify({
               type: 'clip_upload_complete',
-              payload: { success: false, error: String(error) },
-            };
-            const data = new TextEncoder().encode(JSON.stringify(failData));
+              payload: { success: false, error: 'Recording processing failed' },
+            }));
             await room.localParticipant.publishData(data, { reliable: true });
           }
+        } catch (e) {
+          console.error('[Clip] Failed to notify remote of error:', e);
         }
-      } finally {
-        setIsUploadingClip(false);
       }
     };
 

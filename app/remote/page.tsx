@@ -1141,40 +1141,47 @@ function RemoteContent() {
 
             <h2 className="text-xl font-bold mb-4">Post Clip</h2>
 
-            {/* Video Preview - uses localUrl for instant preview */}
-            {clipLocalUrl && (
-              <div className="mb-4 rounded-lg overflow-hidden bg-black relative">
+            {/* Video Preview - show uploaded video or uploading placeholder */}
+            <div className="mb-4 rounded-lg overflow-hidden bg-black relative">
+              {/* Show video once uploaded (mediaUrl available) */}
+              {clipMediaUrl ? (
                 <video
-                  src={clipLocalUrl}
+                  src={clipMediaUrl}
                   controls
                   className="w-full max-h-64 object-contain"
                   playsInline
                 />
-                {/* Upload Progress Overlay */}
-                {clipUploading && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-3 py-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
-                      <span className="text-white">
-                        Uploading {clipFileSize.toFixed(1)} MB...
-                      </span>
-                    </div>
-                    <div className="mt-1 h-1 bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse w-2/3" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Upload Error Message */}
-            {clipUploadError && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
-                <p className="text-red-400 text-sm">
-                  Upload failed: {clipUploadError}. Please try recording again.
-                </p>
-              </div>
-            )}
+              ) : (
+                /* Uploading placeholder - blob URL won't work across devices */
+                <div className="w-full h-48 flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/50 to-pink-900/50">
+                  {clipUploading ? (
+                    <>
+                      <div className="relative mb-4">
+                        <div className="w-16 h-16 border-4 border-purple-500/30 rounded-full" />
+                        <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-purple-500 rounded-full animate-spin" />
+                        <Video className="absolute inset-0 m-auto h-6 w-6 text-purple-400" />
+                      </div>
+                      <p className="text-white font-medium">Uploading clip...</p>
+                      <p className="text-gray-400 text-sm mt-1">{clipFileSize.toFixed(1)} MB</p>
+                      <div className="w-48 mt-3 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse" style={{ width: '60%' }} />
+                      </div>
+                    </>
+                  ) : clipUploadError ? (
+                    <>
+                      <X className="h-12 w-12 text-red-400 mb-2" />
+                      <p className="text-red-400 font-medium">Upload failed</p>
+                      <p className="text-gray-400 text-sm mt-1 text-center px-4">{clipUploadError}</p>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-8 w-8 text-purple-400 animate-spin mb-2" />
+                      <p className="text-gray-400">Processing...</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Upload Success Indicator */}
             {!clipUploading && clipMediaUrl && !clipUploadError && (
