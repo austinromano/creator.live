@@ -30,10 +30,13 @@ import {
   DollarSign,
   Lock,
   Globe,
+  Radio,
 } from 'lucide-react';
 import { Room, RoomEvent } from 'livekit-client';
 import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
+import { AuthModal } from '@/components/auth/AuthModal';
+import { useAuthStore } from '@/stores/authStore';
 
 interface Friend {
   id: string;
@@ -67,6 +70,7 @@ function RemoteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = session?.user;
+  const { setShowAuthModal } = useAuthStore();
 
   // Connection state
   const [connected, setConnected] = useState(false);
@@ -591,6 +595,60 @@ function RemoteContent() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      </div>
+    );
+  }
+
+  // Show sign-in prompt when user scans QR code but is not authenticated
+  if (status === 'unauthenticated' && roomFromUrl) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6">
+        <AuthModal />
+
+        <div className="text-center space-y-6 max-w-sm">
+          {/* Logo/Icon */}
+          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
+            <Radio className="h-10 w-10 text-white" />
+          </div>
+
+          {/* Title */}
+          <div>
+            <h1 className="text-2xl font-bold text-white mb-2">Remote Control</h1>
+            <p className="text-gray-400">
+              Sign in to control your live broadcast from this device
+            </p>
+          </div>
+
+          {/* Sign In Button */}
+          <Button
+            onClick={() => setShowAuthModal(true)}
+            className="w-full h-14 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+          >
+            Sign In to Continue
+          </Button>
+
+          {/* Features */}
+          <div className="grid grid-cols-3 gap-4 pt-4">
+            <div className="text-center">
+              <div className="mx-auto w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mb-2">
+                <Scissors className="h-5 w-5 text-orange-400" />
+              </div>
+              <span className="text-xs text-gray-400">Clip & Post</span>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mb-2">
+                <Video className="h-5 w-5 text-green-400" />
+              </div>
+              <span className="text-xs text-gray-400">Control Camera</span>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mb-2">
+                <MessageSquare className="h-5 w-5 text-blue-400" />
+              </div>
+              <span className="text-xs text-gray-400">Live Chat</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
