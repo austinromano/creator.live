@@ -915,25 +915,15 @@ function GoLiveContent() {
             }
           }
 
-          // Also set local state for desktop fallback
-          setClipBlob(blob);
-          setClipVideoUrl(localUrl);
-          // Don't show modal on desktop - remote will handle it
-          // But if no remote is connected, show it on desktop
-          // setShowClipModal(true);
+          // Clip modal only shows on mobile (remote) - never on desktop
+          console.log('[Clip] Upload complete, remote will handle posting');
         } else {
           console.error('[Clip] Upload failed');
-          // Fallback: show modal on desktop
-          setClipBlob(blob);
-          setClipVideoUrl(URL.createObjectURL(blob));
-          setShowClipModal(true);
+          // Don't show modal on desktop - just log error
         }
       } catch (error) {
         console.error('[Clip] Error uploading:', error);
-        // Fallback: show modal on desktop
-        setClipBlob(blob);
-        setClipVideoUrl(URL.createObjectURL(blob));
-        setShowClipModal(true);
+        // Don't show modal on desktop - just log error
       } finally {
         setIsUploadingClip(false);
       }
