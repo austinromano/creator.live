@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabaseClient();
     const fileBuffer = await file.arrayBuffer();
 
+    console.log(`[Clips] Uploading ${fileName}, size: ${fileBuffer.byteLength} bytes`);
+
     const { error: uploadError } = await supabase.storage
       .from(POSTS_BUCKET)
       .upload(fileName, fileBuffer, {
@@ -62,7 +64,8 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
+      console.error('[Clips] Supabase upload error:', uploadError);
+      throw new Error(`Failed to upload file: ${uploadError.message} (${uploadError.name})`);
     }
 
     // Get public URL for the uploaded file
