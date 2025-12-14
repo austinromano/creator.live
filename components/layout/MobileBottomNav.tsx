@@ -45,7 +45,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-50 pb-safe">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-black/10 backdrop-blur-[4px] border-t border-white/5 z-50 pb-safe">
       <div className="grid grid-cols-5 h-16">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -59,9 +59,10 @@ export function MobileBottomNav() {
                 className="flex flex-col items-center justify-center pt-2"
               >
                 <div className="relative">
-                  {/* Subtle glow effect */}
-                  <div className="absolute inset-0 w-10 h-10 bg-purple-400 rounded-xl blur-md animate-[pulse_4s_ease-in-out_infinite] opacity-60" />
-                  <div className="relative w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center">
+                  {/* Breathing glow effect */}
+                  <div className="absolute -inset-1 bg-purple-500 rounded-xl blur-md animate-[pulse_2s_ease-in-out_infinite] opacity-70" />
+                  <div className="absolute -inset-0.5 bg-purple-400 rounded-xl blur-sm animate-[pulse_2s_ease-in-out_infinite_0.5s] opacity-50" />
+                  <div className="relative w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50">
                     <Icon className="h-5 w-5 text-white" />
                   </div>
                 </div>
@@ -75,8 +76,8 @@ export function MobileBottomNav() {
               href={item.href}
               className="flex flex-col items-center justify-center pt-2"
             >
-              <Icon className={`h-6 w-6 ${isActive ? 'text-purple-500' : 'text-gray-400'}`} />
-              <span className={`text-[10px] mt-1 ${isActive ? 'text-purple-500' : 'text-gray-400'}`}>
+              <Icon className={`h-6 w-6 ${isActive ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/80'}`} />
+              <span className={`text-[10px] mt-1 ${isActive ? 'text-purple-400' : 'text-white/60'}`}>
                 {item.label}
               </span>
             </Link>
