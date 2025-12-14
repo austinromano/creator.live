@@ -440,6 +440,8 @@ function GoLiveContent() {
       toggleCamera();
     } else if (command === 'toggle_microphone') {
       toggleMicrophone();
+    } else if (command === 'toggle_screen_share') {
+      toggleScreenShare();
     }
   };
 
@@ -456,8 +458,8 @@ function GoLiveContent() {
         state: {
           cameraEnabled,
           microphoneEnabled,
-          screenSharing: false,
-          desktopAudioEnabled: false,
+          screenSharing,
+          desktopAudioEnabled,
           isClipping: false,
           clipTime: 0,
           isLive: false,
@@ -477,7 +479,7 @@ function GoLiveContent() {
     broadcastPreviewState(); // Send immediately
 
     return () => clearInterval(interval);
-  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, audioDevices, selectedAudioDevice]);
+  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, audioDevices, selectedAudioDevice]);
 
   // Fetch friends list
   useEffect(() => {

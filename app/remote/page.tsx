@@ -32,6 +32,8 @@ import {
   Globe,
   Radio,
   Play,
+  Monitor,
+  MonitorOff,
 } from 'lucide-react';
 import { Room, RoomEvent } from 'livekit-client';
 import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
@@ -471,6 +473,7 @@ function RemoteContent() {
   // Control handlers
   const toggleCamera = () => sendCommand('toggle_camera');
   const toggleMicrophone = () => sendCommand('toggle_microphone');
+  const toggleScreenShare = () => sendCommand('toggle_screen_share');
   const toggleDesktopAudio = () => sendCommand('toggle_desktop_audio');
   const stopStream = () => sendCommand('stop_stream');
   const switchMicrophone = (deviceId: string) => sendCommand('switch_microphone', { deviceId });
@@ -925,6 +928,25 @@ function RemoteContent() {
                 <MicOff className="h-6 w-6" />
               )}
               <span className="text-xs">Mic</span>
+            </Button>
+
+            {/* Screen Share */}
+            <Button
+              variant="outline"
+              onClick={toggleScreenShare}
+              disabled={!connected}
+              className={`h-16 flex flex-col items-center justify-center gap-1 ${
+                remoteState.screenSharing
+                  ? 'text-blue-400 border-blue-400'
+                  : 'text-gray-400 border-gray-600'
+              }`}
+            >
+              {remoteState.screenSharing ? (
+                <Monitor className="h-6 w-6" />
+              ) : (
+                <MonitorOff className="h-6 w-6" />
+              )}
+              <span className="text-xs">Screen</span>
             </Button>
 
           {/* Desktop Audio (only when screen sharing) */}
