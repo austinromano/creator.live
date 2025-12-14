@@ -34,7 +34,7 @@ import {
   Play,
 } from 'lucide-react';
 import { Room, RoomEvent } from 'livekit-client';
-import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
+import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -84,14 +84,8 @@ function RemoteContent() {
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const connectionStateRef = useRef<'idle' | 'connecting' | 'connected'>('idle');
 
-  // Preview and Go Live state (for starting stream from remote)
-  const [previewMode, setPreviewMode] = useState(true); // Start in preview mode
-  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
-  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  // Go Live state (for sending go_live command to desktop)
   const [goingLive, setGoingLive] = useState(false);
-  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
-  const livekitStreamerRef = useRef<LiveKitStreamer | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   // Remote state (synced from desktop)
   const [remoteState, setRemoteState] = useState<RemoteState>({
@@ -159,60 +153,6 @@ function RemoteContent() {
         .catch(err => console.error('Error fetching user profile:', err));
     }
   }, [status, user]);
-
-  // Start camera preview when in preview mode
-  useEffect(() => {
-    const startPreview = async () => {
-      // Only start preview when authenticated and in preview mode
-      if (!previewMode || status !== 'authenticated') return;
-      // Don't start if already connected to a stream or if room is in URL
-      if (connected || roomFromUrl) return;
-
-      try {
-        // Stop any existing preview stream
-        if (previewStream) {
-          previewStream.getTracks().forEach(track => track.stop());
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: true,
-        });
-
-        setPreviewStream(stream);
-        if (previewVideoRef.current) {
-          previewVideoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.error('Camera preview access denied:', err);
-        // Try again without audio
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user' },
-            audio: false,
-          });
-          setPreviewStream(stream);
-          if (previewVideoRef.current) {
-            previewVideoRef.current.srcObject = stream;
-          }
-        } catch (err2) {
-          console.error('Camera access completely denied:', err2);
-        }
-      }
-    };
-
-    startPreview();
-
-    return () => {
-      if (previewStream) {
-        previewStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [status, previewMode, connected, roomFromUrl]);
 
   // Fetch friends
   useEffect(() => {
@@ -540,186 +480,24 @@ function RemoteContent() {
   const startClip = () => sendCommand('start_clip');
   const stopClip = () => sendCommand('stop_clip');
 
-  // Go Live - start stream from remote device
+  // Go Live - send command to desktop to start broadcasting
   const handleGoLive = async () => {
-    if (!userData?.username) {
-      showToast('Please wait for profile to load', 'error');
+    if (!connected) {
+      showToast('Not connected to desktop', 'error');
       return;
     }
 
     setGoingLive(true);
     try {
-      console.log('[Remote] Starting Go Live process...');
-
-      // Stop preview and use its stream for broadcasting
-      if (previewStream) {
-        streamRef.current = previewStream;
-      } else {
-        // Get camera stream if preview wasn't started
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-        streamRef.current = stream;
-      }
-
-      // Create stream in database
-      const response = await fetch('/api/stream/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `${userData.username}'s Live Stream`,
-          category: 'IRL',
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to start stream');
-      }
-
-      const data = await response.json();
-      console.log('[Remote] Stream created:', data);
-      setCurrentStreamId(data.stream.id);
-
-      const roomName = data.roomName || `user-${userData.id}`;
-      setCurrentRoomName(roomName);
-
-      // Create LiveKit streamer and start broadcast
-      livekitStreamerRef.current = new LiveKitStreamer(roomName);
-
-      // Set up chat message listener
-      livekitStreamerRef.current.onChatMessage(async (lkMessage: LiveKitChatMessage) => {
-        let avatar = lkMessage.avatar;
-        try {
-          const res = await fetch(`/api/user/lookup?username=${encodeURIComponent(lkMessage.user)}`);
-          if (res.ok) {
-            const d = await res.json();
-            if (d.user?.avatar) avatar = d.user.avatar;
-          }
-        } catch {}
-
-        const chatMessage: ChatMessage = {
-          id: lkMessage.id,
-          user: lkMessage.user,
-          message: lkMessage.message,
-          avatar,
-          tip: lkMessage.tip,
-          timestamp: new Date(lkMessage.timestamp),
-          isCreator: lkMessage.isCreator,
-        };
-        setChatMessages(prev => [...prev, chatMessage]);
-      });
-
-      // Set up activity listener
-      livekitStreamerRef.current.onActivityEvent(async (event: LiveKitActivityEvent) => {
-        let avatar = event.avatar;
-        try {
-          const res = await fetch(`/api/user/lookup?username=${encodeURIComponent(event.user)}`);
-          if (res.ok) {
-            const d = await res.json();
-            if (d.user?.avatar) avatar = d.user.avatar;
-          }
-        } catch {}
-        setActivityEvents(prev => [...prev, { ...event, avatar }]);
-      });
-
-      // Start broadcasting
-      await livekitStreamerRef.current.startBroadcast(streamRef.current);
-      console.log('[Remote] LiveKit broadcast started for room:', roomName);
-
-      // Update state
-      setPreviewMode(false);
-      setPreviewStream(null);
-      setConnected(true);
-      setStreamActive(true);
-      setRemoteState(prev => ({ ...prev, isLive: true }));
-
-      // Attach stream to video element
-      if (videoRef.current && streamRef.current) {
-        videoRef.current.srcObject = streamRef.current;
-        videoRef.current.muted = true;
-        videoRef.current.play().catch(console.error);
-        setVideoLoaded(true);
-      }
-
-      showToast('You are now live!', 'success');
+      console.log('[Remote] Sending go_live command to desktop...');
+      await sendCommand('go_live');
+      showToast('Starting stream...', 'success');
     } catch (error) {
-      console.error('[Remote] Error going live:', error);
-      showToast((error as Error).message || 'Failed to start stream', 'error');
+      console.error('[Remote] Error sending go_live command:', error);
+      showToast('Failed to start stream', 'error');
     } finally {
-      setGoingLive(false);
-    }
-  };
-
-  // End stream from remote
-  const handleEndStream = async () => {
-    try {
-      // Stop LiveKit broadcast
-      if (livekitStreamerRef.current) {
-        livekitStreamerRef.current.close();
-        livekitStreamerRef.current = null;
-      }
-
-      // Stop camera
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-
-      // End stream in database
-      if (currentStreamId) {
-        await fetch('/api/stream/end', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ streamId: currentStreamId }),
-        });
-      }
-
-      // Reset state
-      setConnected(false);
-      setStreamActive(false);
-      setPreviewMode(true);
-      setVideoLoaded(false);
-      setCurrentStreamId(null);
-      setCurrentRoomName(null);
-      setRemoteState(prev => ({ ...prev, isLive: false }));
-      setChatMessages([]);
-      setActivityEvents([]);
-
-      showToast('Stream ended', 'success');
-    } catch (error) {
-      console.error('[Remote] Error ending stream:', error);
-    }
-  };
-
-  // Local camera toggle (for streams started from remote)
-  const toggleLocalCamera = () => {
-    if (streamRef.current) {
-      const videoTrack = streamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setRemoteState(prev => ({ ...prev, cameraEnabled: videoTrack.enabled }));
-      }
-    }
-  };
-
-  // Local microphone toggle (for streams started from remote)
-  const toggleLocalMicrophone = () => {
-    if (streamRef.current) {
-      const audioTrack = streamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setRemoteState(prev => ({ ...prev, microphoneEnabled: audioTrack.enabled }));
-      }
+      // goingLive will be reset when we receive the updated state from desktop
+      setTimeout(() => setGoingLive(false), 3000);
     }
   };
 
@@ -834,20 +612,6 @@ function RemoteContent() {
     setClipPostType('free');
     setShowClipModal(false);
   };
-
-  // Session time counter (for streams started from remote)
-  useEffect(() => {
-    if (!remoteState.isLive || !currentStreamId) return;
-
-    const interval = setInterval(() => {
-      setRemoteState(prev => ({
-        ...prev,
-        sessionTime: prev.sessionTime + 1,
-      }));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [remoteState.isLive, currentStreamId]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -1000,47 +764,33 @@ function RemoteContent() {
         </div>
       )}
 
-      {/* Live Stream Preview / Camera Preview */}
+      {/* Live Stream Preview */}
       <div className="px-4 py-3">
         <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden">
-          {/* Preview video (before going live) */}
-          {previewMode && !roomFromUrl && (
-            <video
-              ref={previewVideoRef}
-              className="w-full h-full object-cover mirror"
-              style={{ transform: 'scaleX(-1)' }}
-              playsInline
-              muted
-              autoPlay
-            />
-          )}
-          {/* Live stream video (after going live or when connected) */}
-          {(!previewMode || roomFromUrl) && (
-            <video
-              ref={videoRef}
-              className="w-full h-full object-contain"
-              playsInline
-              muted
-              autoPlay
-            />
-          )}
+          <video
+            ref={videoRef}
+            className="w-full h-full object-contain"
+            playsInline
+            muted
+            autoPlay
+          />
 
-          {/* Preview mode indicator */}
-          {previewMode && !roomFromUrl && previewStream && (
+          {/* Preview mode indicator (connected but not live yet) */}
+          {connected && !remoteState.isLive && videoLoaded && (
             <div className="absolute top-2 left-2">
               <Badge className="bg-gray-600 text-xs">PREVIEW</Badge>
             </div>
           )}
 
-          {/* Loading states for live mode */}
-          {(!previewMode || roomFromUrl) && !videoLoaded && (
+          {/* Loading states */}
+          {!videoLoaded && (
             <div className="absolute inset-0 flex items-center justify-center">
               {connecting ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                  <span className="text-gray-400 text-sm">Connecting to stream...</span>
+                  <span className="text-gray-400 text-sm">Connecting to desktop...</span>
                 </div>
-              ) : connected && remoteState.isLive ? (
+              ) : connected ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
                   <span className="text-gray-400 text-sm">Loading video...</span>
@@ -1049,20 +799,10 @@ function RemoteContent() {
                 <div className="flex flex-col items-center gap-2">
                   <Video className="h-8 w-8 text-gray-600" />
                   <span className="text-gray-500 text-sm">
-                    {remoteState.isLive ? 'Waiting for video...' : 'No active stream'}
+                    Open golive page on desktop to connect
                   </span>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Camera loading state for preview mode */}
-          {previewMode && !roomFromUrl && !previewStream && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                <span className="text-gray-400 text-sm">Starting camera...</span>
-              </div>
             </div>
           )}
 
@@ -1073,7 +813,7 @@ function RemoteContent() {
           )}
 
           {/* Audio Mute/Unmute Button */}
-          {videoLoaded && !previewMode && (
+          {videoLoaded && (
             <button
               onClick={() => {
                 if (videoRef.current) {
@@ -1095,17 +835,22 @@ function RemoteContent() {
 
       {/* Go Live / Clip Button */}
       <div className="px-4 py-4">
-        {previewMode && !roomFromUrl ? (
-          /* Go Live Button - shown in preview mode */
+        {!remoteState.isLive ? (
+          /* Go Live Button - shown when connected but not live */
           <Button
             onClick={handleGoLive}
-            disabled={goingLive || !previewStream || status !== 'authenticated'}
+            disabled={goingLive || !connected || status !== 'authenticated'}
             className="w-full h-20 text-xl font-bold rounded-2xl transition-all bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
           >
             {goingLive ? (
               <>
                 <Loader2 className="h-8 w-8 mr-3 animate-spin" />
                 Starting...
+              </>
+            ) : !connected ? (
+              <>
+                <Video className="h-8 w-8 mr-3" />
+                Waiting for Desktop...
               </>
             ) : (
               <>
@@ -1147,7 +892,7 @@ function RemoteContent() {
             {/* Camera */}
             <Button
               variant="outline"
-              onClick={currentStreamId ? toggleLocalCamera : toggleCamera}
+              onClick={toggleCamera}
               disabled={!connected}
               className={`h-16 flex flex-col items-center justify-center gap-1 ${
                 remoteState.cameraEnabled
@@ -1166,7 +911,7 @@ function RemoteContent() {
             {/* Microphone */}
             <Button
               variant="outline"
-              onClick={currentStreamId ? toggleLocalMicrophone : toggleMicrophone}
+              onClick={toggleMicrophone}
               disabled={!connected}
               className={`h-16 flex flex-col items-center justify-center gap-1 ${
                 remoteState.microphoneEnabled
@@ -1206,7 +951,7 @@ function RemoteContent() {
           {/* Stop Stream */}
           <Button
             variant="outline"
-            onClick={currentStreamId ? handleEndStream : stopStream}
+            onClick={stopStream}
             disabled={!connected || !remoteState.isLive}
             className="h-16 flex flex-col items-center justify-center gap-1 text-red-500 border-red-500 col-span-2"
           >

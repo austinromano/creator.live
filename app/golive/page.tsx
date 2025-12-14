@@ -184,6 +184,10 @@ function GoLiveContent() {
   // Remote control state broadcasting
   const remoteStateBroadcastRef = React.useRef<NodeJS.Timeout | null>(null);
 
+  // Preview room state (for remote to connect before going live)
+  const [previewRoomConnected, setPreviewRoomConnected] = useState(false);
+  const previewRoomRef = React.useRef<LiveKitStreamer | null>(null);
+
   // Incoming invite notification state
   interface IncomingInvite {
     fromUsername: string;
@@ -343,6 +347,137 @@ function GoLiveContent() {
       }
     };
   }, [status, isLive, selectedAudioDevice]);
+
+  // Create preview room for remote control (desktop only, before going live)
+  useEffect(() => {
+    const setupPreviewRoom = async () => {
+      // Only on desktop (not mobile) and when not already live
+      if (isLive || !userData?.id) return;
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+      if (isMobile) return;
+      if (previewRoomRef.current) return; // Already connected
+
+      try {
+        console.log('[GoLive] Setting up preview room for remote control...');
+
+        // Get camera stream for preview broadcast
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1920, min: 1280 },
+            height: { ideal: 1080, min: 720 },
+            frameRate: { ideal: 30, min: 24 },
+            facingMode: 'user',
+          },
+          audio: selectedAudioDevice
+            ? { deviceId: { exact: selectedAudioDevice }, echoCancellation: true, noiseSuppression: true }
+            : { echoCancellation: true, noiseSuppression: true },
+        });
+
+        // Store for later use when going live
+        streamRef.current = stream;
+        setStreamReady(true);
+
+        // Show in video element
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(console.error);
+        }
+
+        // Create preview room with user-based name
+        const roomName = `user-${userData.id}`;
+        previewRoomRef.current = new LiveKitStreamer(roomName);
+
+        // Start broadcasting preview (viewers can see but stream not "live" in DB)
+        await previewRoomRef.current.startBroadcast(stream);
+        console.log('[GoLive] Preview room connected:', roomName);
+        setPreviewRoomConnected(true);
+        setCurrentRoomName(roomName);
+        currentRoomNameRef.current = roomName;
+
+        // Listen for remote commands in preview mode
+        const room = previewRoomRef.current.getRoom();
+        if (room) {
+          room.on(RoomEvent.DataReceived, (data: Uint8Array) => {
+            try {
+              const message = JSON.parse(new TextDecoder().decode(data));
+              if (message.type === 'remote_command') {
+                handlePreviewRemoteCommand(message.command, message.payload);
+              }
+            } catch (e) {
+              // Ignore non-JSON
+            }
+          });
+        }
+      } catch (error) {
+        console.error('[GoLive] Failed to setup preview room:', error);
+      }
+    };
+
+    if (status === 'authenticated' && userData?.id && !isLive) {
+      setupPreviewRoom();
+    }
+
+    return () => {
+      // Clean up preview room when going live or unmounting
+      if (previewRoomRef.current && !isLive) {
+        previewRoomRef.current.close();
+        previewRoomRef.current = null;
+        setPreviewRoomConnected(false);
+      }
+    };
+  }, [status, userData?.id, isLive, selectedAudioDevice]);
+
+  // Handle remote commands in preview mode (before going live)
+  const handlePreviewRemoteCommand = (command: string, payload?: any) => {
+    console.log('[GoLive] Preview remote command:', command, payload);
+
+    if (command === 'go_live') {
+      // Trigger go live from remote
+      if (handleGoLiveRef.current) {
+        handleGoLiveRef.current();
+      }
+    } else if (command === 'toggle_camera') {
+      toggleCamera();
+    } else if (command === 'toggle_microphone') {
+      toggleMicrophone();
+    }
+  };
+
+  // Broadcast preview state to remote (camera/mic status before going live)
+  useEffect(() => {
+    if (!previewRoomConnected || isLive || !previewRoomRef.current) return;
+
+    const broadcastPreviewState = () => {
+      const room = previewRoomRef.current?.getRoom();
+      if (!room?.localParticipant) return;
+
+      const state = {
+        type: 'remote_state',
+        state: {
+          cameraEnabled,
+          microphoneEnabled,
+          screenSharing: false,
+          desktopAudioEnabled: false,
+          isClipping: false,
+          clipTime: 0,
+          isLive: false,
+          viewerCount: 0,
+          sessionTime: 0,
+          audioDevices: audioDevices.map(d => ({ deviceId: d.deviceId, label: d.label })),
+          selectedAudioDevice,
+          previewMode: true, // Indicate we're in preview mode
+        },
+      };
+
+      const data = new TextEncoder().encode(JSON.stringify(state));
+      room.localParticipant.publishData(data, { reliable: false });
+    };
+
+    const interval = setInterval(broadcastPreviewState, 1000);
+    broadcastPreviewState(); // Send immediately
+
+    return () => clearInterval(interval);
+  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, audioDevices, selectedAudioDevice]);
 
   // Fetch friends list
   useEffect(() => {
@@ -1420,25 +1555,39 @@ function GoLiveContent() {
       currentRoomNameRef.current = roomName; // Also set ref for use in intervals
       console.log('Using room name:', roomName);
 
-      // Start camera BEFORE setting isLive
-      console.log('Starting camera...');
-      await startCamera();
+      // Check if we already have a preview room running (started by desktop for remote control)
+      if (previewRoomRef.current && streamRef.current) {
+        console.log('Reusing preview room for live broadcast...');
+        // Transfer preview room to live streamer
+        livekitStreamerRef.current = previewRoomRef.current;
+        previewRoomRef.current = null;
+        setPreviewRoomConnected(false);
+        setIsLive(true);
+      } else {
+        // Start camera BEFORE setting isLive
+        console.log('Starting camera...');
+        await startCamera();
 
-      console.log('Camera started, stream ref:', streamRef.current);
-      console.log('Setting isLive to true...');
-      setIsLive(true);
+        console.log('Camera started, stream ref:', streamRef.current);
+        console.log('Setting isLive to true...');
+        setIsLive(true);
 
-      // Start LiveKit broadcast with room name
-      if (streamRef.current) {
-        // Close any existing LiveKit connection first
-        if (livekitStreamerRef.current) {
-          console.log('Closing existing LiveKit connection before starting new one');
-          livekitStreamerRef.current.close();
-          livekitStreamerRef.current = null;
+        // Start LiveKit broadcast with room name
+        if (streamRef.current) {
+          // Close any existing LiveKit connection first
+          if (livekitStreamerRef.current) {
+            console.log('Closing existing LiveKit connection before starting new one');
+            livekitStreamerRef.current.close();
+            livekitStreamerRef.current = null;
+          }
+
+          console.log('Starting LiveKit broadcast...');
+          livekitStreamerRef.current = new LiveKitStreamer(roomName);
         }
+      }
 
-        console.log('Starting LiveKit broadcast...');
-        livekitStreamerRef.current = new LiveKitStreamer(roomName);
+      // Continue with setting up listeners if we have a streamer
+      if (livekitStreamerRef.current && streamRef.current) {
 
         // Set up chat message listener BEFORE starting broadcast
         console.log('Setting up chat message listener on LiveKit streamer');
@@ -1505,8 +1654,13 @@ function GoLiveContent() {
         // Note: Invite system now uses API polling instead of LiveKit data channel
         // This is more reliable across different network conditions
 
-        await livekitStreamerRef.current.startBroadcast(streamRef.current);
-        console.log('LiveKit broadcast started for room:', roomName);
+        // Only start broadcast if we didn't reuse a preview room (which is already broadcasting)
+        if (!previewRoomConnected) {
+          await livekitStreamerRef.current.startBroadcast(streamRef.current);
+          console.log('LiveKit broadcast started for room:', roomName);
+        } else {
+          console.log('Reused preview room, already broadcasting');
+        }
 
         // Start capturing thumbnails for all streams (token-based or user-based)
         startThumbnailCapture();
