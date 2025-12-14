@@ -54,12 +54,24 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
           className="flex flex-col items-center gap-1 flex-shrink-0"
         >
           <div className="relative">
-            <Avatar className="h-[60px] w-[60px] ring-2 ring-gray-700">
-              <AvatarImage src={currentUserAvatar || undefined} />
-              <AvatarFallback className="bg-gray-700 text-white">
-                You
-              </AvatarFallback>
-            </Avatar>
+            <div className="absolute inset-0 rounded-xl p-[2px] bg-gray-700">
+              <div className="w-full h-full rounded-xl bg-black p-[2px]">
+                <div className="w-full h-full rounded-lg overflow-hidden flex items-center justify-center bg-[#1a1225]">
+                  {currentUserAvatar ? (
+                    <Avatar className="h-full w-full rounded-lg">
+                      <AvatarImage src={currentUserAvatar} className="rounded-lg" />
+                      <AvatarFallback className="bg-[#1a1225] text-white rounded-lg">
+                        You
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <Plus className="h-6 w-6 text-gray-400" />
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* Spacer to maintain size */}
+            <div className="w-[60px] h-[60px]" />
             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center ring-2 ring-black">
               <Plus className="h-3 w-3 text-white" />
             </div>

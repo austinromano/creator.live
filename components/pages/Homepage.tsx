@@ -183,9 +183,26 @@ export function Homepage() {
             </Link>
 
             {/* Center - Osho Logo (Script Font) */}
-            <h1 className="text-3xl text-white tracking-wide font-[family-name:var(--font-pacifico)]">
+            <h1
+              className="text-3xl text-white tracking-wide font-[family-name:var(--font-pacifico)]"
+              style={{
+                animation: 'breathe 5s ease-in-out infinite',
+              }}
+            >
               Osho
             </h1>
+            <style jsx>{`
+              @keyframes breathe {
+                0%, 100% {
+                  text-shadow: none;
+                  filter: none;
+                }
+                50% {
+                  text-shadow: 0 0 4px rgba(168, 85, 247, 0.3), 0 0 8px rgba(168, 85, 247, 0.25), 0 0 12px rgba(147, 51, 234, 0.2);
+                  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.3));
+                }
+              }
+            `}</style>
 
             {/* Right - Remote Control Icon */}
             <Link href="/remote" className="p-1">

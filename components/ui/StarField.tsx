@@ -183,7 +183,7 @@ export function StarField() {
       <canvas
         ref={canvasRef}
         className="fixed inset-0 pointer-events-none z-0"
-        style={{ background: 'transparent' }}
+        style={{ background: 'transparent', opacity: 0.5 }}
       />
       {/* Subtle gradient glow at bottom like Sora */}
       <div

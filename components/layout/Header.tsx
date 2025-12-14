@@ -63,10 +63,25 @@ export function Header() {
 
           {/* Center - Logo */}
           <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
-            <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-purple-500" />
-            <span className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+            <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-purple-500 animate-pulse" />
+            <span
+              className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent"
+              style={{
+                animation: 'breathe 3s ease-in-out infinite',
+              }}
+            >
               OSHO
             </span>
+            <style jsx>{`
+              @keyframes breathe {
+                0%, 100% {
+                  filter: none;
+                }
+                50% {
+                  filter: drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 20px #a855f7) drop-shadow(0 0 40px #9333ea);
+                }
+              }
+            `}</style>
           </Link>
 
           {/* Right Side - Actions */}

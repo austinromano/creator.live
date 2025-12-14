@@ -1,10 +1,24 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Heart, Volume2, VolumeX } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Heart, Volume2, VolumeX, Loader2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useSession } from 'next-auth/react';
+
+interface CommentData {
+  id: string;
+  text: string;
+  createdAt: string;
+  user: {
+    id: string;
+    username: string | null;
+    displayName: string | null;
+    avatar: string | null;
+    isVerified: boolean;
+  };
+}
 
 export interface FeedPostData {
   id: string;
@@ -48,6 +62,7 @@ function isVideoUrl(url: string | null): boolean {
 }
 
 export function FeedPost({ post }: FeedPostProps) {
+  const { data: session } = useSession();
   const [sparked, setSparked] = useState(post.sparked || false);
   const [sparkCount, setSparkCount] = useState(post.sparkCount || 0);
   const [saved, setSaved] = useState(false);
@@ -60,8 +75,90 @@ export function FeedPost({ post }: FeedPostProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Comment states
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState<CommentData[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+
   const contentUrl = post.contentUrl || post.thumbnailUrl;
   const isVideo = isVideoUrl(contentUrl);
+
+  // Fetch comments when showing
+  useEffect(() => {
+    if (showComments && comments.length === 0) {
+      fetchComments();
+    }
+  }, [showComments]);
+
+  const fetchComments = async () => {
+    setLoadingComments(true);
+    try {
+      const response = await fetch(`/api/comments?postId=${post.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setComments(data.comments || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!commentText.trim() || postingComment) return;
+
+    setPostingComment(true);
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, text: commentText.trim() }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setComments((prev) => [data.comment, ...prev]);
+        setCommentText('');
+      }
+    } catch (error) {
+      console.error('Failed to post comment:', error);
+    } finally {
+      setPostingComment(false);
+    }
+  };
+
+  const handleCommentClick = () => {
+    setShowComments(true);
+    setTimeout(() => {
+      commentInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (deletingCommentId) return;
+
+    setDeletingCommentId(commentId);
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId }),
+      });
+
+      if (response.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
+    } catch (error) {
+      console.error('Failed to delete comment:', error);
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
 
   // Detect when post enters viewport
   useEffect(() => {
@@ -199,38 +296,42 @@ export function FeedPost({ post }: FeedPostProps) {
   };
 
   return (
-    <article ref={containerRef} className="border-b border-gray-800">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-1">
-        <Link href={`/profile/${post.user.username}`} className="flex items-center gap-3">
-          <Avatar className="h-8 w-8 ring-2 ring-purple-500/50">
-            <AvatarImage src={post.user.avatar || undefined} alt={post.user.username || ''} />
-            <AvatarFallback className="bg-gray-700 text-white">
-              {post.user.username?.[0]?.toUpperCase() || '?'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex items-center gap-1">
-            <span className="font-semibold text-white text-sm">
-              {post.user.username}
-            </span>
-            {post.user.isVerified && (
-              <BadgeCheck className="h-4 w-4 text-purple-500 fill-purple-500" />
-            )}
-            <span className="text-gray-500 text-sm">
-              &middot; {formatTimeAgo(post.createdAt)}
-            </span>
-          </div>
-        </Link>
-        <button className="text-white p-2">
-          <MoreHorizontal className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Media Content */}
+    <article ref={containerRef} className="border-b border-gray-800 pb-4 mb-3">
+      {/* Media Content with Overlayed Header */}
       <div
         className="relative w-full bg-black"
         onDoubleClick={handleDoubleTap}
       >
+        {/* Header Overlay */}
+        <div
+          className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 py-2"
+          style={{
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)',
+          }}
+        >
+          <Link href={`/profile/${post.user.username}`} className="flex items-center gap-2">
+            <Avatar className="h-7 w-7 ring-[1.5px] ring-green-500">
+              <AvatarImage src={post.user.avatar || undefined} alt={post.user.username || ''} />
+              <AvatarFallback className="bg-gray-700 text-white text-xs">
+                {post.user.username?.[0]?.toUpperCase() || '?'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex items-center gap-1">
+              <span className="font-medium text-white text-sm">
+                {post.user.username}
+              </span>
+              {post.user.isVerified && (
+                <BadgeCheck className="h-4 w-4 text-purple-500 fill-purple-500" />
+              )}
+              <span className="text-gray-400 text-sm">
+                &middot; {formatTimeAgo(post.createdAt)}
+              </span>
+            </div>
+          </Link>
+          <button className="text-white p-1">
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
+        </div>
         {contentUrl && !imageError ? (
           isVideo ? (
             <div
@@ -307,7 +408,7 @@ export function FeedPost({ post }: FeedPostProps) {
       </div>
 
       {/* Action Buttons */}
-      <div className="px-4 py-2">
+      <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {/* Like Button - Heart */}
@@ -316,7 +417,7 @@ export function FeedPost({ post }: FeedPostProps) {
               className="flex items-center justify-center transition-transform active:scale-125"
             >
               <Heart
-                className={`h-7 w-7 transition-colors ${
+                className={`h-6 w-6 transition-colors ${
                   sparked
                     ? 'text-red-500 fill-red-500'
                     : 'text-white hover:text-gray-300'
@@ -325,13 +426,16 @@ export function FeedPost({ post }: FeedPostProps) {
             </button>
 
             {/* Comment Button */}
-            <button className="flex items-center justify-center text-white hover:text-gray-300">
-              <MessageCircle className="h-7 w-7" />
+            <button
+              onClick={handleCommentClick}
+              className="flex items-center justify-center text-white hover:text-gray-300"
+            >
+              <MessageCircle className="h-6 w-6" />
             </button>
 
             {/* Share Button */}
             <button className="flex items-center justify-center text-white hover:text-gray-300">
-              <Send className="h-7 w-7" />
+              <Send className="h-6 w-6" />
             </button>
           </div>
 
@@ -341,7 +445,7 @@ export function FeedPost({ post }: FeedPostProps) {
             className="flex items-center justify-center text-white hover:text-gray-300"
           >
             <Bookmark
-              className={`h-7 w-7 ${saved ? 'fill-white' : ''}`}
+              className={`h-6 w-6 ${saved ? 'fill-white' : ''}`}
             />
           </button>
         </div>
@@ -357,15 +461,99 @@ export function FeedPost({ post }: FeedPostProps) {
 
         {/* Caption */}
         {(post.title || post.description) && (
-          <div className="mt-2">
+          <div className="mt-1">
             <span className="text-white text-sm">
-              <Link href={`/profile/${post.user.username}`} className="font-semibold mr-2">
+              <Link href={`/profile/${post.user.username}`} className="font-semibold mr-1">
                 {post.user.username}
               </Link>
               {post.title || post.description}
             </span>
           </div>
         )}
+
+        {/* Comments Section */}
+        {showComments && (
+          <div className="mt-3 border-t border-gray-800 pt-3">
+            {/* Comments List */}
+            {loadingComments ? (
+              <div className="flex justify-center py-2">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+              </div>
+            ) : comments.length > 0 ? (
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-2 group">
+                    <Link href={`/profile/${comment.user.username}`}>
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={comment.user.avatar || undefined} />
+                        <AvatarFallback className="bg-gray-700 text-white text-xs">
+                          {comment.user.username?.[0]?.toUpperCase() || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Link>
+                    <div className="flex-1">
+                      <p className="text-sm">
+                        <Link href={`/profile/${comment.user.username}`} className="font-semibold text-white mr-1">
+                          {comment.user.username}
+                        </Link>
+                        <span className="text-gray-300">{comment.text}</span>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {formatTimeAgo(comment.createdAt)}
+                      </p>
+                    </div>
+                    {session?.user?.id === comment.user.id && (
+                      <button
+                        onClick={() => handleDeleteComment(comment.id)}
+                        disabled={deletingCommentId === comment.id}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-500 p-1"
+                      >
+                        {deletingCommentId === comment.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-2">No comments yet</p>
+            )}
+          </div>
+        )}
+
+        {/* Comment Input */}
+        <div
+          className="mt-2 flex items-center gap-2"
+          onClick={() => !showComments && handleCommentClick()}
+        >
+          {showComments ? (
+            <>
+              <input
+                ref={commentInputRef}
+                type="text"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
+                placeholder="Add a comment..."
+                className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 outline-none"
+              />
+              {commentText.trim() && (
+                <button
+                  onClick={handlePostComment}
+                  disabled={postingComment}
+                  className="text-purple-500 font-semibold text-sm disabled:opacity-50"
+                >
+                  {postingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Post'}
+                </button>
+              )}
+            </>
+          ) : (
+            <span className="text-gray-500 text-sm cursor-pointer">Add a comment...</span>
+          )}
+        </div>
       </div>
     </article>
   );

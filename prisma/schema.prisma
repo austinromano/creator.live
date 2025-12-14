@@ -44,6 +44,7 @@ model User {
   sparks                Spark[]
   rooms                 Room[]
   roomMemberships       RoomMember[]
+  comments              Comment[]
 
   @@map("users")
 }
@@ -67,8 +68,27 @@ model Post {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[]
   sparks        Spark[]
+  comments      Comment[]
 
   @@map("posts")
+}
+
+// Comments table - stores comments on posts
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+  @@map("comments")
 }
 
 // Streams table - tracks live stream sessions
