@@ -176,7 +176,7 @@ export function Homepage() {
       <div className="flex-1 flex flex-col">
         {/* Instagram-style Top Navbar */}
         <header className="sticky top-0 z-40 bg-[#0f0a15] border-b border-gray-800/50">
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-2">
             {/* Left - Messages Icon */}
             <Link href="/messages" className="p-1">
               <MessageCircle className="h-7 w-7 text-white" strokeWidth={1.5} />

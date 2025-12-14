@@ -35,7 +35,7 @@ export function MobileBottomNav() {
     { href: '/', icon: Home, label: 'Home' },
     { href: '/live', icon: Radio, label: 'Live' },
     { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
-    { href: '/live', icon: Compass, label: 'Explore' },
+    { href: '/explore', icon: Compass, label: 'Explore' },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
 

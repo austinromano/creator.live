@@ -2,7 +2,7 @@
 import React from 'react';
 import { LiveStreamGrid } from '@/components/live/LiveStreamGrid';
 
-export default function ExplorePage() {
+export default function LivePage() {
   return (
     <>
       {/* Mobile - no container padding */}
