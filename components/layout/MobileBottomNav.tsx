@@ -33,9 +33,9 @@ export function MobileBottomNav() {
 
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
-    { href: '/explore', icon: Radio, label: 'Live' },
+    { href: '/live', icon: Radio, label: 'Live' },
     { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
-    { href: '/explore', icon: Compass, label: 'Explore' },
+    { href: '/live', icon: Compass, label: 'Explore' },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
 
