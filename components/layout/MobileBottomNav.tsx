@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Home, Radio, Camera, MessageCircle, User } from 'lucide-react';
+import { Home, Radio, Camera, User } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
@@ -54,7 +54,6 @@ export function MobileBottomNav() {
     { href: '/', icon: Home, label: 'Home' },
     { href: '/explore', icon: Radio, label: 'Live' },
     { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
-    { href: '/messages', icon: MessageCircle, label: 'Messages', badge: unreadCount },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
 
