@@ -46,9 +46,9 @@ export function MobileBottomNav() {
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-50 pb-safe">
-      <div className="flex items-end justify-around h-16 pb-2">
+      <div className="grid grid-cols-5 h-16">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
           const Icon = item.icon;
 
           if (item.isCenter) {
@@ -56,13 +56,13 @@ export function MobileBottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center -mt-4"
+                className="flex flex-col items-center justify-center pt-2"
               >
                 <div className="relative">
-                  {/* Breathing glow effect */}
-                  <div className="absolute inset-0 w-12 h-12 bg-purple-300 rounded-full blur-md animate-[pulse_4s_ease-in-out_infinite] opacity-90" />
-                  <div className="relative w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/70">
-                    <Icon className="h-6 w-6 text-white" />
+                  {/* Subtle glow effect */}
+                  <div className="absolute inset-0 w-10 h-10 bg-purple-400 rounded-xl blur-md animate-[pulse_4s_ease-in-out_infinite] opacity-60" />
+                  <div className="relative w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-white" />
                   </div>
                 </div>
               </Link>
@@ -73,7 +73,7 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-col items-center relative w-16"
+              className="flex flex-col items-center justify-center pt-2"
             >
               <Icon className={`h-6 w-6 ${isActive ? 'text-purple-500' : 'text-gray-400'}`} />
               <span className={`text-[10px] mt-1 ${isActive ? 'text-purple-500' : 'text-gray-400'}`}>

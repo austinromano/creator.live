@@ -48,9 +48,13 @@ export function StarField() {
       const numStars = Math.floor((canvas.width * canvas.height) / 2500); // More stars
 
       for (let i = 0; i < numStars; i++) {
+        // Bias y position towards the top (use squared random for clustering at top)
+        const yRandom = Math.random();
+        const y = yRandom * yRandom * canvas.height; // Clusters more stars at top
+
         stars.push({
           x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
+          y: y,
           size: Math.random() * 0.6 + 0.2, // 0.2 to 0.8px (smaller)
           opacity: Math.random() * 0.5 + 0.4, // 0.4 to 0.9 (brighter)
           twinkleSpeed: Math.random() * 0.001 + 0.0005, // Much slower twinkle
@@ -59,6 +63,22 @@ export function StarField() {
           vy: 0.005, // Slower downward drift
         });
       }
+
+      // Add extra cluster of stars at very top
+      const topClusterStars = Math.floor(numStars * 0.3);
+      for (let i = 0; i < topClusterStars; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height * 0.25, // Only in top 25%
+          size: Math.random() * 0.5 + 0.2, // Slightly smaller
+          opacity: Math.random() * 0.4 + 0.3, // 0.3 to 0.7
+          twinkleSpeed: Math.random() * 0.001 + 0.0005,
+          twinklePhase: Math.random() * Math.PI * 2,
+          vx: 0.02,
+          vy: 0.005,
+        });
+      }
+
       starsRef.current = stars;
     };
 
@@ -101,9 +121,11 @@ export function StarField() {
         ctx.fill();
       });
 
-      // Spawn shooting stars randomly (every 10-20 seconds on average)
-      if (time - lastShootingStarRef.current > 10000 + Math.random() * 10000) {
-        if (Math.random() < 0.5) { // 50% chance when timer is up
+      // Spawn shooting stars rarely (every 20-40 seconds, with initial delay)
+      const timeSinceStart = time;
+      const initialDelay = 8000; // Wait 8 seconds before first shooting star possible
+      if (timeSinceStart > initialDelay && time - lastShootingStarRef.current > 20000 + Math.random() * 20000) {
+        if (Math.random() < 0.4) { // 40% chance when timer is up
           shootingStarsRef.current.push(createShootingStar());
           lastShootingStarRef.current = time;
         }

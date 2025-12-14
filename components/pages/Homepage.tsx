@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Mail, ExternalLink, Home, MessageCircle } from 'lucide-react';
 import { HomeFeed } from '@/components/feed/HomeFeed';
-import { StarField } from '@/components/ui/StarField';
 import Link from 'next/link';
 
 // Detect if user is on mobile device (not in Phantom browser)
@@ -175,9 +174,8 @@ export function Homepage() {
   if (status === 'authenticated') {
     return (
       <div className="flex-1 flex flex-col relative">
-        <StarField />
         {/* Instagram-style Top Navbar */}
-        <header className="sticky top-0 z-40 bg-[#0f0a15] border-b border-gray-800/50">
+        <header className="sticky top-0 z-40 bg-transparent border-b border-gray-800/30">
           <div className="flex items-center justify-between px-4 py-2">
             {/* Left - Messages Icon */}
             <Link href="/messages" className="p-1">
@@ -220,8 +218,7 @@ export function Homepage() {
 
   // Show sign in/sign up for unauthenticated users
   return (
-    <div className="min-h-screen bg-[#0f0a15] flex flex-col relative">
-      <StarField />
+    <div className="min-h-screen bg-transparent flex flex-col relative">
       <div className="flex flex-col items-center pt-12 px-6 pb-8">
         <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6">
           <Home className="h-12 w-12 text-gray-400" />

@@ -8,6 +8,8 @@ import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { AudioUnlockProvider } from "@/components/providers/AudioUnlockProvider";
 import { HeartbeatProvider } from "@/components/HeartbeatProvider";
+import { StarField } from "@/components/ui/StarField";
+import { MobileSwipeNavigator } from "@/components/layout/MobileSwipeNavigator";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,12 +51,20 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased bg-[#0f0a15] text-white min-h-screen`}
       >
+        <StarField />
         <SessionProvider>
           <SolanaWalletProvider>
             <AudioUnlockProvider>
               <HeartbeatProvider>
                 <Header />
-                <main className="min-h-screen bg-[#0f0a15] pb-20 lg:pb-0">
+                {/* Mobile with swipe navigation */}
+                <MobileSwipeNavigator>
+                  <main className="min-h-screen bg-transparent pb-20 lg:hidden">
+                    {children}
+                  </main>
+                </MobileSwipeNavigator>
+                {/* Desktop without swipe */}
+                <main className="min-h-screen bg-transparent hidden lg:block">
                   {children}
                 </main>
                 <MobileBottomNav />

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserStreamCard } from './UserStreamCard';
 import { MobileStreamCard } from './MobileStreamCard';
 import { Radio } from 'lucide-react';
@@ -13,63 +13,6 @@ import type { Stream } from '@/lib/types/stream';
 export function LiveStreamGrid() {
   const [liveStreams, setLiveStreams] = useState<Stream[]>([]);
   const [activeTab, setActiveTab] = useState('For You');
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const touchStartX = useRef<number | null>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  // Swipe handling
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isTransitioning) return;
-    touchStartX.current = e.touches[0].clientX;
-    setSwipeOffset(0);
-  }, [isTransitioning]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartX.current || isTransitioning) return;
-    const currentX = e.touches[0].clientX;
-    const diff = currentX - touchStartX.current;
-    // Limit the swipe offset for a rubber-band effect
-    setSwipeOffset(diff * 0.3);
-  }, [isTransitioning]);
-
-  const handleTouchEnd = useCallback(() => {
-    if (!touchStartX.current || isTransitioning) return;
-
-    const minSwipeDistance = 50;
-
-    if (Math.abs(swipeOffset) > minSwipeDistance * 0.3) {
-      const currentIndex = MOBILE_TABS.indexOf(activeTab as typeof MOBILE_TABS[number]);
-
-      if (swipeOffset < 0 && currentIndex < MOBILE_TABS.length - 1) {
-        // Swipe left - go to next tab
-        setIsTransitioning(true);
-        setSwipeOffset(-100);
-        setTimeout(() => {
-          setActiveTab(MOBILE_TABS[currentIndex + 1]);
-          setSwipeOffset(0);
-          setIsTransitioning(false);
-        }, 200);
-      } else if (swipeOffset > 0 && currentIndex > 0) {
-        // Swipe right - go to previous tab
-        setIsTransitioning(true);
-        setSwipeOffset(100);
-        setTimeout(() => {
-          setActiveTab(MOBILE_TABS[currentIndex - 1]);
-          setSwipeOffset(0);
-          setIsTransitioning(false);
-        }, 200);
-      } else {
-        // Snap back
-        setSwipeOffset(0);
-      }
-    } else {
-      // Snap back
-      setSwipeOffset(0);
-    }
-
-    touchStartX.current = null;
-  }, [activeTab, swipeOffset, isTransitioning]);
 
   // Fetch all live streams from database
   useEffect(() => {
@@ -118,17 +61,7 @@ export function LiveStreamGrid() {
         </div>
 
         {/* Two Column Grid Layout */}
-        <div
-          ref={contentRef}
-          className="grid grid-cols-2 gap-2 px-2 pt-3 pb-24 transition-transform"
-          style={{
-            transform: `translateX(${swipeOffset}px)`,
-            transitionDuration: isTransitioning ? '200ms' : '0ms',
-          }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
+        <div className="grid grid-cols-2 gap-2 px-2 pt-3 pb-24">
           {liveStreams
             .filter((stream) => {
               // For You and Popular show all streams

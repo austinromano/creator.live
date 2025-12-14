@@ -46,7 +46,7 @@ function getTemplateIcon(template: string | null) {
 
 export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryClick }: StoriesRowProps) {
   return (
-    <div className="lg:sticky lg:top-14 z-40 bg-[#0f0a15] border-b border-gray-800">
+    <div className="lg:sticky lg:top-14 z-40 bg-transparent border-b border-gray-800/50">
       <div className="flex gap-3 overflow-x-auto px-4 pt-2 pb-2 scrollbar-hide">
         {/* Your Story / Add Room */}
         <button

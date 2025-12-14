@@ -35,8 +35,8 @@ export function Header() {
 
   // Hide header on mobile when authenticated (only show on lg screens and up)
   const headerClassName = isAuthenticated
-    ? "sticky top-0 z-50 w-full bg-[#0f0a15] hidden lg:block"
-    : "sticky top-0 z-50 w-full bg-[#0f0a15]";
+    ? "sticky top-0 z-50 w-full bg-transparent hidden lg:block"
+    : "sticky top-0 z-50 w-full bg-transparent";
 
   return (
     <header className={headerClassName}>
