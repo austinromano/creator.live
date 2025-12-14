@@ -1,14 +1,28 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Home, Radio, Camera, User } from 'lucide-react';
+import { Home, Radio, Camera, MessageCircle, User } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [username, setUsername] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!session?.user) return;
+    try {
+      const response = await fetch('/api/notifications?unread=true');
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  }, [session]);
 
   useEffect(() => {
     const fetchUsername = async () => {
@@ -26,7 +40,12 @@ export function MobileBottomNav() {
       }
     };
     fetchUsername();
-  }, [session]);
+    fetchNotifications();
+
+    // Poll for notifications every 10 seconds
+    const interval = setInterval(fetchNotifications, 10000);
+    return () => clearInterval(interval);
+  }, [session, fetchNotifications]);
 
   const user = session?.user as any;
   const profileHref = username || user?.name ? `/profile/${username || user?.name}` : '/profile';
@@ -35,6 +54,7 @@ export function MobileBottomNav() {
     { href: '/', icon: Home, label: 'Home' },
     { href: '/explore', icon: Radio, label: 'Live' },
     { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
+    { href: '/messages', icon: MessageCircle, label: 'Messages', badge: unreadCount },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
 
@@ -74,7 +94,16 @@ export function MobileBottomNav() {
               href={item.href}
               className="flex flex-col items-center relative w-16"
             >
-              <Icon className={`h-6 w-6 ${isActive ? 'text-purple-500' : 'text-gray-400'}`} />
+              <div className="relative inline-flex">
+                <Icon className={`h-6 w-6 ${isActive ? 'text-purple-500' : 'text-gray-400'}`} />
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 min-w-[18px] h-[18px] bg-[#ff3b30] rounded-full flex items-center justify-center">
+                    <span className="text-[11px] font-bold text-white leading-none px-1">
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </span>
+                  </span>
+                )}
+              </div>
               <span className={`text-[10px] mt-1 ${isActive ? 'text-purple-500' : 'text-gray-400'}`}>
                 {item.label}
               </span>
