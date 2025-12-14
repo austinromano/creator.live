@@ -31,9 +31,10 @@ import {
   Lock,
   Globe,
   Radio,
+  Play,
 } from 'lucide-react';
 import { Room, RoomEvent } from 'livekit-client';
-import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
+import { LiveKitStreamer, LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
 import { ChatMessage } from '@/lib/types';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -82,6 +83,15 @@ function RemoteContent() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const connectionStateRef = useRef<'idle' | 'connecting' | 'connected'>('idle');
+
+  // Preview and Go Live state (for starting stream from remote)
+  const [previewMode, setPreviewMode] = useState(true); // Start in preview mode
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const [goingLive, setGoingLive] = useState(false);
+  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const livekitStreamerRef = useRef<LiveKitStreamer | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Remote state (synced from desktop)
   const [remoteState, setRemoteState] = useState<RemoteState>({
@@ -149,6 +159,60 @@ function RemoteContent() {
         .catch(err => console.error('Error fetching user profile:', err));
     }
   }, [status, user]);
+
+  // Start camera preview when in preview mode
+  useEffect(() => {
+    const startPreview = async () => {
+      // Only start preview when authenticated and in preview mode
+      if (!previewMode || status !== 'authenticated') return;
+      // Don't start if already connected to a stream or if room is in URL
+      if (connected || roomFromUrl) return;
+
+      try {
+        // Stop any existing preview stream
+        if (previewStream) {
+          previewStream.getTracks().forEach(track => track.stop());
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+          },
+          audio: true,
+        });
+
+        setPreviewStream(stream);
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error('Camera preview access denied:', err);
+        // Try again without audio
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false,
+          });
+          setPreviewStream(stream);
+          if (previewVideoRef.current) {
+            previewVideoRef.current.srcObject = stream;
+          }
+        } catch (err2) {
+          console.error('Camera access completely denied:', err2);
+        }
+      }
+    };
+
+    startPreview();
+
+    return () => {
+      if (previewStream) {
+        previewStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [status, previewMode, connected, roomFromUrl]);
 
   // Fetch friends
   useEffect(() => {
@@ -476,6 +540,189 @@ function RemoteContent() {
   const startClip = () => sendCommand('start_clip');
   const stopClip = () => sendCommand('stop_clip');
 
+  // Go Live - start stream from remote device
+  const handleGoLive = async () => {
+    if (!userData?.username) {
+      showToast('Please wait for profile to load', 'error');
+      return;
+    }
+
+    setGoingLive(true);
+    try {
+      console.log('[Remote] Starting Go Live process...');
+
+      // Stop preview and use its stream for broadcasting
+      if (previewStream) {
+        streamRef.current = previewStream;
+      } else {
+        // Get camera stream if preview wasn't started
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        streamRef.current = stream;
+      }
+
+      // Create stream in database
+      const response = await fetch('/api/stream/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${userData.username}'s Live Stream`,
+          category: 'Just Chatting',
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to start stream');
+      }
+
+      const data = await response.json();
+      console.log('[Remote] Stream created:', data);
+      setCurrentStreamId(data.stream.id);
+
+      const roomName = data.roomName || `user-${userData.id}`;
+      setCurrentRoomName(roomName);
+
+      // Create LiveKit streamer and start broadcast
+      livekitStreamerRef.current = new LiveKitStreamer(roomName);
+
+      // Set up chat message listener
+      livekitStreamerRef.current.onChatMessage(async (lkMessage: LiveKitChatMessage) => {
+        let avatar = lkMessage.avatar;
+        try {
+          const res = await fetch(`/api/user/lookup?username=${encodeURIComponent(lkMessage.user)}`);
+          if (res.ok) {
+            const d = await res.json();
+            if (d.user?.avatar) avatar = d.user.avatar;
+          }
+        } catch {}
+
+        const chatMessage: ChatMessage = {
+          id: lkMessage.id,
+          user: lkMessage.user,
+          message: lkMessage.message,
+          avatar,
+          tip: lkMessage.tip,
+          timestamp: new Date(lkMessage.timestamp),
+          isCreator: lkMessage.isCreator,
+        };
+        setChatMessages(prev => [...prev, chatMessage]);
+      });
+
+      // Set up activity listener
+      livekitStreamerRef.current.onActivityEvent(async (event: LiveKitActivityEvent) => {
+        let avatar = event.avatar;
+        try {
+          const res = await fetch(`/api/user/lookup?username=${encodeURIComponent(event.user)}`);
+          if (res.ok) {
+            const d = await res.json();
+            if (d.user?.avatar) avatar = d.user.avatar;
+          }
+        } catch {}
+        setActivityEvents(prev => [...prev, { ...event, avatar }]);
+      });
+
+      // Start broadcasting
+      await livekitStreamerRef.current.startBroadcast(streamRef.current);
+      console.log('[Remote] LiveKit broadcast started for room:', roomName);
+
+      // Update state
+      setPreviewMode(false);
+      setPreviewStream(null);
+      setConnected(true);
+      setStreamActive(true);
+      setRemoteState(prev => ({ ...prev, isLive: true }));
+
+      // Attach stream to video element
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.muted = true;
+        videoRef.current.play().catch(console.error);
+        setVideoLoaded(true);
+      }
+
+      showToast('You are now live!', 'success');
+    } catch (error) {
+      console.error('[Remote] Error going live:', error);
+      showToast((error as Error).message || 'Failed to start stream', 'error');
+    } finally {
+      setGoingLive(false);
+    }
+  };
+
+  // End stream from remote
+  const handleEndStream = async () => {
+    try {
+      // Stop LiveKit broadcast
+      if (livekitStreamerRef.current) {
+        livekitStreamerRef.current.close();
+        livekitStreamerRef.current = null;
+      }
+
+      // Stop camera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
+      // End stream in database
+      if (currentStreamId) {
+        await fetch('/api/stream/end', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ streamId: currentStreamId }),
+        });
+      }
+
+      // Reset state
+      setConnected(false);
+      setStreamActive(false);
+      setPreviewMode(true);
+      setVideoLoaded(false);
+      setCurrentStreamId(null);
+      setCurrentRoomName(null);
+      setRemoteState(prev => ({ ...prev, isLive: false }));
+      setChatMessages([]);
+      setActivityEvents([]);
+
+      showToast('Stream ended', 'success');
+    } catch (error) {
+      console.error('[Remote] Error ending stream:', error);
+    }
+  };
+
+  // Local camera toggle (for streams started from remote)
+  const toggleLocalCamera = () => {
+    if (streamRef.current) {
+      const videoTrack = streamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setRemoteState(prev => ({ ...prev, cameraEnabled: videoTrack.enabled }));
+      }
+    }
+  };
+
+  // Local microphone toggle (for streams started from remote)
+  const toggleLocalMicrophone = () => {
+    if (streamRef.current) {
+      const audioTrack = streamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setRemoteState(prev => ({ ...prev, microphoneEnabled: audioTrack.enabled }));
+      }
+    }
+  };
+
   // Invite friend
   const inviteFriend = (friend: Friend) => {
     sendCommand('invite_friend', { friendId: friend.id, username: friend.username });
@@ -587,6 +834,20 @@ function RemoteContent() {
     setClipPostType('free');
     setShowClipModal(false);
   };
+
+  // Session time counter (for streams started from remote)
+  useEffect(() => {
+    if (!remoteState.isLive || !currentStreamId) return;
+
+    const interval = setInterval(() => {
+      setRemoteState(prev => ({
+        ...prev,
+        sessionTime: prev.sessionTime + 1,
+      }));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [remoteState.isLive, currentStreamId]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -739,17 +1000,40 @@ function RemoteContent() {
         </div>
       )}
 
-      {/* Live Stream Preview */}
+      {/* Live Stream Preview / Camera Preview */}
       <div className="px-4 py-3">
         <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden">
-          <video
-            ref={videoRef}
-            className="w-full h-full object-contain"
-            playsInline
-            muted
-            autoPlay
-          />
-          {!videoLoaded && (
+          {/* Preview video (before going live) */}
+          {previewMode && !roomFromUrl && (
+            <video
+              ref={previewVideoRef}
+              className="w-full h-full object-cover mirror"
+              style={{ transform: 'scaleX(-1)' }}
+              playsInline
+              muted
+              autoPlay
+            />
+          )}
+          {/* Live stream video (after going live or when connected) */}
+          {(!previewMode || roomFromUrl) && (
+            <video
+              ref={videoRef}
+              className="w-full h-full object-contain"
+              playsInline
+              muted
+              autoPlay
+            />
+          )}
+
+          {/* Preview mode indicator */}
+          {previewMode && !roomFromUrl && previewStream && (
+            <div className="absolute top-2 left-2">
+              <Badge className="bg-gray-600 text-xs">PREVIEW</Badge>
+            </div>
+          )}
+
+          {/* Loading states for live mode */}
+          {(!previewMode || roomFromUrl) && !videoLoaded && (
             <div className="absolute inset-0 flex items-center justify-center">
               {connecting ? (
                 <div className="flex flex-col items-center gap-2">
@@ -771,6 +1055,17 @@ function RemoteContent() {
               )}
             </div>
           )}
+
+          {/* Camera loading state for preview mode */}
+          {previewMode && !roomFromUrl && !previewStream && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                <span className="text-gray-400 text-sm">Starting camera...</span>
+              </div>
+            </div>
+          )}
+
           {remoteState.isLive && videoLoaded && (
             <div className="absolute top-2 left-2">
               <Badge className="bg-red-600 text-xs animate-pulse">● LIVE</Badge>
@@ -778,7 +1073,7 @@ function RemoteContent() {
           )}
 
           {/* Audio Mute/Unmute Button */}
-          {videoLoaded && (
+          {videoLoaded && !previewMode && (
             <button
               onClick={() => {
                 if (videoRef.current) {
@@ -798,71 +1093,94 @@ function RemoteContent() {
         </div>
       </div>
 
-      {/* Big Clip Button */}
+      {/* Go Live / Clip Button */}
       <div className="px-4 py-4">
-        <Button
-          onClick={remoteState.isClipping ? stopClip : startClip}
-          disabled={!connected || !remoteState.isLive}
-          className={`w-full h-20 text-xl font-bold rounded-2xl transition-all ${
-            remoteState.isClipping
-              ? 'bg-red-600 hover:bg-red-700 animate-pulse'
-              : 'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600'
-          }`}
-        >
-          {remoteState.isClipping ? (
-            <>
-              <CircleDot className="h-8 w-8 mr-3" />
-              Recording {formatClipTime(remoteState.clipTime)}
-            </>
-          ) : (
-            <>
-              <Scissors className="h-8 w-8 mr-3" />
-              Start Clip
-            </>
-          )}
-        </Button>
+        {previewMode && !roomFromUrl ? (
+          /* Go Live Button - shown in preview mode */
+          <Button
+            onClick={handleGoLive}
+            disabled={goingLive || !previewStream || status !== 'authenticated'}
+            className="w-full h-20 text-xl font-bold rounded-2xl transition-all bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
+          >
+            {goingLive ? (
+              <>
+                <Loader2 className="h-8 w-8 mr-3 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <Play className="h-8 w-8 mr-3" />
+                Go Live
+              </>
+            )}
+          </Button>
+        ) : (
+          /* Clip Button - shown when live */
+          <Button
+            onClick={remoteState.isClipping ? stopClip : startClip}
+            disabled={!connected || !remoteState.isLive}
+            className={`w-full h-20 text-xl font-bold rounded-2xl transition-all ${
+              remoteState.isClipping
+                ? 'bg-red-600 hover:bg-red-700 animate-pulse'
+                : 'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600'
+            }`}
+          >
+            {remoteState.isClipping ? (
+              <>
+                <CircleDot className="h-8 w-8 mr-3" />
+                Recording {formatClipTime(remoteState.clipTime)}
+              </>
+            ) : (
+              <>
+                <Scissors className="h-8 w-8 mr-3" />
+                Start Clip
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
-      {/* Control Buttons Grid */}
-      <div className="px-4 pb-4">
-        <div className="grid grid-cols-3 gap-3">
-          {/* Camera */}
-          <Button
-            variant="outline"
-            onClick={toggleCamera}
-            disabled={!connected}
-            className={`h-16 flex flex-col items-center justify-center gap-1 ${
-              remoteState.cameraEnabled
-                ? 'text-green-400 border-green-400'
-                : 'text-red-400 border-red-400'
-            }`}
-          >
-            {remoteState.cameraEnabled ? (
-              <Video className="h-6 w-6" />
-            ) : (
-              <VideoOff className="h-6 w-6" />
-            )}
-            <span className="text-xs">Camera</span>
-          </Button>
+      {/* Control Buttons Grid - Only show when live */}
+      {remoteState.isLive && (
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-3 gap-3">
+            {/* Camera */}
+            <Button
+              variant="outline"
+              onClick={currentStreamId ? toggleLocalCamera : toggleCamera}
+              disabled={!connected}
+              className={`h-16 flex flex-col items-center justify-center gap-1 ${
+                remoteState.cameraEnabled
+                  ? 'text-green-400 border-green-400'
+                  : 'text-red-400 border-red-400'
+              }`}
+            >
+              {remoteState.cameraEnabled ? (
+                <Video className="h-6 w-6" />
+              ) : (
+                <VideoOff className="h-6 w-6" />
+              )}
+              <span className="text-xs">Camera</span>
+            </Button>
 
-          {/* Microphone */}
-          <Button
-            variant="outline"
-            onClick={toggleMicrophone}
-            disabled={!connected}
-            className={`h-16 flex flex-col items-center justify-center gap-1 ${
-              remoteState.microphoneEnabled
-                ? 'text-green-400 border-green-400'
-                : 'text-red-400 border-red-400'
-            }`}
-          >
-            {remoteState.microphoneEnabled ? (
-              <Mic className="h-6 w-6" />
-            ) : (
-              <MicOff className="h-6 w-6" />
-            )}
-            <span className="text-xs">Mic</span>
-          </Button>
+            {/* Microphone */}
+            <Button
+              variant="outline"
+              onClick={currentStreamId ? toggleLocalMicrophone : toggleMicrophone}
+              disabled={!connected}
+              className={`h-16 flex flex-col items-center justify-center gap-1 ${
+                remoteState.microphoneEnabled
+                  ? 'text-green-400 border-green-400'
+                  : 'text-red-400 border-red-400'
+              }`}
+            >
+              {remoteState.microphoneEnabled ? (
+                <Mic className="h-6 w-6" />
+              ) : (
+                <MicOff className="h-6 w-6" />
+              )}
+              <span className="text-xs">Mic</span>
+            </Button>
 
           {/* Desktop Audio (only when screen sharing) */}
           {remoteState.screenSharing && (
@@ -888,7 +1206,7 @@ function RemoteContent() {
           {/* Stop Stream */}
           <Button
             variant="outline"
-            onClick={stopStream}
+            onClick={currentStreamId ? handleEndStream : stopStream}
             disabled={!connected || !remoteState.isLive}
             className="h-16 flex flex-col items-center justify-center gap-1 text-red-500 border-red-500 col-span-2"
           >
@@ -897,25 +1215,26 @@ function RemoteContent() {
           </Button>
         </div>
 
-        {/* Microphone Selector */}
-        {remoteState.audioDevices.length > 1 && (
-          <div className="mt-3 flex items-center gap-2">
-            <Mic className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <select
-              value={remoteState.selectedAudioDevice}
-              onChange={(e) => switchMicrophone(e.target.value)}
-              disabled={!connected}
-              className="flex-1 bg-gray-800 text-white text-xs rounded-lg px-2 py-2 border border-gray-700 focus:outline-none focus:border-purple-500"
-            >
-              {remoteState.audioDevices.map((device) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+          {/* Microphone Selector */}
+          {remoteState.audioDevices.length > 1 && (
+            <div className="mt-3 flex items-center gap-2">
+              <Mic className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              <select
+                value={remoteState.selectedAudioDevice}
+                onChange={(e) => switchMicrophone(e.target.value)}
+                disabled={!connected}
+                className="flex-1 bg-gray-800 text-white text-xs rounded-lg px-2 py-2 border border-gray-700 focus:outline-none focus:border-purple-500"
+              >
+                {remoteState.audioDevices.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex border-b border-gray-800">
