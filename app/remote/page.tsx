@@ -577,7 +577,7 @@ function RemoteContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: `${userData.username}'s Live Stream`,
-          category: 'Just Chatting',
+          category: 'IRL',
         }),
       });
 
