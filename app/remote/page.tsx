@@ -767,9 +767,9 @@ function RemoteContent() {
         </div>
       )}
 
-      {/* Live Stream Preview */}
-      <div className="px-4 py-3">
-        <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden">
+      {/* Compact Video Preview */}
+      <div className="px-3 py-2">
+        <div className="relative w-full aspect-[16/10] bg-gray-900 rounded-xl overflow-hidden">
           <video
             ref={videoRef}
             className="w-full h-full object-contain"
@@ -778,44 +778,39 @@ function RemoteContent() {
             autoPlay
           />
 
-          {/* Preview mode indicator (connected but not live yet) */}
-          {connected && !remoteState.isLive && videoLoaded && (
-            <div className="absolute top-2 left-2">
+          {/* Status badges */}
+          <div className="absolute top-2 left-2 flex gap-2">
+            {connected && !remoteState.isLive && videoLoaded && (
               <Badge className="bg-gray-600 text-xs">PREVIEW</Badge>
-            </div>
-          )}
+            )}
+            {remoteState.isLive && videoLoaded && (
+              <Badge className="bg-red-600 text-xs animate-pulse">● LIVE</Badge>
+            )}
+          </div>
 
           {/* Loading states */}
           {!videoLoaded && (
             <div className="absolute inset-0 flex items-center justify-center">
               {connecting ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                  <span className="text-gray-400 text-sm">Connecting to desktop...</span>
+                <div className="flex flex-col items-center gap-1">
+                  <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                  <span className="text-gray-400 text-xs">Connecting...</span>
                 </div>
               ) : connected ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                  <span className="text-gray-400 text-sm">Loading video...</span>
+                <div className="flex flex-col items-center gap-1">
+                  <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                  <span className="text-gray-400 text-xs">Loading...</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <Video className="h-8 w-8 text-gray-600" />
-                  <span className="text-gray-500 text-sm">
-                    Open golive page on desktop to connect
-                  </span>
+                <div className="flex flex-col items-center gap-1">
+                  <Video className="h-6 w-6 text-gray-600" />
+                  <span className="text-gray-500 text-xs">Open golive on desktop</span>
                 </div>
               )}
             </div>
           )}
 
-          {remoteState.isLive && videoLoaded && (
-            <div className="absolute top-2 left-2">
-              <Badge className="bg-red-600 text-xs animate-pulse">● LIVE</Badge>
-            </div>
-          )}
-
-          {/* Audio Mute/Unmute Button */}
+          {/* Audio toggle overlay */}
           {videoLoaded && (
             <button
               onClick={() => {
@@ -824,184 +819,143 @@ function RemoteContent() {
                   setAudioMuted(videoRef.current.muted);
                 }
               }}
-              className="absolute bottom-2 right-2 p-2 bg-black/70 rounded-full hover:bg-black/90 transition-colors"
+              className="absolute bottom-2 right-2 p-1.5 bg-black/70 rounded-full"
             >
               {audioMuted ? (
-                <VolumeX className="h-5 w-5 text-white" />
+                <VolumeX className="h-4 w-4 text-white" />
               ) : (
-                <Volume2 className="h-5 w-5 text-white" />
+                <Volume2 className="h-4 w-4 text-white" />
               )}
             </button>
           )}
         </div>
       </div>
 
-      {/* Go Live / Clip Button */}
-      <div className="px-4 py-4">
+      {/* Compact Control Bar */}
+      <div className="px-3 py-2">
         {!remoteState.isLive ? (
-          /* Go Live Button - shown when connected but not live */
+          /* Go Live Button - compact */
           <Button
             onClick={handleGoLive}
             disabled={goingLive || !connected || status !== 'authenticated'}
-            className="w-full h-20 text-xl font-bold rounded-2xl transition-all bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
+            className="w-full h-12 text-base font-bold rounded-xl bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
           >
             {goingLive ? (
-              <>
-                <Loader2 className="h-8 w-8 mr-3 animate-spin" />
-                Starting...
-              </>
+              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Starting...</>
             ) : !connected ? (
-              <>
-                <Video className="h-8 w-8 mr-3" />
-                Waiting for Desktop...
-              </>
+              <><Video className="h-5 w-5 mr-2" />Waiting for Desktop</>
             ) : (
-              <>
-                <Play className="h-8 w-8 mr-3" />
-                Go Live
-              </>
+              <><Play className="h-5 w-5 mr-2" />Go Live</>
             )}
           </Button>
         ) : (
-          /* Clip Button - shown when live */
-          <Button
-            onClick={remoteState.isClipping ? stopClip : startClip}
-            disabled={!connected || !remoteState.isLive}
-            className={`w-full h-20 text-xl font-bold rounded-2xl transition-all ${
-              remoteState.isClipping
-                ? 'bg-red-600 hover:bg-red-700 animate-pulse'
-                : 'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600'
-            }`}
-          >
-            {remoteState.isClipping ? (
-              <>
-                <CircleDot className="h-8 w-8 mr-3" />
-                Recording {formatClipTime(remoteState.clipTime)}
-              </>
-            ) : (
-              <>
-                <Scissors className="h-8 w-8 mr-3" />
-                Start Clip
-              </>
-            )}
-          </Button>
+          /* Live Controls - horizontal compact bar */
+          <div className="space-y-2">
+            {/* Main action row */}
+            <div className="flex gap-2">
+              {/* Clip Button */}
+              <Button
+                onClick={remoteState.isClipping ? stopClip : startClip}
+                disabled={!connected}
+                className={`flex-1 h-12 font-bold rounded-xl ${
+                  remoteState.isClipping
+                    ? 'bg-red-600 hover:bg-red-700 animate-pulse'
+                    : 'bg-gradient-to-r from-orange-500 to-pink-500'
+                }`}
+              >
+                {remoteState.isClipping ? (
+                  <><CircleDot className="h-5 w-5 mr-2" />{formatClipTime(remoteState.clipTime)}</>
+                ) : (
+                  <><Scissors className="h-5 w-5 mr-2" />Clip</>
+                )}
+              </Button>
+
+              {/* Stop Stream */}
+              <Button
+                variant="outline"
+                onClick={stopStream}
+                disabled={!connected}
+                className="h-12 px-4 rounded-xl text-red-500 border-red-500/50 hover:bg-red-500/10"
+              >
+                <Square className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Control icons row */}
+            <div className="flex justify-center gap-1">
+              {/* Camera */}
+              <button
+                onClick={toggleCamera}
+                disabled={!connected}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  remoteState.cameraEnabled
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {remoteState.cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+              </button>
+
+              {/* Microphone */}
+              <button
+                onClick={toggleMicrophone}
+                disabled={!connected}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  remoteState.microphoneEnabled
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {remoteState.microphoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+              </button>
+
+              {/* Screen Share */}
+              <button
+                onClick={toggleScreenShare}
+                disabled={!connected}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  remoteState.screenSharing
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                {remoteState.screenSharing ? <Monitor className="h-5 w-5" /> : <MonitorOff className="h-5 w-5" />}
+              </button>
+
+              {/* Desktop Audio (only when screen sharing) */}
+              {remoteState.screenSharing && (
+                <button
+                  onClick={toggleDesktopAudio}
+                  disabled={!connected}
+                  className={`p-2.5 rounded-lg transition-colors ${
+                    remoteState.desktopAudioEnabled
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-gray-700 text-gray-400'
+                  }`}
+                >
+                  {remoteState.desktopAudioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                </button>
+              )}
+
+              {/* Mic selector dropdown */}
+              {remoteState.audioDevices.length > 1 && (
+                <select
+                  value={remoteState.selectedAudioDevice}
+                  onChange={(e) => switchMicrophone(e.target.value)}
+                  disabled={!connected}
+                  className="p-2 bg-gray-700 text-white text-xs rounded-lg border-0 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+                  {remoteState.audioDevices.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label?.slice(0, 15) || `Mic ${device.deviceId.slice(0, 4)}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Control Buttons Grid - Only show when live */}
-      {remoteState.isLive && (
-        <div className="px-4 pb-4">
-          <div className="grid grid-cols-3 gap-3">
-            {/* Camera */}
-            <Button
-              variant="outline"
-              onClick={toggleCamera}
-              disabled={!connected}
-              className={`h-16 flex flex-col items-center justify-center gap-1 ${
-                remoteState.cameraEnabled
-                  ? 'text-green-400 border-green-400'
-                  : 'text-red-400 border-red-400'
-              }`}
-            >
-              {remoteState.cameraEnabled ? (
-                <Video className="h-6 w-6" />
-              ) : (
-                <VideoOff className="h-6 w-6" />
-              )}
-              <span className="text-xs">Camera</span>
-            </Button>
-
-            {/* Microphone */}
-            <Button
-              variant="outline"
-              onClick={toggleMicrophone}
-              disabled={!connected}
-              className={`h-16 flex flex-col items-center justify-center gap-1 ${
-                remoteState.microphoneEnabled
-                  ? 'text-green-400 border-green-400'
-                  : 'text-red-400 border-red-400'
-              }`}
-            >
-              {remoteState.microphoneEnabled ? (
-                <Mic className="h-6 w-6" />
-              ) : (
-                <MicOff className="h-6 w-6" />
-              )}
-              <span className="text-xs">Mic</span>
-            </Button>
-
-            {/* Screen Share */}
-            <Button
-              variant="outline"
-              onClick={toggleScreenShare}
-              disabled={!connected}
-              className={`h-16 flex flex-col items-center justify-center gap-1 ${
-                remoteState.screenSharing
-                  ? 'text-blue-400 border-blue-400'
-                  : 'text-gray-400 border-gray-600'
-              }`}
-            >
-              {remoteState.screenSharing ? (
-                <Monitor className="h-6 w-6" />
-              ) : (
-                <MonitorOff className="h-6 w-6" />
-              )}
-              <span className="text-xs">Screen</span>
-            </Button>
-
-          {/* Desktop Audio (only when screen sharing) */}
-          {remoteState.screenSharing && (
-            <Button
-              variant="outline"
-              onClick={toggleDesktopAudio}
-              disabled={!connected}
-              className={`h-16 flex flex-col items-center justify-center gap-1 ${
-                remoteState.desktopAudioEnabled
-                  ? 'text-blue-400 border-blue-400'
-                  : 'text-gray-400 border-gray-400'
-              }`}
-            >
-              {remoteState.desktopAudioEnabled ? (
-                <Volume2 className="h-6 w-6" />
-              ) : (
-                <VolumeX className="h-6 w-6" />
-              )}
-              <span className="text-xs">Desktop</span>
-            </Button>
-          )}
-
-          {/* Stop Stream */}
-          <Button
-            variant="outline"
-            onClick={stopStream}
-            disabled={!connected || !remoteState.isLive}
-            className="h-16 flex flex-col items-center justify-center gap-1 text-red-500 border-red-500 col-span-2"
-          >
-            <Square className="h-6 w-6" />
-            <span className="text-xs">Stop Stream</span>
-          </Button>
-        </div>
-
-          {/* Microphone Selector */}
-          {remoteState.audioDevices.length > 1 && (
-            <div className="mt-3 flex items-center gap-2">
-              <Mic className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              <select
-                value={remoteState.selectedAudioDevice}
-                onChange={(e) => switchMicrophone(e.target.value)}
-                disabled={!connected}
-                className="flex-1 bg-gray-800 text-white text-xs rounded-lg px-2 py-2 border border-gray-700 focus:outline-none focus:border-purple-500"
-              >
-                {remoteState.audioDevices.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Tab Navigation */}
       <div className="flex border-b border-gray-800">
