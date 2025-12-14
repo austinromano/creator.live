@@ -6,7 +6,7 @@ import { signInWithPhantom } from '@/lib/phantom-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Mail, ExternalLink, Home, Plus } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, Home, MessageCircle } from 'lucide-react';
 import { HomeFeed } from '@/components/feed/HomeFeed';
 import Link from 'next/link';
 
@@ -177,9 +177,9 @@ export function Homepage() {
         {/* Instagram-style Top Navbar */}
         <header className="sticky top-0 z-40 bg-[#0f0a15] border-b border-gray-800/50">
           <div className="flex items-center justify-between px-4 py-3">
-            {/* Left - Plus Icon */}
-            <Link href="/camera" className="p-1">
-              <Plus className="h-7 w-7 text-white" strokeWidth={1.5} />
+            {/* Left - Messages Icon */}
+            <Link href="/messages" className="p-1">
+              <MessageCircle className="h-7 w-7 text-white" strokeWidth={1.5} />
             </Link>
 
             {/* Center - Osho Logo (Script Font) */}
