@@ -144,6 +144,7 @@ function GoLiveContent() {
   const [pipControlsVisible, setPipControlsVisible] = useState(true);
   const pipControlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [streamEnded, setStreamEnded] = useState(false); // Tracks if user manually ended stream (prevents auto-restart)
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const [streamTitle, setStreamTitle] = useState('');
@@ -336,7 +337,7 @@ function GoLiveContent() {
       }
     };
 
-    if (status === 'authenticated' && !isLive) {
+    if (status === 'authenticated' && !isLive && !streamEnded) {
       startPreview();
     }
 
@@ -346,7 +347,7 @@ function GoLiveContent() {
         previewStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [status, isLive, selectedAudioDevice]);
+  }, [status, isLive, selectedAudioDevice, streamEnded]);
 
   // Create preview room for remote control (desktop only, before going live)
   useEffect(() => {
@@ -413,7 +414,7 @@ function GoLiveContent() {
       }
     };
 
-    if (status === 'authenticated' && userData?.id && !isLive) {
+    if (status === 'authenticated' && userData?.id && !isLive && !streamEnded) {
       setupPreviewRoom();
     }
 
@@ -425,7 +426,7 @@ function GoLiveContent() {
         setPreviewRoomConnected(false);
       }
     };
-  }, [status, userData?.id, isLive, selectedAudioDevice]);
+  }, [status, userData?.id, isLive, selectedAudioDevice, streamEnded]);
 
   // Handle remote commands in preview mode (before going live)
   const handlePreviewRemoteCommand = (command: string, payload?: any) => {
@@ -1550,6 +1551,9 @@ function GoLiveContent() {
     try {
       console.log('=== STARTING GO LIVE PROCESS ===');
 
+      // Reset streamEnded flag so preview can restart after this stream
+      setStreamEnded(false);
+
       // Call API to create stream record in database
       console.log('Creating stream record in database...');
       const response = await fetch('/api/stream/start', {
@@ -1726,6 +1730,9 @@ function GoLiveContent() {
     console.log('=== STOPPING STREAM ===');
     console.log('currentStreamId:', currentStreamId);
     console.log('currentRoomName:', currentRoomName);
+
+    // Mark stream as manually ended to prevent auto-restart of preview
+    setStreamEnded(true);
 
     // Save roomName before clearing state
     const roomNameToDelete = currentRoomNameRef.current;
