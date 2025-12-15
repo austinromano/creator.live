@@ -78,6 +78,7 @@ function RemoteContent() {
   // Connection state
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [connectionFailed, setConnectionFailed] = useState(false);
   const [streamActive, setStreamActive] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [audioMuted, setAudioMuted] = useState(true);
@@ -85,6 +86,7 @@ function RemoteContent() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const connectionStateRef = useRef<'idle' | 'connecting' | 'connected'>('idle');
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Go Live state (for sending go_live command to desktop)
   const [goingLive, setGoingLive] = useState(false);
@@ -135,12 +137,24 @@ function RemoteContent() {
   const username = user?.name || 'Creator';
   const roomFromUrl = searchParams.get('room');
 
-  // Redirect to home if not authenticated and no room in URL
+  // Preserve room parameter through auth flow using sessionStorage
   useEffect(() => {
-    if (status === 'unauthenticated' && !roomFromUrl) {
+    if (roomFromUrl) {
+      // Save room param so we can restore it after auth
+      sessionStorage.setItem('remote_room_param', roomFromUrl);
+    }
+  }, [roomFromUrl]);
+
+  // Restore room param after auth if we had one saved
+  const savedRoomParam = typeof window !== 'undefined' ? sessionStorage.getItem('remote_room_param') : null;
+  const effectiveRoomParam = roomFromUrl || savedRoomParam;
+
+  // Redirect to home if not authenticated and no room in URL (and no saved room)
+  useEffect(() => {
+    if (status === 'unauthenticated' && !effectiveRoomParam) {
       router.push('/');
     }
-  }, [status, roomFromUrl, router]);
+  }, [status, effectiveRoomParam, router]);
 
   // Fetch user data
   useEffect(() => {
@@ -150,6 +164,8 @@ function RemoteContent() {
         .then(data => {
           if (data.user) {
             setUserData(data.user);
+            // Clear saved room param after successful auth and data fetch
+            sessionStorage.removeItem('remote_room_param');
           }
         })
         .catch(err => console.error('Error fetching user profile:', err));
@@ -177,61 +193,83 @@ function RemoteContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Get room from URL params (for unauthenticated access)
+  // Get room from URL params or saved session (for auth flow preservation)
   const roomFromParams = searchParams.get('room');
   const connectionAttemptedRef = useRef(false);
 
-  // Connect directly if room is provided in URL
+  // Connect directly if room is provided in URL or was saved before auth
   // Connect immediately - don't wait for auth status as it can cause issues with wallet auth
   useEffect(() => {
-    if (roomFromParams && !connectionAttemptedRef.current && connectionStateRef.current === 'idle') {
-      console.log('[Remote] Room provided in URL, connecting immediately:', roomFromParams);
+    const roomToConnect = roomFromParams || savedRoomParam;
+    if (roomToConnect && !connectionAttemptedRef.current && connectionStateRef.current === 'idle') {
+      console.log('[Remote] Room available, connecting immediately:', roomToConnect);
       connectionAttemptedRef.current = true;
       setStreamActive(true);
       // Use a stable identity that doesn't depend on auth state
-      connectToStream(roomFromParams);
+      connectToStream(roomToConnect);
     }
-  }, [roomFromParams]);
+  }, [roomFromParams, savedRoomParam]);
 
-  // Check if user has an active stream (only if no room in URL and user is authenticated)
+  // Check if user has an active stream or try preview room (only if no room in URL/saved and user is authenticated)
   useEffect(() => {
-    if (roomFromParams) return; // Skip if room is in URL
+    if (roomFromParams || savedRoomParam) return; // Skip if room is available from URL or saved
+    if (connectionAttemptedRef.current) return; // Skip if already attempted connection
 
-    const checkStream = async () => {
-      console.log('[Remote] Checking for active stream, userData:', userData?.username);
-      if (!userData?.username) {
-        console.log('[Remote] No username available yet');
+    const checkStreamAndTryPreview = async () => {
+      console.log('[Remote] Checking for active stream, userData:', userData?.id, userData?.username);
+      if (!userData?.id) {
+        console.log('[Remote] No user ID available yet');
         return;
       }
 
       try {
+        // First check for active live stream
         console.log('[Remote] Fetching /api/streams/active');
         const response = await fetch(`/api/streams/active?username=${userData.username}`);
         console.log('[Remote] Response status:', response.status);
+
         if (response.ok) {
           const data = await response.json();
           console.log('[Remote] API response:', data);
+
           if (data.stream) {
+            // Found active live stream
             console.log('[Remote] Found active stream:', data.stream.roomName);
+            connectionAttemptedRef.current = true;
             setStreamActive(true);
             connectToStream(data.stream.roomName);
-          } else {
-            console.log('[Remote] No active stream in response');
+            return;
           }
-        } else {
-          console.log('[Remote] Response not OK:', response.status);
         }
+
+        // No active stream found - try connecting to preview room
+        // The preview room uses the format `user-{userId}`
+        const previewRoomName = `user-${userData.id}`;
+        console.log('[Remote] No active stream, trying preview room:', previewRoomName);
+
+        // Mark as attempted so we don't keep trying
+        connectionAttemptedRef.current = true;
+        setStreamActive(true);
+        connectToStream(previewRoomName);
+
       } catch (error) {
         console.error('[Remote] Error checking stream:', error);
+
+        // Even on error, try the preview room
+        if (userData?.id && !connectionAttemptedRef.current) {
+          const previewRoomName = `user-${userData.id}`;
+          console.log('[Remote] Error occurred, trying preview room anyway:', previewRoomName);
+          connectionAttemptedRef.current = true;
+          setStreamActive(true);
+          connectToStream(previewRoomName);
+        }
       }
     };
 
-    if (userData?.username) {
-      checkStream();
-      const interval = setInterval(checkStream, 10000);
-      return () => clearInterval(interval);
+    if (userData?.id) {
+      checkStreamAndTryPreview();
     }
-  }, [userData?.username, roomFromParams]);
+  }, [userData?.id, userData?.username, roomFromParams, savedRoomParam]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -239,6 +277,9 @@ function RemoteContent() {
       if (roomRef.current) {
         roomRef.current.disconnect();
         roomRef.current = null;
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
       }
       connectionStateRef.current = 'idle';
     };
@@ -450,6 +491,22 @@ function RemoteContent() {
     } catch (error) {
       console.error('Error connecting to stream:', error);
       connectionStateRef.current = 'idle';
+      setConnectionFailed(true);
+
+      // Auto-retry after 5 seconds if desktop might not be ready yet
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log('[Remote] Auto-retrying connection...');
+        connectionAttemptedRef.current = false;
+        setConnectionFailed(false);
+        // Trigger re-connection via state change
+        if (userData?.id) {
+          const previewRoomName = `user-${userData.id}`;
+          connectToStream(previewRoomName);
+        }
+      }, 5000);
     } finally {
       setConnecting(false);
     }
@@ -792,19 +849,26 @@ function RemoteContent() {
           {!videoLoaded && (
             <div className="absolute inset-0 flex items-center justify-center">
               {connecting ? (
-                <div className="flex flex-col items-center gap-1">
+                <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
-                  <span className="text-gray-400 text-xs">Connecting...</span>
+                  <span className="text-gray-400 text-xs">Connecting to desktop...</span>
                 </div>
               ) : connected ? (
-                <div className="flex flex-col items-center gap-1">
+                <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
-                  <span className="text-gray-400 text-xs">Loading...</span>
+                  <span className="text-gray-400 text-xs">Loading preview...</span>
+                </div>
+              ) : connectionFailed ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
+                  <span className="text-yellow-400 text-xs">Waiting for desktop...</span>
+                  <span className="text-gray-500 text-[10px]">Auto-retrying connection</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <Video className="h-6 w-6 text-gray-600" />
+                <div className="flex flex-col items-center gap-2">
+                  <Monitor className="h-6 w-6 text-gray-600" />
                   <span className="text-gray-500 text-xs">Open golive on desktop</span>
+                  <span className="text-gray-600 text-[10px]">or scan QR code to connect</span>
                 </div>
               )}
             </div>
@@ -842,8 +906,12 @@ function RemoteContent() {
           >
             {goingLive ? (
               <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Starting...</>
+            ) : connecting ? (
+              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Connecting...</>
+            ) : connectionFailed ? (
+              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Connecting...</>
             ) : !connected ? (
-              <><Video className="h-5 w-5 mr-2" />Waiting for Desktop</>
+              <><Monitor className="h-5 w-5 mr-2" />Waiting for Desktop</>
             ) : (
               <><Play className="h-5 w-5 mr-2" />Go Live</>
             )}
