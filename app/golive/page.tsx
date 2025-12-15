@@ -395,7 +395,7 @@ function GoLiveContent() {
         currentRoomNameRef.current = roomName;
 
         // Listen for remote commands in preview mode
-        const room = previewRoomRef.current.getRoom();
+        const room = previewRoomRef.current?.getRoom();
         if (room) {
           room.on(RoomEvent.DataReceived, (data: Uint8Array) => {
             try {
@@ -449,9 +449,10 @@ function GoLiveContent() {
   useEffect(() => {
     if (!previewRoomConnected || isLive || !previewRoomRef.current) return;
 
-    const broadcastPreviewState = () => {
+    const broadcastPreviewState = async () => {
       const room = previewRoomRef.current?.getRoom();
-      if (!room?.localParticipant) return;
+      // Check room is connected and has local participant before publishing
+      if (!room?.localParticipant || room.state !== 'connected') return;
 
       const state = {
         type: 'remote_state',
@@ -471,8 +472,13 @@ function GoLiveContent() {
         },
       };
 
-      const data = new TextEncoder().encode(JSON.stringify(state));
-      room.localParticipant.publishData(data, { reliable: false });
+      try {
+        const data = new TextEncoder().encode(JSON.stringify(state));
+        await room.localParticipant.publishData(data, { reliable: false });
+      } catch (err) {
+        // Silently ignore publish errors (room may have disconnected)
+        console.debug('[GoLive] Preview state broadcast skipped - room disconnected');
+      }
     };
 
     const interval = setInterval(broadcastPreviewState, 1000);
@@ -1200,7 +1206,7 @@ function GoLiveContent() {
         // Try to notify remote even if everything else failed
         try {
           const room = livekitStreamerRef.current?.getRoom();
-          if (room?.localParticipant) {
+          if (room?.localParticipant && room.state === 'connected') {
             const data = new TextEncoder().encode(JSON.stringify({
               type: 'clip_upload_complete',
               payload: { success: false, error: 'Recording processing failed' },
@@ -1208,7 +1214,8 @@ function GoLiveContent() {
             await room.localParticipant.publishData(data, { reliable: true });
           }
         } catch (e) {
-          console.error('[Clip] Failed to notify remote of error:', e);
+          // Silently ignore - room may have disconnected
+          console.debug('[Clip] Failed to notify remote of error (room disconnected)');
         }
       }
     };
@@ -2201,11 +2208,12 @@ function GoLiveContent() {
   };
 
   // Broadcast remote state to mobile remote control clients
-  const broadcastRemoteState = () => {
+  const broadcastRemoteState = async () => {
     if (!livekitStreamerRef.current || !isLive) return;
 
     const room = livekitStreamerRef.current.getRoom();
-    if (!room?.localParticipant) return;
+    // Check room is connected before publishing
+    if (!room?.localParticipant || room.state !== 'connected') return;
 
     const state = {
       type: 'remote_state',
@@ -2224,8 +2232,13 @@ function GoLiveContent() {
       },
     };
 
-    const data = new TextEncoder().encode(JSON.stringify(state));
-    room.localParticipant.publishData(data, { reliable: false }); // Use unreliable for frequent state updates
+    try {
+      const data = new TextEncoder().encode(JSON.stringify(state));
+      await room.localParticipant.publishData(data, { reliable: false }); // Use unreliable for frequent state updates
+    } catch (err) {
+      // Silently ignore publish errors (room may have disconnected)
+      console.debug('[GoLive] Remote state broadcast skipped - room disconnected');
+    }
   };
 
   // Handle remote control commands from mobile
@@ -2340,9 +2353,13 @@ function GoLiveContent() {
       const encoder = new TextEncoder();
       const data = encoder.encode(JSON.stringify(guestInfo));
       const room = livekitStreamerRef.current.getRoom();
-      if (room?.localParticipant) {
-        await room.localParticipant.publishData(data, { reliable: true });
-        console.log('✅ Guest PiP info sent to viewers:', guestInfo);
+      if (room?.localParticipant && room.state === 'connected') {
+        try {
+          await room.localParticipant.publishData(data, { reliable: true });
+          console.log('✅ Guest PiP info sent to viewers:', guestInfo);
+        } catch (err) {
+          console.debug('[GoLive] Guest PiP publish skipped - room disconnected');
+        }
       }
     }
 
@@ -2350,7 +2367,7 @@ function GoLiveContent() {
     // Also periodically resend the full guest info for viewers who join late
     console.log('📡 Setting up periodic guest PiP broadcast with:', roomName, username);
 
-    guestCompositeIntervalRef.current = setInterval(() => {
+    guestCompositeIntervalRef.current = setInterval(async () => {
       // Periodically send full guest info to viewers (including late joiners)
       if (livekitStreamerRef.current && roomName) {
         const guestInfo = {
@@ -2364,11 +2381,15 @@ function GoLiveContent() {
         const encoder = new TextEncoder();
         const data = encoder.encode(JSON.stringify(guestInfo));
         const room = livekitStreamerRef.current.getRoom();
-        if (room?.localParticipant) {
-          room.localParticipant.publishData(data, { reliable: true }); // Use reliable for better delivery
-          console.log('📡 Sent guest PiP update to viewers:', guestInfo);
+        if (room?.localParticipant && room.state === 'connected') {
+          try {
+            await room.localParticipant.publishData(data, { reliable: true }); // Use reliable for better delivery
+            console.log('📡 Sent guest PiP update to viewers:', guestInfo);
+          } catch (err) {
+            console.debug('[GoLive] Guest PiP periodic publish skipped - room disconnected');
+          }
         } else {
-          console.log('📡 Cannot send - no local participant');
+          console.log('📡 Cannot send - no local participant or room disconnected');
         }
       } else {
         console.log('📡 Cannot send - missing refs:', !!livekitStreamerRef.current, roomName);
@@ -2395,9 +2416,13 @@ function GoLiveContent() {
       const encoder = new TextEncoder();
       const data = encoder.encode(JSON.stringify(guestInfo));
       const room = livekitStreamerRef.current.getRoom();
-      if (room?.localParticipant) {
-        await room.localParticipant.publishData(data, { reliable: true });
-        console.log('✅ Guest PiP stop sent to viewers');
+      if (room?.localParticipant && room.state === 'connected') {
+        try {
+          await room.localParticipant.publishData(data, { reliable: true });
+          console.log('✅ Guest PiP stop sent to viewers');
+        } catch (err) {
+          console.debug('[GoLive] Guest PiP stop publish skipped - room disconnected');
+        }
       }
     }
   };
@@ -3806,6 +3831,37 @@ function GoLiveContent() {
                       <Radio className="h-4 w-4 mr-2" />
                       Go Live
                     </Button>
+
+                    {/* Preview Mode Remote Control QR Code */}
+                    {previewRoomConnected && currentRoomName && (
+                      <div className="mt-4 flex items-center justify-center gap-4 p-3 bg-gray-800/50 rounded-lg">
+                        <div className="bg-white p-2 rounded-lg">
+                          <QRCodeSVG
+                            value={typeof window !== 'undefined'
+                              ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                                ? `https://creator-fun-ruby.vercel.app/remote?room=${encodeURIComponent(currentRoomName)}`
+                                : `${window.location.origin}/remote?room=${encodeURIComponent(currentRoomName)}`)
+                              : '/remote'}
+                            size={80}
+                            level="M"
+                          />
+                        </div>
+                        <div className="text-left">
+                          <div className="flex items-center gap-2 text-sm font-medium text-white">
+                            <Smartphone className="h-4 w-4 text-purple-400" />
+                            Remote Control
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Scan with your phone to control<br />your stream remotely
+                          </p>
+                          {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                            <p className="text-xs text-yellow-400 mt-1">
+                              Using production URL for mobile
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
