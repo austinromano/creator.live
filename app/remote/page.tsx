@@ -769,10 +769,10 @@ function RemoteContent() {
 
       {/* Compact Video Preview */}
       <div className="px-3 py-2">
-        <div className="relative w-full aspect-[16/10] bg-gray-900 rounded-xl overflow-hidden">
+        <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden">
           <video
             ref={videoRef}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover"
             playsInline
             muted
             autoPlay
