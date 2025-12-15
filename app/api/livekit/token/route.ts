@@ -10,6 +10,11 @@ const tokenSchema = z.object({
 
 export const POST = createRoute(
   async (_req, _ctx, body) => {
+    // KILL SWITCH - blocks all LiveKit connections
+    if (process.env.LIVEKIT_DISABLED === 'true') {
+      throw new ApiError('Streaming temporarily disabled', 503, 'LIVEKIT_DISABLED');
+    }
+
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
 

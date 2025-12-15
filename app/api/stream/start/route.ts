@@ -1,11 +1,16 @@
 import { nanoid } from 'nanoid';
 import { prisma } from '@/lib/prisma';
-import { createRoute } from '@/lib/api/middleware';
+import { createRoute, ApiError } from '@/lib/api/middleware';
 import { startStreamSchema } from '@/lib/validations';
 
 // Go Live - flips PREVIEW stream to LIVE (or creates new LIVE stream if no preview)
 export const POST = createRoute(
   async (_req, { userId }, body) => {
+    // KILL SWITCH
+    if (process.env.LIVEKIT_DISABLED === 'true') {
+      throw new ApiError('Streaming temporarily disabled', 503, 'LIVEKIT_DISABLED');
+    }
+
     console.log('[/api/stream/start] Going LIVE for userId:', userId);
 
     // Check if user has an existing PREVIEW stream to flip

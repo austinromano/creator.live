@@ -1,10 +1,15 @@
 import { nanoid } from 'nanoid';
 import { prisma } from '@/lib/prisma';
-import { createRoute } from '@/lib/api/middleware';
+import { createRoute, ApiError } from '@/lib/api/middleware';
 
 // Start a preview session - stream is connected to LiveKit but not visible to viewers
 export const POST = createRoute(
   async (_req, { userId }) => {
+    // KILL SWITCH
+    if (process.env.LIVEKIT_DISABLED === 'true') {
+      throw new ApiError('Streaming temporarily disabled', 503, 'LIVEKIT_DISABLED');
+    }
+
     console.log('[/api/stream/preview] Starting preview for userId:', userId);
 
     // Check if user already has a PREVIEW stream
