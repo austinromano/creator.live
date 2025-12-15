@@ -20,6 +20,7 @@ export const POST = createRoute(
       where: { id: body.streamId },
       data: {
         isLive: false,
+        status: 'ENDED',
         endedAt: new Date(),
       },
     });

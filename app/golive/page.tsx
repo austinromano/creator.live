@@ -305,6 +305,51 @@ function GoLiveContent() {
     }
   }, [status, router]);
 
+  // End stream when browser is closed or page is navigated away
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only prompt if actively streaming
+      if (isLive || previewRoomConnected) {
+        console.log('[GoLive] Browser closing - ending stream');
+
+        // Use sendBeacon for reliable delivery during page unload
+        const streamId = currentStreamId;
+        if (streamId) {
+          const blob = new Blob([JSON.stringify({ streamId })], { type: 'application/json' });
+          navigator.sendBeacon('/api/stream/end', blob);
+        }
+
+        // Clean up LiveKit connections
+        if (livekitStreamerRef.current) {
+          livekitStreamerRef.current.close();
+        }
+        if (previewRoomRef.current) {
+          previewRoomRef.current.close();
+        }
+
+        // Stop camera tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // Also handle when tab becomes hidden (mobile browser backgrounded)
+      if (document.visibilityState === 'hidden' && isLive) {
+        console.log('[GoLive] Page hidden - stream continues but logging state');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isLive, previewRoomConnected, currentStreamId]);
+
   // Start camera preview for mobile (before going live)
   useEffect(() => {
     const startPreview = async () => {
