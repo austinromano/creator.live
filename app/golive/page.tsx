@@ -421,6 +421,9 @@ function GoLiveContent() {
         livekitStreamerRef.current = new LiveKitStreamer(previewData.roomName);
         await livekitStreamerRef.current.startBroadcast(stream);
 
+        // Store reference for preview mode commands
+        previewRoomRef.current = livekitStreamerRef.current;
+
         console.log('[GoLive] PREVIEW mode ready - broadcasting to LiveKit but NOT visible on live page');
       } catch (error) {
         console.error('[GoLive] Failed to setup preview mode:', error);
@@ -470,8 +473,8 @@ function GoLiveContent() {
           microphoneEnabled,
           screenSharing,
           desktopAudioEnabled,
-          isClipping: false,
-          clipTime: 0,
+          isClipping,
+          clipTime,
           isLive: false,
           viewerCount: 0,
           sessionTime: 0,
@@ -494,7 +497,34 @@ function GoLiveContent() {
     broadcastPreviewState(); // Send immediately
 
     return () => clearInterval(interval);
-  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, audioDevices, selectedAudioDevice]);
+  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, isClipping, clipTime, audioDevices, selectedAudioDevice]);
+
+  // Set up remote command listener for PREVIEW mode (before going live)
+  useEffect(() => {
+    if (!previewRoomConnected || isLive || !previewRoomRef.current) return;
+
+    const room = previewRoomRef.current.getRoom();
+    if (!room) return;
+
+    const handlePreviewDataReceived = (data: Uint8Array, participant: any) => {
+      try {
+        const message = JSON.parse(new TextDecoder().decode(data));
+        if (message.type === 'remote_command') {
+          console.log('[GoLive Preview] Received command:', message.command, message.payload);
+          handleRemoteCommand(message.command, message.payload);
+        }
+      } catch (e) {
+        // Ignore non-JSON messages
+      }
+    };
+
+    console.log('[GoLive] Setting up preview mode command listener');
+    room.on(RoomEvent.DataReceived, handlePreviewDataReceived);
+
+    return () => {
+      room.off(RoomEvent.DataReceived, handlePreviewDataReceived);
+    };
+  }, [previewRoomConnected, isLive]);
 
   // Fetch friends list
   useEffect(() => {

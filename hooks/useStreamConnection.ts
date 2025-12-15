@@ -76,7 +76,9 @@ export function useStreamConnection({
 
   // Main connection effect
   useEffect(() => {
-    if (!isLive || !videoRef.current || !shouldConnect) {
+    // Skip connection for demo streams (they don't have real video)
+    const isDemoStream = roomName.startsWith('demo-');
+    if (!isLive || !videoRef.current || !shouldConnect || isDemoStream) {
       if (streamerRef.current) {
         streamerRef.current.close();
         streamerRef.current = null;

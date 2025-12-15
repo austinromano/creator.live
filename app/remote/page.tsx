@@ -34,6 +34,11 @@ import {
   Play,
   Monitor,
   MonitorOff,
+  ZoomIn,
+  ZoomOut,
+  Move,
+  RotateCcw,
+  Crop,
 } from 'lucide-react';
 import { Room, RoomEvent } from 'livekit-client';
 import { LiveKitChatMessage, LiveKitActivityEvent } from '@/lib/livekit-stream';
@@ -115,6 +120,12 @@ function RemoteContent() {
   const [activeTab, setActiveTab] = useState<'chat' | 'activity' | 'friends'>('chat');
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [userData, setUserData] = useState<any>(null);
+
+  // Video crop/zoom state (pre-live adjustment)
+  const [videoZoom, setVideoZoom] = useState(1);
+  const [videoOffsetX, setVideoOffsetX] = useState(0);
+  const [videoOffsetY, setVideoOffsetY] = useState(0);
+  const [showCropControls, setShowCropControls] = useState(false);
 
   // Clip state comes from desktop via remoteState (no local recording anymore)
   // Recording happens on desktop for better quality
@@ -540,6 +551,60 @@ function RemoteContent() {
   const startClip = () => sendCommand('start_clip');
   const stopClip = () => sendCommand('stop_clip');
 
+  // Video crop/zoom controls (pre-live)
+  const handleZoomIn = () => {
+    const newZoom = Math.min(videoZoom + 0.25, 3);
+    setVideoZoom(newZoom);
+    sendCommand('set_crop', { zoom: newZoom, offsetX: videoOffsetX, offsetY: videoOffsetY });
+  };
+
+  const handleZoomOut = () => {
+    const newZoom = Math.max(videoZoom - 0.25, 1);
+    setVideoZoom(newZoom);
+    // Reset offset if zooming back to 1x
+    if (newZoom === 1) {
+      setVideoOffsetX(0);
+      setVideoOffsetY(0);
+      sendCommand('set_crop', { zoom: 1, offsetX: 0, offsetY: 0 });
+    } else {
+      sendCommand('set_crop', { zoom: newZoom, offsetX: videoOffsetX, offsetY: videoOffsetY });
+    }
+  };
+
+  const handlePan = (direction: 'up' | 'down' | 'left' | 'right') => {
+    const step = 5; // percentage
+    let newX = videoOffsetX;
+    let newY = videoOffsetY;
+    const maxOffset = (videoZoom - 1) * 50; // Max pan based on zoom level
+
+    switch (direction) {
+      case 'up':
+        newY = Math.max(videoOffsetY - step, -maxOffset);
+        break;
+      case 'down':
+        newY = Math.min(videoOffsetY + step, maxOffset);
+        break;
+      case 'left':
+        newX = Math.max(videoOffsetX - step, -maxOffset);
+        break;
+      case 'right':
+        newX = Math.min(videoOffsetX + step, maxOffset);
+        break;
+    }
+
+    setVideoOffsetX(newX);
+    setVideoOffsetY(newY);
+    sendCommand('set_crop', { zoom: videoZoom, offsetX: newX, offsetY: newY });
+  };
+
+  const resetCrop = () => {
+    setVideoZoom(1);
+    setVideoOffsetX(0);
+    setVideoOffsetY(0);
+    setShowCropControls(false);
+    sendCommand('set_crop', { zoom: 1, offsetX: 0, offsetY: 0 });
+  };
+
   // Go Live - send command to desktop to start broadcasting
   const handleGoLive = async () => {
     if (!connected) {
@@ -829,7 +894,10 @@ function RemoteContent() {
         <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden">
           <video
             ref={videoRef}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-200"
+            style={{
+              transform: `scale(${videoZoom}) translate(${videoOffsetX}%, ${videoOffsetY}%)`,
+            }}
             playsInline
             muted
             autoPlay
@@ -843,7 +911,22 @@ function RemoteContent() {
             {remoteState.isLive && videoLoaded && (
               <Badge className="bg-red-600 text-xs animate-pulse">● LIVE</Badge>
             )}
+            {videoZoom > 1 && (
+              <Badge className="bg-purple-600 text-xs">{videoZoom.toFixed(1)}x</Badge>
+            )}
           </div>
+
+          {/* Crop button (pre-live only) */}
+          {videoLoaded && !remoteState.isLive && (
+            <button
+              onClick={() => setShowCropControls(!showCropControls)}
+              className={`absolute top-2 right-2 p-1.5 rounded-full transition-colors ${
+                showCropControls ? 'bg-purple-600' : 'bg-black/70'
+              }`}
+            >
+              <Crop className="h-4 w-4 text-white" />
+            </button>
+          )}
 
           {/* Loading states */}
           {!videoLoaded && (
@@ -892,30 +975,136 @@ function RemoteContent() {
               )}
             </button>
           )}
+
+          {/* Crop controls overlay */}
+          {showCropControls && videoLoaded && !remoteState.isLive && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              {/* Center crosshair */}
+              <div className="absolute w-16 h-16 border-2 border-white/30 rounded-lg" />
+
+              {/* Control panel */}
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-xl p-3 pointer-events-auto">
+                <div className="flex items-center gap-3">
+                  {/* Zoom controls */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={handleZoomOut}
+                      disabled={videoZoom <= 1}
+                      className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ZoomOut className="h-4 w-4 text-white" />
+                    </button>
+                    <span className="text-white text-xs w-10 text-center">{videoZoom.toFixed(1)}x</span>
+                    <button
+                      onClick={handleZoomIn}
+                      disabled={videoZoom >= 3}
+                      className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ZoomIn className="h-4 w-4 text-white" />
+                    </button>
+                  </div>
+
+                  <div className="w-px h-8 bg-gray-600" />
+
+                  {/* Pan controls */}
+                  <div className="grid grid-cols-3 gap-0.5">
+                    <div />
+                    <button
+                      onClick={() => handlePan('up')}
+                      disabled={videoZoom <= 1}
+                      className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      <Move className="h-3 w-3 text-white rotate-0" style={{ transform: 'rotate(-90deg)' }} />
+                    </button>
+                    <div />
+                    <button
+                      onClick={() => handlePan('left')}
+                      disabled={videoZoom <= 1}
+                      className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      <Move className="h-3 w-3 text-white" style={{ transform: 'rotate(180deg)' }} />
+                    </button>
+                    <div className="p-1.5 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-gray-500 rounded-full" />
+                    </div>
+                    <button
+                      onClick={() => handlePan('right')}
+                      disabled={videoZoom <= 1}
+                      className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      <Move className="h-3 w-3 text-white" />
+                    </button>
+                    <div />
+                    <button
+                      onClick={() => handlePan('down')}
+                      disabled={videoZoom <= 1}
+                      className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      <Move className="h-3 w-3 text-white" style={{ transform: 'rotate(90deg)' }} />
+                    </button>
+                    <div />
+                  </div>
+
+                  <div className="w-px h-8 bg-gray-600" />
+
+                  {/* Reset button */}
+                  <button
+                    onClick={resetCrop}
+                    className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                  >
+                    <RotateCcw className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Compact Control Bar */}
       <div className="px-3 py-2">
         {!remoteState.isLive ? (
-          /* Go Live Button - compact */
-          <Button
-            onClick={handleGoLive}
-            disabled={goingLive || !connected || status !== 'authenticated'}
-            className="w-full h-12 text-base font-bold rounded-xl bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
-          >
-            {goingLive ? (
-              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Starting...</>
-            ) : connecting ? (
-              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Connecting...</>
-            ) : connectionFailed ? (
-              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Connecting...</>
-            ) : !connected ? (
-              <><Monitor className="h-5 w-5 mr-2" />Waiting for Desktop</>
-            ) : (
-              <><Play className="h-5 w-5 mr-2" />Go Live</>
-            )}
-          </Button>
+          /* Preview Mode Controls */
+          <div className="space-y-2">
+            {/* Main action row - Go Live + Clip */}
+            <div className="flex gap-2">
+              {/* Go Live Button */}
+              <Button
+                onClick={handleGoLive}
+                disabled={goingLive || !connected || status !== 'authenticated'}
+                className="flex-1 h-12 text-base font-bold rounded-xl bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-700"
+              >
+                {goingLive ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Starting...</>
+                ) : connecting ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Connecting...</>
+                ) : connectionFailed ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Connecting...</>
+                ) : !connected ? (
+                  <><Monitor className="h-5 w-5 mr-2" />Waiting for Desktop</>
+                ) : (
+                  <><Play className="h-5 w-5 mr-2" />Go Live</>
+                )}
+              </Button>
+
+              {/* Clip Button (works in preview too) */}
+              <Button
+                onClick={remoteState.isClipping ? stopClip : startClip}
+                disabled={!connected || !videoLoaded}
+                className={`h-12 px-4 font-bold rounded-xl ${
+                  remoteState.isClipping
+                    ? 'bg-red-600 hover:bg-red-700 animate-pulse'
+                    : 'bg-gradient-to-r from-orange-500 to-pink-500'
+                }`}
+              >
+                {remoteState.isClipping ? (
+                  <><CircleDot className="h-5 w-5 mr-1" />{formatClipTime(remoteState.clipTime)}</>
+                ) : (
+                  <Scissors className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
+          </div>
         ) : (
           /* Live Controls - horizontal compact bar */
           <div className="space-y-2">
