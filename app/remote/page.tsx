@@ -1064,9 +1064,9 @@ function RemoteContent() {
       {/* Compact Control Bar */}
       <div className="px-3 py-2">
         {!remoteState.isLive ? (
-          /* Preview Mode Controls */
+          /* Preview Mode Controls - Full controls like live mode */
           <div className="space-y-2">
-            {/* Main action row - Go Live + Clip */}
+            {/* Main action row - Go Live + Clip + Stop */}
             <div className="flex gap-2">
               {/* Go Live Button */}
               <Button
@@ -1087,7 +1087,7 @@ function RemoteContent() {
                 )}
               </Button>
 
-              {/* Clip Button (works in preview too) */}
+              {/* Clip Button */}
               <Button
                 onClick={remoteState.isClipping ? stopClip : startClip}
                 disabled={!connected || !videoLoaded}
@@ -1103,6 +1103,89 @@ function RemoteContent() {
                   <Scissors className="h-5 w-5" />
                 )}
               </Button>
+
+              {/* Stop Preview */}
+              <Button
+                variant="outline"
+                onClick={stopStream}
+                disabled={!connected}
+                className="h-12 px-4 rounded-xl text-red-500 border-red-500/50 hover:bg-red-500/10"
+              >
+                <Square className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Control icons row */}
+            <div className="flex justify-center gap-1">
+              {/* Camera */}
+              <button
+                onClick={toggleCamera}
+                disabled={!connected}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  remoteState.cameraEnabled
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {remoteState.cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+              </button>
+
+              {/* Microphone */}
+              <button
+                onClick={toggleMicrophone}
+                disabled={!connected}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  remoteState.microphoneEnabled
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {remoteState.microphoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+              </button>
+
+              {/* Screen Share */}
+              <button
+                onClick={toggleScreenShare}
+                disabled={!connected}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  remoteState.screenSharing
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                {remoteState.screenSharing ? <Monitor className="h-5 w-5" /> : <MonitorOff className="h-5 w-5" />}
+              </button>
+
+              {/* Desktop Audio (only when screen sharing) */}
+              {remoteState.screenSharing && (
+                <button
+                  onClick={toggleDesktopAudio}
+                  disabled={!connected}
+                  className={`p-2.5 rounded-lg transition-colors ${
+                    remoteState.desktopAudioEnabled
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-gray-700 text-gray-400'
+                  }`}
+                >
+                  {remoteState.desktopAudioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                </button>
+              )}
+
+              {/* Mic selector dropdown */}
+              {remoteState.audioDevices.length > 1 && (
+                <select
+                  value={remoteState.selectedAudioDevice}
+                  onChange={(e) => switchMicrophone(e.target.value)}
+                  disabled={!connected}
+                  className="p-2 bg-gray-700 text-white text-xs rounded-lg border-0 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+                  {remoteState.audioDevices.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label?.slice(0, 15) || `Mic ${device.deviceId.slice(0, 4)}`}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         ) : (
