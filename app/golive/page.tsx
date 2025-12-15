@@ -501,27 +501,37 @@ function GoLiveContent() {
 
   // Set up remote command listener for PREVIEW mode (before going live)
   useEffect(() => {
-    if (!previewRoomConnected || isLive || !previewRoomRef.current) return;
+    console.log('[GoLive Preview] Checking listener setup:', { previewRoomConnected, isLive, hasPreviewRoom: !!previewRoomRef.current });
+
+    if (!previewRoomConnected || isLive || !previewRoomRef.current) {
+      console.log('[GoLive Preview] Skipping listener setup - conditions not met');
+      return;
+    }
 
     const room = previewRoomRef.current.getRoom();
-    if (!room) return;
+    if (!room) {
+      console.log('[GoLive Preview] No room available');
+      return;
+    }
 
     const handlePreviewDataReceived = (data: Uint8Array, participant: any) => {
       try {
         const message = JSON.parse(new TextDecoder().decode(data));
+        console.log('[GoLive Preview] Data received:', message.type, message);
         if (message.type === 'remote_command') {
-          console.log('[GoLive Preview] Received command:', message.command, message.payload);
+          console.log('[GoLive Preview] Executing command:', message.command, message.payload);
           handleRemoteCommand(message.command, message.payload);
         }
       } catch (e) {
-        // Ignore non-JSON messages
+        console.log('[GoLive Preview] Non-JSON message received');
       }
     };
 
-    console.log('[GoLive] Setting up preview mode command listener');
+    console.log('[GoLive Preview] Setting up command listener on room:', room.name);
     room.on(RoomEvent.DataReceived, handlePreviewDataReceived);
 
     return () => {
+      console.log('[GoLive Preview] Cleaning up command listener');
       room.off(RoomEvent.DataReceived, handlePreviewDataReceived);
     };
   }, [previewRoomConnected, isLive]);
@@ -2282,29 +2292,40 @@ function GoLiveContent() {
 
   // Handle remote control commands from mobile
   const handleRemoteCommand = (command: string, payload?: any) => {
-    console.log('Remote command received:', command, payload);
+    console.log('[GoLive] Remote command received:', command, payload);
 
     switch (command) {
       case 'toggle_camera':
+        console.log('[GoLive] Toggling camera');
         toggleCamera();
         break;
       case 'toggle_microphone':
+        console.log('[GoLive] Toggling microphone');
         toggleMicrophone();
         break;
       case 'toggle_screen_share':
+        console.log('[GoLive] Toggling screen share');
         toggleScreenShare();
         break;
       case 'toggle_desktop_audio':
+        console.log('[GoLive] Toggling desktop audio');
         toggleDesktopAudio();
         break;
       case 'start_clip':
+        console.log('[GoLive] Starting clip');
         startClip();
         break;
       case 'stop_clip':
+        console.log('[GoLive] Stopping clip');
         stopClip();
         break;
       case 'stop_stream':
+        console.log('[GoLive] Stopping stream');
         handleEndStream();
+        break;
+      case 'go_live':
+        console.log('[GoLive] Go live command received from remote');
+        handleGoLive();
         break;
       case 'invite_friend':
         if (payload?.friendId && payload?.username) {
@@ -2320,8 +2341,12 @@ function GoLiveContent() {
           switchMicrophone(payload.deviceId);
         }
         break;
+      case 'set_crop':
+        console.log('[GoLive] Set crop:', payload);
+        // TODO: Apply crop settings to video
+        break;
       default:
-        console.warn('Unknown remote command:', command);
+        console.warn('[GoLive] Unknown remote command:', command);
     }
   };
 

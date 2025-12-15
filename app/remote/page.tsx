@@ -525,7 +525,18 @@ function RemoteContent() {
 
   // Send control command to desktop
   const sendCommand = async (command: string, payload?: any) => {
-    if (!roomRef.current?.localParticipant) return;
+    console.log('[Remote] sendCommand called:', command, payload);
+    console.log('[Remote] Room state:', {
+      hasRoom: !!roomRef.current,
+      hasLocalParticipant: !!roomRef.current?.localParticipant,
+      roomState: roomRef.current?.state,
+    });
+
+    if (!roomRef.current?.localParticipant) {
+      console.error('[Remote] Cannot send command - no room or local participant');
+      showToast('Not connected to desktop', 'error');
+      return;
+    }
 
     const message = {
       type: 'remote_command',
@@ -534,8 +545,14 @@ function RemoteContent() {
       timestamp: Date.now(),
     };
 
-    const data = new TextEncoder().encode(JSON.stringify(message));
-    await roomRef.current.localParticipant.publishData(data, { reliable: true });
+    try {
+      const data = new TextEncoder().encode(JSON.stringify(message));
+      await roomRef.current.localParticipant.publishData(data, { reliable: true });
+      console.log('[Remote] Command sent successfully:', command);
+    } catch (error) {
+      console.error('[Remote] Failed to send command:', error);
+      showToast('Failed to send command', 'error');
+    }
   };
 
   // Control handlers
