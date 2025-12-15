@@ -4,9 +4,15 @@ import { createRoute } from '@/lib/api/middleware';
 import type { Stream } from '@/lib/types/stream';
 
 export const GET = createRoute(async () => {
-  // Only return streams with status 'LIVE' (not PREVIEW, IDLE, or ENDED)
+  // Return streams that are LIVE - check both new status field and legacy isLive field
+  // Exclude PREVIEW streams (those are private until "Go Live" is clicked)
   const liveStreams = await prisma.stream.findMany({
-    where: { status: 'LIVE' },
+    where: {
+      OR: [
+        { status: 'LIVE' },
+        { isLive: true, status: { notIn: ['PREVIEW', 'ENDED', 'IDLE'] } },
+      ],
+    },
     include: {
       user: {
         select: {
@@ -25,27 +31,30 @@ export const GET = createRoute(async () => {
 
   const now = Date.now();
 
-  const streams: Stream[] = liveStreams.map((stream) => ({
-    id: stream.id,
-    roomName: `user-${stream.userId}`,
-    title: stream.title || `${stream.user.username}'s Live Stream`,
-    category: stream.category,
-    isLive: stream.isLive,
-    viewerCount: stream.viewerCount,
-    startedAt: stream.startedAt?.toISOString() || null,
-    thumbnail: stream.thumbnail,
-    user: {
-      id: stream.user.id,
-      username: stream.user.username,
-      displayName: stream.user.displayName,
-      avatar: stream.user.avatar,
-      walletAddress: stream.user.walletAddress,
-      isAI: stream.user.isAI,
-      isOnline: stream.user.lastSeenAt
-        ? now - new Date(stream.user.lastSeenAt).getTime() < TIME.ONLINE_THRESHOLD
-        : false,
-    },
-  }));
+  const streams: Stream[] = liveStreams.map((dbStream) => {
+    const user = dbStream.user;
+    return {
+      id: dbStream.id,
+      roomName: `user-${dbStream.userId}`,
+      title: dbStream.title || `${user.username}'s Live Stream`,
+      category: dbStream.category,
+      isLive: dbStream.isLive,
+      viewerCount: dbStream.viewerCount,
+      startedAt: dbStream.startedAt?.toISOString() || null,
+      thumbnail: dbStream.thumbnail,
+      user: {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar,
+        walletAddress: user.walletAddress,
+        isAI: user.isAI,
+        isOnline: user.lastSeenAt
+          ? now - new Date(user.lastSeenAt).getTime() < TIME.ONLINE_THRESHOLD
+          : false,
+      },
+    };
+  });
 
   return { streams };
 });
