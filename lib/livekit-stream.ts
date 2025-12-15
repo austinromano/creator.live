@@ -217,6 +217,84 @@ export class LiveKitStreamer {
     return data.token;
   }
 
+  // Connect to room for data channel only (no video/audio publishing)
+  // Used for preview mode remote control before going live
+  async connectForData(): Promise<void> {
+    console.log(`[${this.streamId}] Connecting for data channel only...`);
+
+    const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+    if (!livekitUrl) {
+      throw new Error('NEXT_PUBLIC_LIVEKIT_URL is not configured');
+    }
+
+    // Get publisher token (we need publisher rights for data channel)
+    const token = await this.getToken(`broadcaster-${Date.now()}`, true);
+
+    // Create and connect to room
+    this.room = new Room({
+      adaptiveStream: false,
+      dynacast: false,
+    });
+
+    this.room.on(RoomEvent.ParticipantConnected, (participant) => {
+      console.log(`[${this.streamId}] Participant connected: ${participant.identity}`);
+    });
+
+    this.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      console.log(`[${this.streamId}] Participant disconnected: ${participant.identity}`);
+    });
+
+    this.room.on(RoomEvent.Disconnected, () => {
+      console.log(`[${this.streamId}] Disconnected from room`);
+    });
+
+    await this.room.connect(livekitUrl, token);
+    console.log(`[${this.streamId}] Connected to LiveKit room (data only)`);
+
+    // Setup data channel for remote control
+    this.setupDataListener();
+  }
+
+  // Publish video/audio tracks to an already connected room
+  async publishTracks(stream: MediaStream): Promise<void> {
+    if (!this.room || !this.room.localParticipant) {
+      console.error('Cannot publish tracks: not connected to room');
+      return;
+    }
+
+    console.log(`[${this.streamId}] Publishing tracks to room...`);
+    this.localStream = stream;
+
+    // Publish the local tracks with optimized encoding
+    const videoTrack = stream.getVideoTracks()[0];
+    const audioTrack = stream.getAudioTracks()[0];
+
+    if (videoTrack) {
+      const localVideoTrack = new LocalVideoTrack(videoTrack);
+      await this.room.localParticipant.publishTrack(localVideoTrack, {
+        name: 'camera',
+        simulcast: false,
+        videoEncoding: {
+          maxBitrate: 4_000_000,
+          maxFramerate: 30,
+          priority: 'high',
+        },
+      });
+      console.log(`[${this.streamId}] Published video track`);
+    }
+
+    if (audioTrack) {
+      const localAudioTrack = new LocalAudioTrack(audioTrack);
+      await this.room.localParticipant.publishTrack(localAudioTrack, {
+        name: 'microphone',
+        audioPreset: {
+          maxBitrate: 64_000,
+        },
+      });
+      console.log(`[${this.streamId}] Published audio track`);
+    }
+  }
+
   async startBroadcast(stream: MediaStream): Promise<void> {
     console.log(`[${this.streamId}] Starting LiveKit broadcast...`);
     this.localStream = stream;

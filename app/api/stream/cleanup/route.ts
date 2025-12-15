@@ -5,14 +5,16 @@ import {
 } from '@/lib/api/middleware';
 
 // POST /api/stream/cleanup - End all active streams for the current user
+// This ends both PREVIEW and LIVE streams
 export const POST = createRoute(
   async (_req, { userId }) => {
     const result = await prisma.stream.updateMany({
       where: {
         userId,
-        isLive: true,
+        status: { in: ['PREVIEW', 'LIVE'] },
       },
       data: {
+        status: 'ENDED',
         isLive: false,
         endedAt: new Date(),
       },

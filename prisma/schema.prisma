@@ -92,6 +92,7 @@ model Comment {
 }
 
 // Streams table - tracks live stream sessions
+// Status lifecycle: IDLE -> PREVIEW -> LIVE -> ENDED
 model Stream {
   id         String    @id @default(cuid())
   userId     String    @map("user_id")
@@ -99,7 +100,8 @@ model Stream {
   title      String?
   category   String?   // IRL, Gaming, Music
   thumbnail  String?   @db.Text // Base64 thumbnail image
-  isLive     Boolean   @default(false) @map("is_live")
+  status     String    @default("IDLE") // IDLE, PREVIEW, LIVE, ENDED
+  isLive     Boolean   @default(false) @map("is_live") // Kept for backward compatibility
   startedAt  DateTime? @map("started_at")
   endedAt    DateTime? @map("ended_at")
   viewerCount Int      @default(0) @map("viewer_count")

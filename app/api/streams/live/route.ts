@@ -4,8 +4,9 @@ import { createRoute } from '@/lib/api/middleware';
 import type { Stream } from '@/lib/types/stream';
 
 export const GET = createRoute(async () => {
+  // Only return streams with status 'LIVE' (not PREVIEW, IDLE, or ENDED)
   const liveStreams = await prisma.stream.findMany({
-    where: { isLive: true },
+    where: { status: 'LIVE' },
     include: {
       user: {
         select: {
