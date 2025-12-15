@@ -1517,17 +1517,33 @@ function GoLiveContent() {
 
   const stopCamera = () => {
     console.log('Stopping camera...');
+    // Stop main camera stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    // Stop screen share stream
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
+    }
+    // Stop preview stream (mobile camera mode)
+    if (previewStreamRef.current) {
+      previewStreamRef.current.getTracks().forEach(track => track.stop());
+      previewStreamRef.current = null;
+    }
+    // Clear video elements
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
     if (desktopVideoRef.current) {
       desktopVideoRef.current.srcObject = null;
     }
+    if (previewVideoRef.current) {
+      previewVideoRef.current.srcObject = null;
+    }
     setStreamReady(false);
+    setScreenSharing(false);
   };
 
   const handleGoLive = async () => {
@@ -1710,7 +1726,6 @@ function GoLiveContent() {
     console.log('=== STOPPING STREAM ===');
     console.log('currentStreamId:', currentStreamId);
     console.log('currentRoomName:', currentRoomName);
-    console.log('currentRoomName:', currentRoomName);
 
     // Save roomName before clearing state
     const roomNameToDelete = currentRoomNameRef.current;
@@ -1732,8 +1747,13 @@ function GoLiveContent() {
         setGuestRoomName(null);
       }
 
-      // Stop camera and UI regardless of stream ID
+      // Stop composite stream (screen share with PiP)
+      stopCompositeStream();
+
+      // Stop camera and all streams
       stopCamera();
+
+      // Reset UI state
       setIsLive(false);
       setSessionTime(0);
       setStreamTitle('');
@@ -1741,6 +1761,14 @@ function GoLiveContent() {
       currentRoomNameRef.current = null;
       setChatMessages([]); // Clear chat messages
       setActivityEvents([]); // Clear activity events
+
+      // Close preview room if still active
+      if (previewRoomRef.current) {
+        console.log('Closing preview room');
+        previewRoomRef.current.close();
+        previewRoomRef.current = null;
+        setPreviewRoomConnected(false);
+      }
 
       // Stop LiveKit broadcast
       if (livekitStreamerRef.current) {
