@@ -3552,6 +3552,39 @@ function GoLiveContent() {
                 </div>
               )}
             </div>
+
+            {/* Remote Control QR Code */}
+            {previewRoomConnected && currentRoomName && (
+              <div className="p-4 border-t border-gray-800">
+                <div className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg">
+                  <div className="bg-white p-2 rounded-lg flex-shrink-0">
+                    <QRCodeSVG
+                      value={typeof window !== 'undefined'
+                        ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                          ? `https://creator-fun-ruby.vercel.app/remote?room=${encodeURIComponent(currentRoomName)}`
+                          : `${window.location.origin}/remote?room=${encodeURIComponent(currentRoomName)}`)
+                        : '/remote'}
+                      size={80}
+                      level="M"
+                    />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white">
+                      <Smartphone className="h-4 w-4 text-purple-400" />
+                      Remote Control
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Scan with your phone to control<br />your stream remotely
+                    </p>
+                    {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                      <p className="text-xs text-yellow-400 mt-1">
+                        Using production URL for mobile
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Center Column - Video Preview */}
@@ -3867,36 +3900,6 @@ function GoLiveContent() {
                       Go Live
                     </Button>
 
-                    {/* Preview Mode Remote Control QR Code */}
-                    {previewRoomConnected && currentRoomName && (
-                      <div className="mt-4 flex items-center justify-center gap-4 p-3 bg-gray-800/50 rounded-lg">
-                        <div className="bg-white p-2 rounded-lg">
-                          <QRCodeSVG
-                            value={typeof window !== 'undefined'
-                              ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                                ? `https://creator-fun-ruby.vercel.app/remote?room=${encodeURIComponent(currentRoomName)}`
-                                : `${window.location.origin}/remote?room=${encodeURIComponent(currentRoomName)}`)
-                              : '/remote'}
-                            size={80}
-                            level="M"
-                          />
-                        </div>
-                        <div className="text-left">
-                          <div className="flex items-center gap-2 text-sm font-medium text-white">
-                            <Smartphone className="h-4 w-4 text-purple-400" />
-                            Remote Control
-                          </div>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Scan with your phone to control<br />your stream remotely
-                          </p>
-                          {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-                            <p className="text-xs text-yellow-400 mt-1">
-                              Using production URL for mobile
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
