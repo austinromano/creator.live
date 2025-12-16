@@ -39,5 +39,5 @@ export const POST = createRoute(
 
     return { token };
   },
-  { bodySchema: tokenSchema }
+  { auth: 'required', authMode: 'id-only', bodySchema: tokenSchema }
 );

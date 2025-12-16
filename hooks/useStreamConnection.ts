@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { LiveKitStreamer } from '@/lib/livekit-stream';
-import { isAudioUnlocked, onAudioUnlock } from '@/lib/audio-unlock';
+import { isAudioUnlocked, onAudioUnlock, offAudioUnlock } from '@/lib/audio-unlock';
 import { TIME, USER_INTERACTION_EVENTS } from '@/lib/constants';
 
 interface UseStreamConnectionOptions {
@@ -76,6 +76,8 @@ export function useStreamConnection({
 
   // Main connection effect
   useEffect(() => {
+    let mounted = true;
+
     // Skip connection for demo streams (they don't have real video)
     const isDemoStream = roomName.startsWith('demo-');
     if (!isLive || !videoRef.current || !shouldConnect || isDemoStream) {
@@ -95,6 +97,7 @@ export function useStreamConnection({
     }
 
     const connectToStream = async () => {
+      if (!mounted) return;
       setIsConnecting(true);
       setError(null);
 
@@ -103,21 +106,28 @@ export function useStreamConnection({
       try {
         await streamerRef.current.startViewingWithElement(
           videoRef.current!,
-          () => tryPlay(),
+          () => {
+            if (mounted) tryPlay();
+          },
           undefined,
           { muteAudio }
         );
       } catch (err) {
-        console.error('Failed to connect to stream preview:', err);
-        setError(err instanceof Error ? err : new Error('Connection failed'));
+        if (mounted) {
+          console.error('Failed to connect to stream preview:', err);
+          setError(err instanceof Error ? err : new Error('Connection failed'));
+        }
       } finally {
-        setIsConnecting(false);
+        if (mounted) {
+          setIsConnecting(false);
+        }
       }
     };
 
     connectToStream();
 
     return () => {
+      mounted = false;
       if (streamerRef.current) {
         streamerRef.current.close();
         streamerRef.current = null;
@@ -135,33 +145,48 @@ export function useStreamConnection({
       }
     };
 
+    // Use consistent options object for add/remove
+    const options = { passive: true, capture: true };
     USER_INTERACTION_EVENTS.forEach(event => {
-      document.addEventListener(event, handleInteraction, { passive: true, capture: true });
+      document.addEventListener(event, handleInteraction, options);
     });
 
     return () => {
       USER_INTERACTION_EVENTS.forEach(event => {
-        document.removeEventListener(event, handleInteraction, true);
+        // Must match the capture flag exactly
+        document.removeEventListener(event, handleInteraction, { capture: true });
       });
     };
   }, [isConnected, tryPlay]);
 
-  // Register callback for audio unlock
+  // Register callback for audio unlock with proper cleanup
   useEffect(() => {
     if (isConnected) return;
 
-    onAudioUnlock(() => {
+    const unlockCallback = () => {
       if (videoRef.current?.srcObject) {
         tryPlay();
       }
-    });
+    };
+
+    onAudioUnlock(unlockCallback);
+
+    // Cleanup: remove callback when effect re-runs or unmounts
+    return () => {
+      offAudioUnlock(unlockCallback);
+    };
   }, [isConnected, tryPlay]);
 
-  // Poll for srcObject availability
+  // Poll for srcObject availability (with early exit when connected)
   useEffect(() => {
     if (isConnected) return;
 
     const interval = setInterval(() => {
+      // Early exit if already connected
+      if (hasTriedPlay.current) {
+        clearInterval(interval);
+        return;
+      }
       if (videoRef.current?.srcObject && isAudioUnlocked()) {
         tryPlay();
       }

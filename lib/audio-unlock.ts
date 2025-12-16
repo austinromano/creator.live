@@ -4,36 +4,61 @@
 
 let audioUnlocked = false;
 let audioContext: AudioContext | null = null;
-let unlockCallbacks: (() => void)[] = [];
+let unlockCallbacks: Set<() => void> = new Set(); // Use Set to prevent duplicate callbacks
+let isUnlocking = false; // Prevent multiple unlock attempts
 
 export function isAudioUnlocked(): boolean {
   return audioUnlocked;
 }
 
+// Register callback for audio unlock - uses Set to prevent duplicates
 export function onAudioUnlock(callback: () => void): void {
   if (audioUnlocked) {
     callback();
   } else {
-    unlockCallbacks.push(callback);
+    unlockCallbacks.add(callback);
   }
+}
+
+// Remove a specific callback (for cleanup)
+export function offAudioUnlock(callback: () => void): void {
+  unlockCallbacks.delete(callback);
+}
+
+// Helper to cleanup and notify callbacks
+function completeUnlock(): void {
+  audioUnlocked = true;
+  unlockCallbacks.forEach(cb => {
+    try {
+      cb();
+    } catch (e) {
+      console.error('Audio unlock callback error:', e);
+    }
+  });
+  unlockCallbacks.clear();
+  isUnlocking = false;
 }
 
 export function unlockAudio(): Promise<void> {
   if (audioUnlocked) return Promise.resolve();
+  if (isUnlocking) return Promise.resolve(); // Already attempting unlock
+
+  isUnlocking = true;
 
   return new Promise((resolve) => {
     try {
       // Create AudioContext
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
-        audioUnlocked = true;
-        unlockCallbacks.forEach(cb => cb());
-        unlockCallbacks = [];
+        completeUnlock();
         resolve();
         return;
       }
 
-      audioContext = new AudioContextClass();
+      // Reuse existing context if available
+      if (!audioContext || audioContext.state === 'closed') {
+        audioContext = new AudioContextClass();
+      }
 
       // Create a silent buffer and play it
       const buffer = audioContext.createBuffer(1, 1, 22050);
@@ -42,25 +67,32 @@ export function unlockAudio(): Promise<void> {
       source.connect(audioContext.destination);
       source.start(0);
 
+      // Disconnect source after it plays to prevent memory leak
+      source.onended = () => {
+        try {
+          source.disconnect();
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+      };
+
       // Resume context if suspended (iOS Safari)
       if (audioContext.state === 'suspended') {
         audioContext.resume().then(() => {
-          audioUnlocked = true;
-          unlockCallbacks.forEach(cb => cb());
-          unlockCallbacks = [];
+          completeUnlock();
+          resolve();
+        }).catch(() => {
+          // Resume failed, but still mark as unlocked
+          completeUnlock();
           resolve();
         });
       } else {
-        audioUnlocked = true;
-        unlockCallbacks.forEach(cb => cb());
-        unlockCallbacks = [];
+        completeUnlock();
         resolve();
       }
     } catch (e) {
       // If anything fails, just mark as unlocked and continue
-      audioUnlocked = true;
-      unlockCallbacks.forEach(cb => cb());
-      unlockCallbacks = [];
+      completeUnlock();
       resolve();
     }
   });
@@ -69,20 +101,23 @@ export function unlockAudio(): Promise<void> {
 // Auto-unlock on first user interaction
 export function setupAutoUnlock(): void {
   if (typeof window === 'undefined') return;
+  if (audioUnlocked) return; // Already unlocked
 
   // Check if already unlocked (non-iOS or user already interacted)
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContextClass) {
       const testCtx = new AudioContextClass();
-      if (testCtx.state === 'running') {
+      const isRunning = testCtx.state === 'running';
+      testCtx.close(); // Always close test context
+      if (isRunning) {
         audioUnlocked = true;
-        testCtx.close();
         return;
       }
-      testCtx.close();
     }
-  } catch (e) {}
+  } catch (e) {
+    // Ignore errors in test
+  }
 
   const events = ['touchstart', 'touchend', 'click', 'keydown', 'scroll', 'mousemove'];
 

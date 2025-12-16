@@ -8,8 +8,7 @@ import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { AudioUnlockProvider } from "@/components/providers/AudioUnlockProvider";
 import { HeartbeatProvider } from "@/components/HeartbeatProvider";
-import { StarField } from "@/components/ui/StarField";
-import { AuroraBorealis } from "@/components/ui/AuroraBorealis";
+import { ClientBackgrounds } from "@/components/ui/ClientBackgrounds";
 import { MobileSwipeNavigator } from "@/components/layout/MobileSwipeNavigator";
 
 const geistSans = Geist({
@@ -52,8 +51,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased bg-[#0f0a15] text-white min-h-screen`}
       >
-        <StarField />
-        <AuroraBorealis />
+        <ClientBackgrounds />
         <SessionProvider>
           <SolanaWalletProvider>
             <AudioUnlockProvider>

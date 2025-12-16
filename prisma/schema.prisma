@@ -71,6 +71,8 @@ model Post {
   sparks        Spark[]
   comments      Comment[]
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("posts")
 }
 
@@ -131,6 +133,9 @@ model Stream {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   tips Tip[]
 
+  @@index([userId])
+  @@index([status])
+  @@index([isLive])
   @@map("streams")
 }
 
@@ -221,6 +226,7 @@ model Spark {
 
   @@unique([userId, postId]) // User can only spark a post once
   @@index([postId])
+  @@index([userId])
   @@map("sparks")
 }
 

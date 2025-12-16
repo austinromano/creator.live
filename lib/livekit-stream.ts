@@ -58,6 +58,10 @@ export class LiveKitStreamer {
   private onInviteEventCallback?: (event: LiveKitInviteEvent) => void;
   private onGuestPipCallback?: (data: any) => void;
 
+  // Store bound event handlers for cleanup
+  private boundHandlers: Map<string, (...args: any[]) => void> = new Map();
+  private attachedTracks: Set<string> = new Set(); // Track attached track IDs to prevent duplicates
+
   constructor(streamId: string) {
     this.streamId = streamId;
   }
@@ -403,8 +407,8 @@ export class LiveKitStreamer {
       },
     });
 
-    // Handle track subscriptions - use LiveKit's attach method
-    this.room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    // Handle track subscriptions - use safe attach to prevent duplicates
+    const trackSubscribedHandler = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
       console.log(`[${this.streamId}] Subscribed to track: ${track.kind} from ${participant.identity}`);
 
       if (track.kind === 'video' && this.onVideoElement) {
@@ -417,9 +421,9 @@ export class LiveKitStreamer {
           (publication as any).setVideoDimensions({ width: 1280, height: 720 });
         }
 
-        // Use LiveKit's attach method - this is the proper way
-        track.attach(this.onVideoElement);
-        console.log(`[${this.streamId}] Attached video track to element`);
+        // Use safe attach to prevent duplicate tracks
+        const attached = this.safeAttachTrack(track, this.onVideoElement);
+        if (!attached) return; // Already attached, skip
 
         // iOS Safari requires these attributes
         this.onVideoElement.setAttribute('playsinline', 'true');
@@ -443,27 +447,40 @@ export class LiveKitStreamer {
           });
       } else if (track.kind === 'audio' && this.onVideoElement && !muteAudio) {
         // Attach audio track (skip if muteAudio option is set)
-        track.attach(this.onVideoElement);
-        console.log(`[${this.streamId}] Attached audio track to element`);
+        this.safeAttachTrack(track, this.onVideoElement);
       }
-    });
+    };
+    this.room.on(RoomEvent.TrackSubscribed, trackSubscribedHandler);
+    this.boundHandlers.set('TrackSubscribed', trackSubscribedHandler);
 
-    this.room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+    const trackUnsubscribedHandler = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
       console.log(`[${this.streamId}] Unsubscribed from track: ${track.kind}`);
+      const trackId = track.mediaStreamTrack?.id || track.sid;
+      if (trackId) {
+        this.attachedTracks.delete(trackId);
+      }
       track.detach();
-    });
+    };
+    this.room.on(RoomEvent.TrackUnsubscribed, trackUnsubscribedHandler);
+    this.boundHandlers.set('TrackUnsubscribed', trackUnsubscribedHandler);
 
-    this.room.on(RoomEvent.ParticipantConnected, (participant) => {
+    const participantConnectedHandler = (participant: RemoteParticipant) => {
       console.log(`[${this.streamId}] Participant connected: ${participant.identity}`);
-    });
+    };
+    this.room.on(RoomEvent.ParticipantConnected, participantConnectedHandler);
+    this.boundHandlers.set('ParticipantConnected', participantConnectedHandler);
 
-    this.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+    const participantDisconnectedHandler = (participant: RemoteParticipant) => {
       console.log(`[${this.streamId}] Participant disconnected: ${participant.identity}`);
-    });
+    };
+    this.room.on(RoomEvent.ParticipantDisconnected, participantDisconnectedHandler);
+    this.boundHandlers.set('ParticipantDisconnected', participantDisconnectedHandler);
 
-    this.room.on(RoomEvent.Disconnected, () => {
+    const disconnectedHandler = () => {
       console.log(`[${this.streamId}] Disconnected from room`);
-    });
+    };
+    this.room.on(RoomEvent.Disconnected, disconnectedHandler);
+    this.boundHandlers.set('Disconnected', disconnectedHandler);
 
     try {
       await this.room.connect(livekitUrl, token);
@@ -484,8 +501,8 @@ export class LiveKitStreamer {
         if (publication.track && publication.isSubscribed) {
           const track = publication.track;
           if (track.kind === 'video' && this.onVideoElement) {
-            track.attach(this.onVideoElement);
-            console.log(`[${this.streamId}] Attached existing video track`);
+            const attached = this.safeAttachTrack(track, this.onVideoElement);
+            if (!attached) return; // Already attached
             this.onVideoElement.muted = true;
             this.onVideoElement.play()
               .then(() => {
@@ -495,8 +512,7 @@ export class LiveKitStreamer {
               })
               .catch(err => console.error('Failed to play:', err));
           } else if (track.kind === 'audio' && this.onVideoElement && !muteAudio) {
-            track.attach(this.onVideoElement);
-            console.log(`[${this.streamId}] Attached existing audio track`);
+            this.safeAttachTrack(track, this.onVideoElement);
           }
         }
       });
@@ -694,16 +710,73 @@ export class LiveKitStreamer {
     }
   }
 
+  // Remove all room event listeners to prevent memory leaks
+  private removeRoomListeners(): void {
+    if (!this.room) return;
+
+    // Remove all stored event handlers
+    this.boundHandlers.forEach((handler, eventName) => {
+      this.room?.off(eventName as any, handler);
+    });
+    this.boundHandlers.clear();
+
+    // Also remove the data listener
+    this.room.removeAllListeners();
+  }
+
+  // Safely attach track to element, preventing duplicates
+  private safeAttachTrack(track: RemoteTrack | Track, element: HTMLVideoElement): boolean {
+    const trackId = track.mediaStreamTrack?.id || track.sid;
+    if (!trackId) return false;
+
+    // Check if already attached
+    if (this.attachedTracks.has(trackId)) {
+      console.log(`[${this.streamId}] Track ${trackId} already attached, skipping`);
+      return false;
+    }
+
+    // Detach any existing tracks of the same kind to prevent duplicates
+    if (track.kind === 'video') {
+      // Clear video source before attaching new track
+      const existingVideoTracks = this.attachedTracks;
+      existingVideoTracks.forEach(id => {
+        if (id.includes('video')) {
+          this.attachedTracks.delete(id);
+        }
+      });
+    }
+
+    track.attach(element);
+    this.attachedTracks.add(trackId);
+    console.log(`[${this.streamId}] Safely attached ${track.kind} track ${trackId}`);
+    return true;
+  }
+
   close(): void {
     this.stopBroadcast();
+
+    // Remove all event listeners before disconnecting
+    this.removeRoomListeners();
+
     if (this.room) {
       this.room.disconnect();
       this.room = null;
     }
+
     // Clean up viewer stream
     this.viewerStream.getTracks().forEach(track => track.stop());
     this.viewerStream = new MediaStream();
+
+    // Clear attached tracks tracking
+    this.attachedTracks.clear();
+
+    // Clear callbacks
     this.onVideoElement = undefined;
     this.onConnectedCallback = undefined;
+    this.onStreamCallback = undefined;
+    this.onChatMessageCallback = undefined;
+    this.onActivityEventCallback = undefined;
+    this.onInviteEventCallback = undefined;
+    this.onGuestPipCallback = undefined;
   }
 }

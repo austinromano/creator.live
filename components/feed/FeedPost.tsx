@@ -406,7 +406,7 @@ export function FeedPost({ post }: FeedPostProps) {
                   fill
                   className="object-contain"
                   sizes="(max-width: 768px) 100vw, 600px"
-                  priority
+                  loading="lazy"
                 />
               )}
               {/* Loading indicator when no thumbnail */}
@@ -415,7 +415,7 @@ export function FeedPost({ post }: FeedPostProps) {
                   <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
                 </div>
               )}
-              {/* Video - always render but hide until loaded if we have thumbnail */}
+              {/* Video - only preload metadata, full video loads when in view */}
               <video
                 ref={videoRef}
                 src={contentUrl}
@@ -423,8 +423,8 @@ export function FeedPost({ post }: FeedPostProps) {
                 loop
                 muted
                 playsInline
-                preload="auto"
-                autoPlay={!post.thumbnailUrl}
+                preload={isInView ? "auto" : "metadata"}
+                autoPlay={!post.thumbnailUrl && isInView}
                 onCanPlay={() => setVideoLoaded(true)}
               />
               {/* Mute/unmute button */}
