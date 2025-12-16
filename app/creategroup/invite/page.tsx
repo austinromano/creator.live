@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Check } from 'lucide-react';
 import { useSession } from 'next-auth/react';
@@ -12,7 +12,7 @@ interface Friend {
   avatar: string | null;
 }
 
-export default function InviteFriendsPage() {
+function InviteFriendsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -178,5 +178,17 @@ export default function InviteFriendsPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function InviteFriendsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <InviteFriendsContent />
+    </Suspense>
   );
 }
