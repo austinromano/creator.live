@@ -52,7 +52,7 @@ export default function ProfilePage() {
   const params = useParams();
   const router = useRouter();
   const username = params.username as string;
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [posts, setPosts] = useState<ContentGridItem[]>([]);
@@ -66,10 +66,13 @@ export default function ProfilePage() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Fetch current user's username from database
+  // Fetch current user's username from database - wait for session to be ready
   useEffect(() => {
     const fetchCurrentUser = async () => {
-      if (!session?.user) return;
+      // Wait for session to be determined
+      if (sessionStatus === 'loading') return;
+      if (sessionStatus === 'unauthenticated' || !session?.user) return;
+
       try {
         const response = await fetch('/api/user/me');
         if (response.ok) {
@@ -83,7 +86,7 @@ export default function ProfilePage() {
       }
     };
     fetchCurrentUser();
-  }, [session]);
+  }, [session, sessionStatus]);
 
   // Check if viewing own profile (case-insensitive)
   const isOwnProfile = currentUserUsername === username.toLowerCase();
@@ -127,10 +130,14 @@ export default function ProfilePage() {
     }
   }, [username, fetchProfile]);
 
-  // Check if following this user
+  // Check if following this user - wait for session to be determined
   useEffect(() => {
     const checkFollowStatus = async () => {
-      if (!session?.user || !username) return;
+      // Wait for session to be determined
+      if (sessionStatus === 'loading') return;
+      if (sessionStatus === 'unauthenticated' || !session?.user) return;
+      if (!username) return;
+
       try {
         const response = await fetch(`/api/user/follow?username=${encodeURIComponent(username)}`);
         if (response.ok) {
@@ -142,7 +149,7 @@ export default function ProfilePage() {
       }
     };
     checkFollowStatus();
-  }, [session, username]);
+  }, [session, sessionStatus, username]);
 
   const handleFollow = async () => {
     if (!session?.user) {

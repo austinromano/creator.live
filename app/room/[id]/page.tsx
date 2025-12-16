@@ -705,7 +705,7 @@ function MemberSettingsModal({
 export default function PrivateRoomPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const roomId = params.id as string;
 
   const [roomData, setRoomData] = useState<RoomData | null>(null);
@@ -798,8 +798,10 @@ export default function PrivateRoomPage() {
     setParticipants(allParticipants);
   }, [roomData?.userId]);
 
-  // Connect to LiveKit room
+  // Connect to LiveKit room - wait for session to be determined
   useEffect(() => {
+    // Wait for session to be determined before connecting
+    if (sessionStatus === 'loading') return;
     if (!roomData || !session?.user) return;
 
     const connectToLiveKit = async () => {
@@ -956,7 +958,7 @@ export default function PrivateRoomPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomData?.id, session?.user?.id, roomId]);
+  }, [roomData?.id, session?.user?.id, sessionStatus, roomId]);
 
   // Toggle mute
   const toggleMute = async () => {
