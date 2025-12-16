@@ -20,7 +20,7 @@ interface Group {
 }
 
 export default function CommunityPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,7 +28,13 @@ export default function CommunityPage() {
 
   useEffect(() => {
     const fetchGroups = async () => {
-      if (!session?.user) {
+      // Wait for session to be determined
+      if (status === 'loading') {
+        return;
+      }
+
+      // No session - stop loading
+      if (status === 'unauthenticated' || !session?.user) {
         setIsLoading(false);
         return;
       }
@@ -38,6 +44,8 @@ export default function CommunityPage() {
         if (response.ok) {
           const data = await response.json();
           setGroups(data.rooms || []);
+        } else {
+          console.error('Failed to fetch groups:', response.status);
         }
       } catch (error) {
         console.error('Failed to fetch groups:', error);
@@ -47,7 +55,7 @@ export default function CommunityPage() {
     };
 
     fetchGroups();
-  }, [session]);
+  }, [session, status]);
 
   const filteredGroups = groups.filter(group =>
     group.name.toLowerCase().includes(searchQuery.toLowerCase())

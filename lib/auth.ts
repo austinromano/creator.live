@@ -146,38 +146,68 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account }) {
+      // For Google OAuth, ensure user exists in database with normalized username
       if (account?.provider === 'google' && user.email) {
         let existingUser = await prisma.user.findUnique({
           where: { email: user.email.toLowerCase() },
         });
 
         if (!existingUser) {
+          // Normalize username to lowercase and make URL-safe
+          const baseUsername = (user.name || user.email.split('@')[0])
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
+            .slice(0, 30);
+
           existingUser = await prisma.user.create({
             data: {
-              username: user.name || user.email.split('@')[0],
+              username: baseUsername,
               email: user.email.toLowerCase(),
               avatar: user.image,
             },
           });
         }
-
-        user.id = existingUser.id;
-      }
-
-      if (account?.provider === 'phantom' && !user.id) {
-        user.id = user.walletAddress || user.email || `phantom_${Date.now()}`;
+        // Note: user.id will be set properly in jwt callback
       }
 
       return true;
     },
     async jwt({ token, user, account }) {
-      if (user) {
-        token.id = user.id;
-        token.name = user.name;
+      // On initial sign-in, always look up the database user to get correct ID
+      if (account && user) {
+        token.provider = account.provider;
         token.email = user.email;
         token.image = user.image;
-        token.provider = account?.provider || 'unknown';
         token.walletAddress = user.walletAddress;
+
+        let dbUser = null;
+
+        // Always query database to ensure we have the correct user ID
+        if (account.provider === 'google' && user.email) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: user.email.toLowerCase() },
+            select: { id: true, username: true },
+          });
+        } else if (account.provider === 'phantom' && user.walletAddress) {
+          dbUser = await prisma.user.findUnique({
+            where: { walletAddress: user.walletAddress },
+            select: { id: true, username: true },
+          });
+        } else if (account.provider === 'email' && user.email) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: (user.email as string).toLowerCase() },
+            select: { id: true, username: true },
+          });
+        }
+
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.name = dbUser.username;
+        } else {
+          // Fallback - should only happen if DB lookup fails
+          token.id = user.id;
+          token.name = user.name;
+        }
       }
       return token;
     },

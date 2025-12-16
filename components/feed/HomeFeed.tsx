@@ -29,7 +29,7 @@ interface RoomData {
 }
 
 export function HomeFeed() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [posts, setPosts] = useState<FeedPostData[]>([]);
   const [friends, setFriends] = useState<StoryUser[]>([]);
   const [rooms, setRooms] = useState<UserRoom[]>([]);
@@ -39,7 +39,16 @@ export function HomeFeed() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!session?.user) return;
+      // Wait for session to be determined
+      if (status === 'loading') {
+        return;
+      }
+
+      // No session - stop loading and show empty state
+      if (status === 'unauthenticated' || !session?.user) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
@@ -53,14 +62,16 @@ export function HomeFeed() {
           fetch('/api/rooms'),
         ]);
 
+        // Parse responses safely - check ok before parsing
         if (feedRes.ok) {
           const feedData = await feedRes.json();
           setPosts(feedData.posts || []);
+        } else {
+          console.error('Feed API error:', feedRes.status);
         }
 
         if (friendsRes.ok) {
           const friendsData = await friendsRes.json();
-          // Transform friends data for stories row
           const storyUsers: StoryUser[] = (friendsData.friends || []).map((f: FriendData) => ({
             id: f.id,
             username: f.username,
@@ -68,9 +79,11 @@ export function HomeFeed() {
             avatar: f.avatar,
             isLive: f.isLive,
             isOnline: f.isOnline,
-            hasStory: false, // Can add story feature later
+            hasStory: false,
           }));
           setFriends(storyUsers);
+        } else {
+          console.error('Friends API error:', friendsRes.status);
         }
 
         if (userRes.ok) {
@@ -82,11 +95,12 @@ export function HomeFeed() {
               avatar: userData.user.avatar,
             });
           }
+        } else {
+          console.error('User API error:', userRes.status);
         }
 
         if (roomsRes.ok) {
           const roomsData = await roomsRes.json();
-          // Transform rooms data for stories row
           const userRooms: UserRoom[] = (roomsData.rooms || []).map((r: RoomData) => ({
             id: r.id,
             name: r.name,
@@ -94,6 +108,8 @@ export function HomeFeed() {
             template: r.template,
           }));
           setRooms(userRooms);
+        } else {
+          console.error('Rooms API error:', roomsRes.status);
         }
       } catch (err) {
         console.error('Error fetching feed data:', err);
@@ -104,7 +120,7 @@ export function HomeFeed() {
     };
 
     fetchData();
-  }, [session]);
+  }, [session, status]);
 
   if (loading) {
     return (

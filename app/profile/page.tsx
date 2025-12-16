@@ -44,8 +44,11 @@ export default function ProfilePage() {
   }, []);
 
   // Redirect to user's profile if logged in
+  const [redirecting, setRedirecting] = useState(false);
+
   useEffect(() => {
     if (status === 'authenticated' && session?.user) {
+      setRedirecting(true);
       // Fetch their username and redirect
       const fetchAndRedirect = async () => {
         try {
@@ -54,10 +57,19 @@ export default function ProfilePage() {
             const data = await response.json();
             if (data.user?.username) {
               router.replace(`/profile/${data.user.username}`);
+              return;
             }
           }
+          // If we couldn't get username, still try to redirect using session name
+          if (session.user.name) {
+            router.replace(`/profile/${session.user.name}`);
+            return;
+          }
+          // Last resort - go to home
+          router.replace('/');
         } catch (error) {
           console.error('Error fetching user:', error);
+          setRedirecting(false);
         }
       };
       fetchAndRedirect();
@@ -185,8 +197,8 @@ export default function ProfilePage() {
     }
   };
 
-  // Show loading while checking session
-  if (status === 'loading') {
+  // Show loading while checking session or redirecting authenticated user
+  if (status === 'loading' || redirecting) {
     return (
       <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
