@@ -144,7 +144,6 @@ function GoLiveContent() {
   const [pipControlsVisible, setPipControlsVisible] = useState(true);
   const pipControlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [streamReady, setStreamReady] = useState(false);
-  const [streamEnded, setStreamEnded] = useState(false); // Tracks if user manually ended stream (prevents auto-restart)
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
   const [streamTitle, setStreamTitle] = useState('');
@@ -237,14 +236,14 @@ function GoLiveContent() {
     };
   }, []);
 
-  // Check for category from camera page (must be before early returns)
-  // NOTE: Auto-start disabled - user must manually click Go Live
+  // Check for auto-start from camera page (must be before early returns)
   useEffect(() => {
     const category = searchParams.get('category');
-    if (category) {
-      // Set the category but do NOT auto-start
+    if (category && !autoStartTriggeredRef.current) {
+      // Set the category immediately
       setStreamCategory(category);
-      // Don't set shouldAutoStart - let user click Go Live manually
+      // Mark that we should auto-start once everything is loaded
+      setShouldAutoStart(true);
     }
   }, [searchParams]);
 
@@ -275,20 +274,6 @@ function GoLiveContent() {
 
         setUserData(data.user);
         setUserLoading(false);
-
-        // Clean up any leftover streams from previous sessions
-        // This prevents the stream from showing as "live" when user hasn't clicked Go Live
-        try {
-          const cleanupResponse = await fetch('/api/stream/cleanup', { method: 'POST' });
-          if (cleanupResponse.ok) {
-            const cleanupData = await cleanupResponse.json();
-            if (cleanupData.success) {
-              console.log('[GoLive] Cleaned up leftover streams:', cleanupData.message);
-            }
-          }
-        } catch (cleanupError) {
-          console.error('Error cleaning up streams:', cleanupError);
-        }
       } catch (error) {
         console.error('Error checking onboarding:', error);
         setUserLoading(false);
@@ -304,51 +289,6 @@ function GoLiveContent() {
       router.push('/');
     }
   }, [status, router]);
-
-  // End stream when browser is closed or page is navigated away
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Only prompt if actively streaming
-      if (isLive || previewRoomConnected) {
-        console.log('[GoLive] Browser closing - ending stream');
-
-        // Use sendBeacon for reliable delivery during page unload
-        const streamId = currentStreamId;
-        if (streamId) {
-          const blob = new Blob([JSON.stringify({ streamId })], { type: 'application/json' });
-          navigator.sendBeacon('/api/stream/end', blob);
-        }
-
-        // Clean up LiveKit connections
-        if (livekitStreamerRef.current) {
-          livekitStreamerRef.current.close();
-        }
-        if (previewRoomRef.current) {
-          previewRoomRef.current.close();
-        }
-
-        // Stop camera tracks
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      // Also handle when tab becomes hidden (mobile browser backgrounded)
-      if (document.visibilityState === 'hidden' && isLive) {
-        console.log('[GoLive] Page hidden - stream continues but logging state');
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isLive, previewRoomConnected, currentStreamId]);
 
   // Start camera preview for mobile (before going live)
   useEffect(() => {
@@ -396,7 +336,7 @@ function GoLiveContent() {
       }
     };
 
-    if (status === 'authenticated' && !isLive && !streamEnded) {
+    if (status === 'authenticated' && !isLive) {
       startPreview();
     }
 
@@ -406,36 +346,21 @@ function GoLiveContent() {
         previewStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [status, isLive, selectedAudioDevice, streamEnded]);
+  }, [status, isLive, selectedAudioDevice]);
 
-  // Setup PREVIEW mode - connects to LiveKit but stream is not visible to viewers
-  // The preview is a private room that becomes public via a state flip when "Go Live" is clicked
+  // Create preview room for remote control (desktop only, before going live)
   useEffect(() => {
-    const setupPreviewMode = async () => {
-      // Only on desktop and when not already live
+    const setupPreviewRoom = async () => {
+      // Only on desktop (not mobile) and when not already live
       if (isLive || !userData?.id) return;
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
       if (isMobile) return;
-      if (livekitStreamerRef.current) return; // Already connected
+      if (previewRoomRef.current) return; // Already connected
 
       try {
-        console.log('[GoLive] Setting up PREVIEW mode...');
+        console.log('[GoLive] Setting up preview room for remote control...');
 
-        // Step 1: Create PREVIEW stream in database
-        const previewResponse = await fetch('/api/stream/preview', { method: 'POST' });
-        if (!previewResponse.ok) {
-          console.error('[GoLive] Failed to create preview stream');
-          return;
-        }
-        const previewData = await previewResponse.json();
-        console.log('[GoLive] Preview stream created:', previewData.stream.id, 'status:', previewData.stream.status);
-
-        setCurrentStreamId(previewData.stream.id);
-        setCurrentRoomName(previewData.roomName);
-        currentRoomNameRef.current = previewData.roomName;
-        setPreviewRoomConnected(true);
-
-        // Step 2: Get camera stream
+        // Get camera stream for preview broadcast
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1920, min: 1280 },
@@ -448,6 +373,7 @@ function GoLiveContent() {
             : { echoCancellation: true, noiseSuppression: true },
         });
 
+        // Store for later use when going live
         streamRef.current = stream;
         setStreamReady(true);
 
@@ -456,33 +382,50 @@ function GoLiveContent() {
           videoRef.current.srcObject = stream;
           videoRef.current.play().catch(console.error);
         }
-        if (desktopVideoRef.current) {
-          desktopVideoRef.current.srcObject = stream;
-          desktopVideoRef.current.play().catch(console.error);
+
+        // Create preview room with user-based name
+        const roomName = `user-${userData.id}`;
+        previewRoomRef.current = new LiveKitStreamer(roomName);
+
+        // Start broadcasting preview (viewers can see but stream not "live" in DB)
+        await previewRoomRef.current.startBroadcast(stream);
+        console.log('[GoLive] Preview room connected:', roomName);
+        setPreviewRoomConnected(true);
+        setCurrentRoomName(roomName);
+        currentRoomNameRef.current = roomName;
+
+        // Listen for remote commands in preview mode
+        const room = previewRoomRef.current.getRoom();
+        if (room) {
+          room.on(RoomEvent.DataReceived, (data: Uint8Array) => {
+            try {
+              const message = JSON.parse(new TextDecoder().decode(data));
+              if (message.type === 'remote_command') {
+                handlePreviewRemoteCommand(message.command, message.payload);
+              }
+            } catch (e) {
+              // Ignore non-JSON
+            }
+          });
         }
-
-        // Step 3: Connect to LiveKit and start broadcasting (PREVIEW mode - not visible to viewers)
-        console.log('[GoLive] Connecting to LiveKit room:', previewData.roomName);
-        livekitStreamerRef.current = new LiveKitStreamer(previewData.roomName);
-        await livekitStreamerRef.current.startBroadcast(stream);
-
-        // Store reference for preview mode commands
-        previewRoomRef.current = livekitStreamerRef.current;
-
-        console.log('[GoLive] PREVIEW mode ready - broadcasting to LiveKit but NOT visible on live page');
       } catch (error) {
-        console.error('[GoLive] Failed to setup preview mode:', error);
+        console.error('[GoLive] Failed to setup preview room:', error);
       }
     };
 
-    if (status === 'authenticated' && userData?.id && !isLive && !streamEnded) {
-      setupPreviewMode();
+    if (status === 'authenticated' && userData?.id && !isLive) {
+      setupPreviewRoom();
     }
 
     return () => {
-      // Don't cleanup here - we want to keep the LiveKit connection for seamless transition to LIVE
+      // Clean up preview room when going live or unmounting
+      if (previewRoomRef.current && !isLive) {
+        previewRoomRef.current.close();
+        previewRoomRef.current = null;
+        setPreviewRoomConnected(false);
+      }
     };
-  }, [status, userData?.id, isLive, selectedAudioDevice, streamEnded]);
+  }, [status, userData?.id, isLive, selectedAudioDevice]);
 
   // Handle remote commands in preview mode (before going live)
   const handlePreviewRemoteCommand = (command: string, payload?: any) => {
@@ -506,10 +449,9 @@ function GoLiveContent() {
   useEffect(() => {
     if (!previewRoomConnected || isLive || !previewRoomRef.current) return;
 
-    const broadcastPreviewState = async () => {
+    const broadcastPreviewState = () => {
       const room = previewRoomRef.current?.getRoom();
-      // Check room is connected and has local participant before publishing
-      if (!room?.localParticipant || room.state !== 'connected') return;
+      if (!room?.localParticipant) return;
 
       const state = {
         type: 'remote_state',
@@ -518,8 +460,8 @@ function GoLiveContent() {
           microphoneEnabled,
           screenSharing,
           desktopAudioEnabled,
-          isClipping,
-          clipTime,
+          isClipping: false,
+          clipTime: 0,
           isLive: false,
           viewerCount: 0,
           sessionTime: 0,
@@ -529,57 +471,15 @@ function GoLiveContent() {
         },
       };
 
-      try {
-        const data = new TextEncoder().encode(JSON.stringify(state));
-        await room.localParticipant.publishData(data, { reliable: false });
-      } catch (err) {
-        // Silently ignore publish errors (room may have disconnected)
-        console.debug('[GoLive] Preview state broadcast skipped - room disconnected');
-      }
+      const data = new TextEncoder().encode(JSON.stringify(state));
+      room.localParticipant.publishData(data, { reliable: false });
     };
 
     const interval = setInterval(broadcastPreviewState, 1000);
     broadcastPreviewState(); // Send immediately
 
     return () => clearInterval(interval);
-  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, isClipping, clipTime, audioDevices, selectedAudioDevice]);
-
-  // Set up remote command listener for PREVIEW mode (before going live)
-  useEffect(() => {
-    console.log('[GoLive Preview] Checking listener setup:', { previewRoomConnected, isLive, hasPreviewRoom: !!previewRoomRef.current });
-
-    if (!previewRoomConnected || isLive || !previewRoomRef.current) {
-      console.log('[GoLive Preview] Skipping listener setup - conditions not met');
-      return;
-    }
-
-    const room = previewRoomRef.current.getRoom();
-    if (!room) {
-      console.log('[GoLive Preview] No room available');
-      return;
-    }
-
-    const handlePreviewDataReceived = (data: Uint8Array, participant: any) => {
-      try {
-        const message = JSON.parse(new TextDecoder().decode(data));
-        console.log('[GoLive Preview] Data received:', message.type, message);
-        if (message.type === 'remote_command') {
-          console.log('[GoLive Preview] Executing command:', message.command, message.payload);
-          handleRemoteCommand(message.command, message.payload);
-        }
-      } catch (e) {
-        console.log('[GoLive Preview] Non-JSON message received');
-      }
-    };
-
-    console.log('[GoLive Preview] Setting up command listener on room:', room.name);
-    room.on(RoomEvent.DataReceived, handlePreviewDataReceived);
-
-    return () => {
-      console.log('[GoLive Preview] Cleaning up command listener');
-      room.off(RoomEvent.DataReceived, handlePreviewDataReceived);
-    };
-  }, [previewRoomConnected, isLive]);
+  }, [previewRoomConnected, isLive, cameraEnabled, microphoneEnabled, screenSharing, desktopAudioEnabled, audioDevices, selectedAudioDevice]);
 
   // Fetch friends list
   useEffect(() => {
@@ -1300,7 +1200,7 @@ function GoLiveContent() {
         // Try to notify remote even if everything else failed
         try {
           const room = livekitStreamerRef.current?.getRoom();
-          if (room?.localParticipant && room.state === 'connected') {
+          if (room?.localParticipant) {
             const data = new TextEncoder().encode(JSON.stringify({
               type: 'clip_upload_complete',
               payload: { success: false, error: 'Recording processing failed' },
@@ -1308,8 +1208,7 @@ function GoLiveContent() {
             await room.localParticipant.publishData(data, { reliable: true });
           }
         } catch (e) {
-          // Silently ignore - room may have disconnected
-          console.debug('[Clip] Failed to notify remote of error (room disconnected)');
+          console.error('[Clip] Failed to notify remote of error:', e);
         }
       }
     };
@@ -1611,57 +1510,25 @@ function GoLiveContent() {
 
   const stopCamera = () => {
     console.log('Stopping camera...');
-    // Stop main camera stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    // Stop screen share stream
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(track => track.stop());
-      screenStreamRef.current = null;
-    }
-    // Stop preview stream (mobile camera mode)
-    if (previewStreamRef.current) {
-      previewStreamRef.current.getTracks().forEach(track => track.stop());
-      previewStreamRef.current = null;
-    }
-    // Clear video elements
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
     if (desktopVideoRef.current) {
       desktopVideoRef.current.srcObject = null;
     }
-    if (previewVideoRef.current) {
-      previewVideoRef.current.srcObject = null;
-    }
     setStreamReady(false);
-    setScreenSharing(false);
   };
 
   const handleGoLive = async () => {
     try {
-      console.log('=== GOING LIVE (PREVIEW → LIVE) ===');
+      console.log('=== STARTING GO LIVE PROCESS ===');
 
-      // Reset streamEnded flag so preview can restart after this stream
-      setStreamEnded(false);
-
-      // Check that we have a preview stream connected
-      if (!livekitStreamerRef.current) {
-        console.error('No preview stream connected! Setting up now...');
-        // Fallback: if somehow preview wasn't set up, start fresh
-        if (!streamRef.current) {
-          await startCamera();
-        }
-        if (!streamRef.current) {
-          alert('Failed to access camera');
-          return;
-        }
-      }
-
-      // Call API to flip PREVIEW → LIVE (same LiveKit session continues)
-      console.log('Flipping stream status from PREVIEW to LIVE...');
+      // Call API to create stream record in database
+      console.log('Creating stream record in database...');
       const response = await fetch('/api/stream/start', {
         method: 'POST',
         headers: {
@@ -1675,24 +1542,56 @@ function GoLiveContent() {
 
       if (!response.ok) {
         const error = await response.json();
-        console.error('Failed to go live:', error);
-        alert(error.error || 'Failed to go live');
+        console.error('Failed to create stream:', error);
+        alert(error.error || 'Failed to start stream');
         return;
       }
 
       const data = await response.json();
-      console.log('Stream is now LIVE:', data.stream.id, 'status:', data.stream.status);
+      console.log('Stream created:', data);
       setCurrentStreamId(data.stream.id);
-      setCurrentRoomName(data.roomName);
-      currentRoomNameRef.current = data.roomName;
 
-      // Set isLive to true - this is the state flip!
-      console.log('Setting isLive to true...');
-      setIsLive(true);
+      // Use user-based room name from API
+      const roomName = data.roomName || `user-${userId}`;
+      setCurrentRoomName(roomName);
+      currentRoomNameRef.current = roomName; // Also set ref for use in intervals
+      console.log('Using room name:', roomName);
 
-      // Set up chat and activity listeners now that we're live
-      if (livekitStreamerRef.current) {
-        // Set up chat message listener
+      // Check if we already have a preview room running (started by desktop for remote control)
+      if (previewRoomRef.current && streamRef.current) {
+        console.log('Reusing preview room for live broadcast...');
+        // Transfer preview room to live streamer
+        livekitStreamerRef.current = previewRoomRef.current;
+        previewRoomRef.current = null;
+        setPreviewRoomConnected(false);
+        setIsLive(true);
+      } else {
+        // Start camera BEFORE setting isLive
+        console.log('Starting camera...');
+        await startCamera();
+
+        console.log('Camera started, stream ref:', streamRef.current);
+        console.log('Setting isLive to true...');
+        setIsLive(true);
+
+        // Start LiveKit broadcast with room name
+        if (streamRef.current) {
+          // Close any existing LiveKit connection first
+          if (livekitStreamerRef.current) {
+            console.log('Closing existing LiveKit connection before starting new one');
+            livekitStreamerRef.current.close();
+            livekitStreamerRef.current = null;
+          }
+
+          console.log('Starting LiveKit broadcast...');
+          livekitStreamerRef.current = new LiveKitStreamer(roomName);
+        }
+      }
+
+      // Continue with setting up listeners if we have a streamer
+      if (livekitStreamerRef.current && streamRef.current) {
+
+        // Set up chat message listener BEFORE starting broadcast
         console.log('Setting up chat message listener on LiveKit streamer');
         livekitStreamerRef.current.onChatMessage(async (lkMessage: LiveKitChatMessage) => {
           console.log('=== GOLIVE: Received chat message ===', lkMessage);
@@ -1754,42 +1653,57 @@ function GoLiveContent() {
           setActivityEvents(prev => [...prev, activityEvent]);
         });
 
-        // If screen sharing was active in preview, ensure composite track is published
-        if (screenSharing && compositeStreamRef.current) {
-          const compositeTrack = compositeStreamRef.current.getVideoTracks()[0];
-          if (compositeTrack) {
-            console.log('Screen sharing active, ensuring composite track is published...');
-            await livekitStreamerRef.current.replaceVideoTrack(compositeTrack);
-          }
-          if (desktopAudioTrackRef.current) {
-            await livekitStreamerRef.current.publishAdditionalAudioTrack(desktopAudioTrackRef.current, 'desktop-audio');
-          }
+        // Note: Invite system now uses API polling instead of LiveKit data channel
+        // This is more reliable across different network conditions
+
+        // Only start broadcast if we didn't reuse a preview room (which is already broadcasting)
+        if (!previewRoomConnected) {
+          await livekitStreamerRef.current.startBroadcast(streamRef.current);
+          console.log('LiveKit broadcast started for room:', roomName);
+        } else {
+          console.log('Reused preview room, already broadcasting');
         }
 
-        // Start capturing thumbnails
+        // Start capturing thumbnails for all streams (token-based or user-based)
         startThumbnailCapture();
+      } else {
+        console.error('ERROR: streamRef.current is null after startCamera!');
       }
 
-      console.log('=== GO LIVE COMPLETE - Stream is now visible to viewers! ===');
+      console.log('=== GO LIVE COMPLETE ===');
     } catch (error) {
-      console.error('Error going live:', error);
-      alert('Failed to go live: ' + (error as Error).message);
+      console.error('Error starting stream:', error);
+      alert('Failed to start stream: ' + (error as Error).message);
     }
   };
 
-  // Store handleGoLive in ref (kept for potential future use)
+  // Store handleGoLive in ref so auto-start can call it
   handleGoLiveRef.current = handleGoLive;
 
-  // Auto-start disabled - user must manually click Go Live button
-  // This ensures they can preview their stream before broadcasting
+  // Auto-start stream when coming from camera page with category
+  // This effect triggers the go-live once user data is loaded
+  useEffect(() => {
+    if (shouldAutoStart && !isPageLoading && !isLive && !autoStartTriggeredRef.current) {
+      autoStartTriggeredRef.current = true;
+      setShouldAutoStart(false);
+
+      // Small delay to ensure everything is ready, then trigger go live
+      const timer = setTimeout(() => {
+        if (handleGoLiveRef.current) {
+          console.log('Auto-starting stream...');
+          handleGoLiveRef.current();
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAutoStart, isPageLoading, isLive]);
 
   const handleEndStream = async () => {
     console.log('=== STOPPING STREAM ===');
     console.log('currentStreamId:', currentStreamId);
     console.log('currentRoomName:', currentRoomName);
-
-    // Mark stream as manually ended to prevent auto-restart of preview
-    setStreamEnded(true);
+    console.log('currentRoomName:', currentRoomName);
 
     // Save roomName before clearing state
     const roomNameToDelete = currentRoomNameRef.current;
@@ -1811,13 +1725,8 @@ function GoLiveContent() {
         setGuestRoomName(null);
       }
 
-      // Stop composite stream (screen share with PiP)
-      stopCompositeStream();
-
-      // Stop camera and all streams
+      // Stop camera and UI regardless of stream ID
       stopCamera();
-
-      // Reset UI state
       setIsLive(false);
       setSessionTime(0);
       setStreamTitle('');
@@ -1825,14 +1734,6 @@ function GoLiveContent() {
       currentRoomNameRef.current = null;
       setChatMessages([]); // Clear chat messages
       setActivityEvents([]); // Clear activity events
-
-      // Close preview room if still active
-      if (previewRoomRef.current) {
-        console.log('Closing preview room');
-        previewRoomRef.current.close();
-        previewRoomRef.current = null;
-        setPreviewRoomConnected(false);
-      }
 
       // Stop LiveKit broadcast
       if (livekitStreamerRef.current) {
@@ -2203,16 +2104,14 @@ function GoLiveContent() {
         if (streamRef.current) {
           const compositeTrack = await startCompositeStream(screenStream, streamRef.current);
 
-          if (compositeTrack) {
-            // Show composite in preview (works in both preview and live mode)
+          if (compositeTrack && livekitStreamerRef.current) {
+            // Send composite to LiveKit broadcast
+            await livekitStreamerRef.current.replaceVideoTrack(compositeTrack);
+
+            // Show composite in preview too
             const compositeStream = new MediaStream([compositeTrack]);
             if (desktopVideoRef.current) {
               desktopVideoRef.current.srcObject = compositeStream;
-            }
-
-            // Send composite to LiveKit broadcast (only if live)
-            if (livekitStreamerRef.current) {
-              await livekitStreamerRef.current.replaceVideoTrack(compositeTrack);
             }
           }
         }
@@ -2302,12 +2201,11 @@ function GoLiveContent() {
   };
 
   // Broadcast remote state to mobile remote control clients
-  const broadcastRemoteState = async () => {
+  const broadcastRemoteState = () => {
     if (!livekitStreamerRef.current || !isLive) return;
 
     const room = livekitStreamerRef.current.getRoom();
-    // Check room is connected before publishing
-    if (!room?.localParticipant || room.state !== 'connected') return;
+    if (!room?.localParticipant) return;
 
     const state = {
       type: 'remote_state',
@@ -2326,51 +2224,35 @@ function GoLiveContent() {
       },
     };
 
-    try {
-      const data = new TextEncoder().encode(JSON.stringify(state));
-      await room.localParticipant.publishData(data, { reliable: false }); // Use unreliable for frequent state updates
-    } catch (err) {
-      // Silently ignore publish errors (room may have disconnected)
-      console.debug('[GoLive] Remote state broadcast skipped - room disconnected');
-    }
+    const data = new TextEncoder().encode(JSON.stringify(state));
+    room.localParticipant.publishData(data, { reliable: false }); // Use unreliable for frequent state updates
   };
 
   // Handle remote control commands from mobile
   const handleRemoteCommand = (command: string, payload?: any) => {
-    console.log('[GoLive] Remote command received:', command, payload);
+    console.log('Remote command received:', command, payload);
 
     switch (command) {
       case 'toggle_camera':
-        console.log('[GoLive] Toggling camera');
         toggleCamera();
         break;
       case 'toggle_microphone':
-        console.log('[GoLive] Toggling microphone');
         toggleMicrophone();
         break;
       case 'toggle_screen_share':
-        console.log('[GoLive] Toggling screen share');
         toggleScreenShare();
         break;
       case 'toggle_desktop_audio':
-        console.log('[GoLive] Toggling desktop audio');
         toggleDesktopAudio();
         break;
       case 'start_clip':
-        console.log('[GoLive] Starting clip');
         startClip();
         break;
       case 'stop_clip':
-        console.log('[GoLive] Stopping clip');
         stopClip();
         break;
       case 'stop_stream':
-        console.log('[GoLive] Stopping stream');
         handleEndStream();
-        break;
-      case 'go_live':
-        console.log('[GoLive] Go live command received from remote');
-        handleGoLive();
         break;
       case 'invite_friend':
         if (payload?.friendId && payload?.username) {
@@ -2386,12 +2268,8 @@ function GoLiveContent() {
           switchMicrophone(payload.deviceId);
         }
         break;
-      case 'set_crop':
-        console.log('[GoLive] Set crop:', payload);
-        // TODO: Apply crop settings to video
-        break;
       default:
-        console.warn('[GoLive] Unknown remote command:', command);
+        console.warn('Unknown remote command:', command);
     }
   };
 
@@ -2462,13 +2340,9 @@ function GoLiveContent() {
       const encoder = new TextEncoder();
       const data = encoder.encode(JSON.stringify(guestInfo));
       const room = livekitStreamerRef.current.getRoom();
-      if (room?.localParticipant && room.state === 'connected') {
-        try {
-          await room.localParticipant.publishData(data, { reliable: true });
-          console.log('✅ Guest PiP info sent to viewers:', guestInfo);
-        } catch (err) {
-          console.debug('[GoLive] Guest PiP publish skipped - room disconnected');
-        }
+      if (room?.localParticipant) {
+        await room.localParticipant.publishData(data, { reliable: true });
+        console.log('✅ Guest PiP info sent to viewers:', guestInfo);
       }
     }
 
@@ -2476,7 +2350,7 @@ function GoLiveContent() {
     // Also periodically resend the full guest info for viewers who join late
     console.log('📡 Setting up periodic guest PiP broadcast with:', roomName, username);
 
-    guestCompositeIntervalRef.current = setInterval(async () => {
+    guestCompositeIntervalRef.current = setInterval(() => {
       // Periodically send full guest info to viewers (including late joiners)
       if (livekitStreamerRef.current && roomName) {
         const guestInfo = {
@@ -2490,15 +2364,11 @@ function GoLiveContent() {
         const encoder = new TextEncoder();
         const data = encoder.encode(JSON.stringify(guestInfo));
         const room = livekitStreamerRef.current.getRoom();
-        if (room?.localParticipant && room.state === 'connected') {
-          try {
-            await room.localParticipant.publishData(data, { reliable: true }); // Use reliable for better delivery
-            console.log('📡 Sent guest PiP update to viewers:', guestInfo);
-          } catch (err) {
-            console.debug('[GoLive] Guest PiP periodic publish skipped - room disconnected');
-          }
+        if (room?.localParticipant) {
+          room.localParticipant.publishData(data, { reliable: true }); // Use reliable for better delivery
+          console.log('📡 Sent guest PiP update to viewers:', guestInfo);
         } else {
-          console.log('📡 Cannot send - no local participant or room disconnected');
+          console.log('📡 Cannot send - no local participant');
         }
       } else {
         console.log('📡 Cannot send - missing refs:', !!livekitStreamerRef.current, roomName);
@@ -2525,13 +2395,9 @@ function GoLiveContent() {
       const encoder = new TextEncoder();
       const data = encoder.encode(JSON.stringify(guestInfo));
       const room = livekitStreamerRef.current.getRoom();
-      if (room?.localParticipant && room.state === 'connected') {
-        try {
-          await room.localParticipant.publishData(data, { reliable: true });
-          console.log('✅ Guest PiP stop sent to viewers');
-        } catch (err) {
-          console.debug('[GoLive] Guest PiP stop publish skipped - room disconnected');
-        }
+      if (room?.localParticipant) {
+        await room.localParticipant.publishData(data, { reliable: true });
+        console.log('✅ Guest PiP stop sent to viewers');
       }
     }
   };
@@ -3081,11 +2947,48 @@ function GoLiveContent() {
               </div>
             </div>
 
-            {/* LIVE Mode - Offline indicator (only when no video preview) */}
-            {cameraMode === 'LIVE' && !capturedImage && !isLive && !streamReady && (
+            {/* LIVE Mode - Category selector in center */}
+            {cameraMode === 'LIVE' && !capturedImage && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
                 <div className="text-3xl font-bold text-white tracking-wider mb-2">OFFLINE</div>
-                <p className="text-gray-300 text-base">Select a category and go live</p>
+                <p className="text-gray-300 text-base mb-6">Select a category</p>
+
+                {/* Category Selection */}
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setStreamCategory('IRL')}
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
+                      streamCategory === 'IRL'
+                        ? 'bg-purple-600 ring-2 ring-purple-400'
+                        : 'bg-gray-800/80'
+                    }`}
+                  >
+                    <Camera className="w-7 h-7 text-white mb-1" />
+                    <span className="text-white text-xs font-medium">IRL</span>
+                  </button>
+                  <button
+                    onClick={() => setStreamCategory('Gaming')}
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
+                      streamCategory === 'Gaming'
+                        ? 'bg-purple-600 ring-2 ring-purple-400'
+                        : 'bg-gray-800/80'
+                    }`}
+                  >
+                    <Gamepad2 className="w-7 h-7 text-white mb-1" />
+                    <span className="text-white text-xs font-medium">Gaming</span>
+                  </button>
+                  <button
+                    onClick={() => setStreamCategory('Music')}
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
+                      streamCategory === 'Music'
+                        ? 'bg-purple-600 ring-2 ring-purple-400'
+                        : 'bg-gray-800/80'
+                    }`}
+                  >
+                    <Music className="w-7 h-7 text-white mb-1" />
+                    <span className="text-white text-xs font-medium">Music</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -3589,39 +3492,6 @@ function GoLiveContent() {
                 </div>
               )}
             </div>
-
-            {/* Remote Control QR Code */}
-            {previewRoomConnected && currentRoomName && (
-              <div className="p-4 border-t border-gray-800">
-                <div className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg">
-                  <div className="bg-white p-2 rounded-lg flex-shrink-0">
-                    <QRCodeSVG
-                      value={typeof window !== 'undefined'
-                        ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                          ? `https://creator-fun-ruby.vercel.app/remote?room=${encodeURIComponent(currentRoomName)}`
-                          : `${window.location.origin}/remote?room=${encodeURIComponent(currentRoomName)}`)
-                        : '/remote'}
-                      size={80}
-                      level="M"
-                    />
-                  </div>
-                  <div className="text-left">
-                    <div className="flex items-center gap-2 text-sm font-medium text-white">
-                      <Smartphone className="h-4 w-4 text-purple-400" />
-                      Remote Control
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Scan with your phone to control<br />your stream remotely
-                    </p>
-                    {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-                      <p className="text-xs text-yellow-400 mt-1">
-                        Using production URL for mobile
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Center Column - Video Preview */}
@@ -3641,16 +3511,16 @@ function GoLiveContent() {
                 }
               }}
             >
-              {/* Desktop video - shows preview before live and screen share when active */}
+              {/* Desktop video - shows screen share when active, camera otherwise */}
               <video
                 ref={desktopVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${streamReady || isLive ? '' : 'hidden'}`}
+                className={`w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
               />
               {/* Draggable/Resizable PiP control overlay when screen sharing and camera on */}
-              {(isLive || streamReady) && screenSharing && cameraEnabled && (
+              {isLive && screenSharing && cameraEnabled && (
                 <div
                   className={`absolute border-2 border-dashed border-purple-400 bg-transparent cursor-move transition-opacity duration-300 ${pipControlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                   style={{
@@ -3864,26 +3734,88 @@ function GoLiveContent() {
                   </div>
                 </div>
               )}
-              {/* Preview badge when not live but stream ready */}
-              {!isLive && streamReady && (
-                <div className="absolute top-4 left-4 z-10">
-                  <Badge className="bg-gray-600 text-white">PREVIEW</Badge>
-                </div>
-              )}
-
-              {/* Offline text when no stream */}
-              {!isLive && !streamReady && (
+              {!isLive && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-6xl font-bold text-gray-600">OFFLINE</div>
+                  <div className="text-center">
+                    <div className="text-6xl font-bold text-gray-600 mb-6">OFFLINE</div>
+
+                    {/* Category Selection */}
+                    <div className="mb-6">
+                      <p className="text-gray-400 text-sm mb-3">Select a category</p>
+                      <div className="flex gap-3 justify-center">
+                        <button
+                          onClick={() => setStreamCategory('IRL')}
+                          className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl transition-all ${
+                            streamCategory === 'IRL'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <Camera className="h-6 w-6" />
+                          <span className="text-sm font-medium">IRL</span>
+                        </button>
+                        <button
+                          onClick={() => setStreamCategory('Gaming')}
+                          className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl transition-all ${
+                            streamCategory === 'Gaming'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <Gamepad2 className="h-6 w-6" />
+                          <span className="text-sm font-medium">Gaming</span>
+                        </button>
+                        <button
+                          onClick={() => setStreamCategory('Music')}
+                          className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl transition-all ${
+                            streamCategory === 'Music'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <Music className="h-6 w-6" />
+                          <span className="text-sm font-medium">Music</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Microphone Selector */}
+                    {audioDevices.length > 0 && (
+                      <div className="mb-4 w-full max-w-xs">
+                        <label className="block text-xs text-gray-400 mb-1">Microphone</label>
+                        <select
+                          value={selectedAudioDevice}
+                          onChange={(e) => switchMicrophone(e.target.value)}
+                          className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-purple-500"
+                        >
+                          {audioDevices.map((device) => (
+                            <option key={device.deviceId} value={device.deviceId}>
+                              {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleGoLive}
+                      disabled={!streamCategory}
+                      data-go-live-button
+                      className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Radio className="h-4 w-4 mr-2" />
+                      Go Live
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Stream Info Below Video */}
             <div className="p-4 bg-[#18181b] flex-1 overflow-y-auto">
-              {/* Stream Controls - show in both preview and live mode */}
-              {(isLive || streamReady) && (
-                <div className="mb-4 flex items-center justify-center gap-3 flex-wrap">
+              {/* Stream Controls */}
+              {isLive && (
+                <div className="mb-4 flex items-center justify-center gap-3">
                   <Button
                     variant="outline"
                     size="sm"
@@ -3927,75 +3859,40 @@ function GoLiveContent() {
                     </Button>
                   )}
 
-                  {/* Flip Camera Button */}
+                  {/* Clip Button */}
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      if (desktopVideoRef.current) {
-                        const current = desktopVideoRef.current.style.transform;
-                        desktopVideoRef.current.style.transform = current === 'scaleX(-1)' ? 'scaleX(1)' : 'scaleX(-1)';
-                      }
-                    }}
-                    className="text-gray-400 border-gray-400"
+                    onClick={isClipping ? stopClip : startClip}
+                    className={`${isClipping ? 'text-red-400 border-red-400 animate-pulse' : 'text-orange-400 border-orange-400'}`}
                   >
-                    <FlipHorizontal className="h-4 w-4 mr-1" />
-                    Flip
+                    {isClipping ? (
+                      <>
+                        <CircleDot className="h-4 w-4 mr-1" />
+                        {formatRecordingTime(clipTime)}
+                      </>
+                    ) : (
+                      <>
+                        <Scissors className="h-4 w-4 mr-1" />
+                        Clip
+                      </>
+                    )}
                   </Button>
 
-                  {/* Go Live Button - only in preview mode */}
-                  {!isLive && streamReady && (
-                    <Button
-                      onClick={handleGoLive}
-                      disabled={!streamCategory}
-                      data-go-live-button
-                      size="sm"
-                      className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Radio className="h-4 w-4 mr-1" />
-                      Go Live
-                    </Button>
-                  )}
-
-                  {/* Clip Button - only when live */}
-                  {isLive && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={isClipping ? stopClip : startClip}
-                      className={`${isClipping ? 'text-red-400 border-red-400 animate-pulse' : 'text-orange-400 border-orange-400'}`}
-                    >
-                      {isClipping ? (
-                        <>
-                          <CircleDot className="h-4 w-4 mr-1" />
-                          {formatRecordingTime(clipTime)}
-                        </>
-                      ) : (
-                        <>
-                          <Scissors className="h-4 w-4 mr-1" />
-                          Clip
-                        </>
-                      )}
-                    </Button>
-                  )}
-
-                  {/* Stop Stream - only when live */}
-                  {isLive && (
-                    <Button
-                      onClick={handleEndStream}
-                      variant="destructive"
-                      size="sm"
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      <Square className="h-4 w-4 mr-1" />
-                      Stop Stream
-                    </Button>
-                  )}
+                  <Button
+                    onClick={handleEndStream}
+                    variant="destructive"
+                    size="sm"
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    <Square className="h-4 w-4 mr-1" />
+                    Stop Stream
+                  </Button>
                 </div>
               )}
 
-              {/* Microphone Selector - show in both preview and live */}
-              {(isLive || streamReady) && audioDevices.length > 1 && (
+              {/* Microphone Selector during live */}
+              {isLive && audioDevices.length > 1 && (
                 <div className="mb-4 flex items-center justify-center gap-2">
                   <Mic className="h-4 w-4 text-gray-400" />
                   <select
@@ -4111,48 +4008,6 @@ function GoLiveContent() {
 
           {/* Right Column - Chat */}
           <div className="bg-[#18181b] border-l border-gray-800 flex flex-col h-screen w-[300px] flex-shrink-0">
-            {/* Category Selection - Above Chat */}
-            {!isLive && (
-              <div className="border-b border-gray-800 px-4 py-3">
-                <h2 className="text-sm font-semibold mb-3">Select Category</h2>
-                <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => setStreamCategory('IRL')}
-                    className={`flex flex-col items-center justify-center w-16 h-16 rounded-xl transition-all ${
-                      streamCategory === 'IRL'
-                        ? 'bg-purple-600 ring-2 ring-purple-400'
-                        : 'bg-gray-800 hover:bg-gray-700'
-                    }`}
-                  >
-                    <Camera className="w-5 h-5 text-white mb-1" />
-                    <span className="text-white text-xs font-medium">IRL</span>
-                  </button>
-                  <button
-                    onClick={() => setStreamCategory('Gaming')}
-                    className={`flex flex-col items-center justify-center w-16 h-16 rounded-xl transition-all ${
-                      streamCategory === 'Gaming'
-                        ? 'bg-purple-600 ring-2 ring-purple-400'
-                        : 'bg-gray-800 hover:bg-gray-700'
-                    }`}
-                  >
-                    <Gamepad2 className="w-5 h-5 text-white mb-1" />
-                    <span className="text-white text-xs font-medium">Gaming</span>
-                  </button>
-                  <button
-                    onClick={() => setStreamCategory('Music')}
-                    className={`flex flex-col items-center justify-center w-16 h-16 rounded-xl transition-all ${
-                      streamCategory === 'Music'
-                        ? 'bg-purple-600 ring-2 ring-purple-400'
-                        : 'bg-gray-800 hover:bg-gray-700'
-                    }`}
-                  >
-                    <Music className="w-5 h-5 text-white mb-1" />
-                    <span className="text-white text-xs font-medium">Music</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm font-semibold">My Chat</h2>

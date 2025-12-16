@@ -237,3 +237,27 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Aurora Borealis Animation */
+@keyframes aurora-float {
+  0%, 100% {
+    background-position: 0% 50%;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    background-position: 50% 100%;
+    transform: translate(5%, 2%) rotate(1deg);
+  }
+  50% {
+    background-position: 100% 50%;
+    transform: translate(-3%, -1%) rotate(-1deg);
+  }
+  75% {
+    background-position: 50% 0%;
+    transform: translate(2%, 3%) rotate(0.5deg);
+  }
+}
+
+.animate-aurora-float {
+  animation: aurora-float 15s ease-in-out infinite;
+}

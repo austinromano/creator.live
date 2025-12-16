@@ -21,17 +21,19 @@ export function Header() {
         const data = await response.json();
         setUnreadCount(data.unreadCount || 0);
       }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
+    } catch {
+      // Silently ignore fetch errors (common during HMR/navigation)
     }
   }, [session]);
 
   useEffect(() => {
+    if (!session?.user) return;
+
     fetchNotifications();
-    // Poll for notifications every 10 seconds
-    const interval = setInterval(fetchNotifications, 10000);
+    // Poll for notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, session?.user]);
 
   // Hide header on mobile when authenticated (only show on lg screens and up)
   const headerClassName = isAuthenticated
@@ -66,22 +68,9 @@ export function Header() {
             <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-purple-500 animate-pulse" />
             <span
               className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent"
-              style={{
-                animation: 'breathe 3s ease-in-out infinite',
-              }}
             >
               OSHO
             </span>
-            <style jsx>{`
-              @keyframes breathe {
-                0%, 100% {
-                  filter: none;
-                }
-                50% {
-                  filter: drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 20px #a855f7) drop-shadow(0 0 40px #9333ea);
-                }
-              }
-            `}</style>
           </Link>
 
           {/* Right Side - Actions */}

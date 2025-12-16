@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Heart, Volume2, VolumeX, Loader2, X } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Star, Volume2, VolumeX, Loader2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
 
@@ -11,6 +11,8 @@ interface CommentData {
   id: string;
   text: string;
   createdAt: string;
+  starCount: number;
+  starred: boolean;
   user: {
     id: string;
     username: string | null;
@@ -76,38 +78,47 @@ export function FeedPost({ post }: FeedPostProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Comment states
-  const [showComments, setShowComments] = useState(false);
+  const [showAllComments, setShowAllComments] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
   const [postingComment, setPostingComment] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [hasFetchedComments, setHasFetchedComments] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   const contentUrl = post.contentUrl || post.thumbnailUrl;
   const isVideo = isVideoUrl(contentUrl);
 
-  // Fetch comments when showing
-  useEffect(() => {
-    if (showComments && comments.length === 0) {
-      fetchComments();
-    }
-  }, [showComments]);
+  // Sort comments by star count (most starred first), then by date as fallback
+  const sortedComments = [...comments].sort((a, b) => {
+    if (b.starCount !== a.starCount) return b.starCount - a.starCount;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  const previewComments = sortedComments.slice(0, 2);
+  const hasMoreComments = comments.length > 2;
 
   const fetchComments = async () => {
+    if (hasFetchedComments || loadingComments) return;
     setLoadingComments(true);
     try {
       const response = await fetch(`/api/comments?postId=${post.id}`);
+      const data = await response.json();
       if (response.ok) {
-        const data = await response.json();
         setComments(data.comments || []);
       }
     } catch (error) {
       console.error('Failed to fetch comments:', error);
     } finally {
       setLoadingComments(false);
+      setHasFetchedComments(true);
     }
   };
+
+  // Fetch comments automatically on mount to show top comments
+  useEffect(() => {
+    fetchComments();
+  }, [post.id]);
 
   const handlePostComment = async () => {
     if (!commentText.trim() || postingComment) return;
@@ -120,10 +131,12 @@ export function FeedPost({ post }: FeedPostProps) {
         body: JSON.stringify({ postId: post.id, text: commentText.trim() }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+
+      if (response.ok && data.comment) {
         setComments((prev) => [data.comment, ...prev]);
         setCommentText('');
+        setShowAllComments(true);
       }
     } catch (error) {
       console.error('Failed to post comment:', error);
@@ -133,7 +146,8 @@ export function FeedPost({ post }: FeedPostProps) {
   };
 
   const handleCommentClick = () => {
-    setShowComments(true);
+    setShowAllComments(true);
+    fetchComments(); // Lazy load comments on first interaction
     setTimeout(() => {
       commentInputRef.current?.focus();
     }, 100);
@@ -157,6 +171,51 @@ export function FeedPost({ post }: FeedPostProps) {
       console.error('Failed to delete comment:', error);
     } finally {
       setDeletingCommentId(null);
+    }
+  };
+
+  const handleStarComment = async (commentId: string) => {
+    const comment = comments.find((c) => c.id === commentId);
+    if (!comment) return;
+
+    const wasStarred = comment.starred;
+
+    // Optimistic update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, starred: !wasStarred, starCount: wasStarred ? c.starCount - 1 : c.starCount + 1 }
+          : c
+      )
+    );
+
+    try {
+      const response = await fetch('/api/comments/like', {
+        method: wasStarred ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId }),
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === commentId
+              ? { ...c, starred: wasStarred, starCount: wasStarred ? c.starCount + 1 : c.starCount - 1 }
+              : c
+          )
+        );
+      }
+    } catch (error) {
+      // Revert on error
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, starred: wasStarred, starCount: wasStarred ? c.starCount + 1 : c.starCount - 1 }
+            : c
+        )
+      );
+      console.error('Failed to star comment:', error);
     }
   };
 
@@ -411,15 +470,15 @@ export function FeedPost({ post }: FeedPostProps) {
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Like Button - Heart */}
+            {/* Like Button - Star */}
             <button
               onClick={handleSpark}
               className="flex items-center justify-center transition-transform active:scale-125"
             >
-              <Heart
-                className={`h-6 w-6 transition-colors ${
+              <Star
+                className={`h-7 w-7 transition-colors ${
                   sparked
-                    ? 'text-red-500 fill-red-500'
+                    ? 'text-purple-500 fill-purple-500'
                     : 'text-white hover:text-gray-300'
                 }`}
               />
@@ -450,11 +509,11 @@ export function FeedPost({ post }: FeedPostProps) {
           </button>
         </div>
 
-        {/* Like Count */}
+        {/* Star Count */}
         {sparkCount > 0 && (
           <div className="mt-2">
             <span className="font-semibold text-white text-sm">
-              {sparkCount.toLocaleString()} like{sparkCount !== 1 ? 's' : ''}
+              {sparkCount.toLocaleString()} star{sparkCount !== 1 ? 's' : ''}
             </span>
           </div>
         )}
@@ -471,17 +530,17 @@ export function FeedPost({ post }: FeedPostProps) {
           </div>
         )}
 
-        {/* Comments Section */}
-        {showComments && (
+        {/* Comments Section - Always show top 2, expand on click */}
+        {(previewComments.length > 0 || showAllComments) && (
           <div className="mt-3 border-t border-gray-800 pt-3">
             {/* Comments List */}
             {loadingComments ? (
               <div className="flex justify-center py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
               </div>
-            ) : comments.length > 0 ? (
-              <div className="space-y-3 max-h-48 overflow-y-auto">
-                {comments.map((comment) => (
+            ) : (showAllComments ? sortedComments : previewComments).length > 0 ? (
+              <div className={`space-y-3 ${showAllComments ? 'max-h-48 overflow-y-auto' : ''}`}>
+                {(showAllComments ? sortedComments : previewComments).map((comment) => (
                   <div key={comment.id} className="flex gap-2 group">
                     <Link href={`/profile/${comment.user.username}`}>
                       <Avatar className="h-6 w-6">
@@ -498,38 +557,68 @@ export function FeedPost({ post }: FeedPostProps) {
                         </Link>
                         <span className="text-gray-300">{comment.text}</span>
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {formatTimeAgo(comment.createdAt)}
-                      </p>
-                    </div>
-                    {session?.user?.id === comment.user.id && (
-                      <button
-                        onClick={() => handleDeleteComment(comment.id)}
-                        disabled={deletingCommentId === comment.id}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-500 p-1"
-                      >
-                        {deletingCommentId === comment.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-gray-500">
+                          {formatTimeAgo(comment.createdAt)}
+                        </span>
+                        {comment.starCount > 0 && (
+                          <span className="text-xs text-gray-500">
+                            {comment.starCount} {comment.starCount === 1 ? 'star' : 'stars'}
+                          </span>
                         )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleStarComment(comment.id)}
+                        className="p-1"
+                      >
+                        <Star
+                          className={`h-4 w-4 transition-colors ${
+                            comment.starred
+                              ? 'text-purple-500 fill-purple-500'
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        />
                       </button>
-                    )}
+                      {session?.user?.id === comment.user.id && (
+                        <button
+                          onClick={() => handleDeleteComment(comment.id)}
+                          disabled={deletingCommentId === comment.id}
+                          className="text-gray-500 hover:text-red-500 p-1"
+                        >
+                          {deletingCommentId === comment.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <X className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
+                {/* Show "View all comments" link if there are more */}
+                {!showAllComments && hasMoreComments && (
+                  <button
+                    onClick={handleCommentClick}
+                    className="text-gray-500 text-sm hover:text-gray-300 transition-colors"
+                  >
+                    View all {comments.length} comments
+                  </button>
+                )}
               </div>
-            ) : (
+            ) : showAllComments ? (
               <p className="text-gray-500 text-sm text-center py-2">No comments yet</p>
-            )}
+            ) : null}
           </div>
         )}
 
         {/* Comment Input */}
         <div
           className="mt-2 flex items-center gap-2"
-          onClick={() => !showComments && handleCommentClick()}
+          onClick={() => !showAllComments && handleCommentClick()}
         >
-          {showComments ? (
+          {showAllComments ? (
             <>
               <input
                 ref={commentInputRef}

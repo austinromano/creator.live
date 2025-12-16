@@ -45,6 +45,7 @@ model User {
   rooms                 Room[]
   roomMemberships       RoomMember[]
   comments              Comment[]
+  commentStars          CommentStar[]
 
   @@map("users")
 }
@@ -83,12 +84,30 @@ model Comment {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post  Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stars CommentStar[]
 
   @@index([postId])
   @@index([userId])
   @@map("comments")
+}
+
+// CommentStar table - tracks stars on comments
+model CommentStar {
+  id        String   @id @default(cuid())
+  commentId String   @map("comment_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId]) // User can only star a comment once
+  @@index([commentId])
+  @@index([userId])
+  @@map("comment_stars")
 }
 
 // Streams table - tracks live stream sessions

@@ -607,6 +607,13 @@ export class LiveKitStreamer {
       console.log(`[${this.streamId}] Unpublished old video track`);
     }
 
+    // Wait for track to have dimensions (canvas tracks may not have them immediately)
+    const settings = newVideoTrack.getSettings();
+    if (!settings.width || !settings.height) {
+      // Wait a frame for dimensions to be available
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+
     // Publish the new track with optimized settings for composite/screen share streams
     // Higher bitrate for canvas/screen content which has more detail
     const localVideoTrack = new LocalVideoTrack(newVideoTrack);
