@@ -235,8 +235,10 @@ model Room {
   id                  String   @id @default(cuid())
   userId              String   @map("user_id")
   name                String
+  description         String?  // Room description
   icon                String?  // URL to room icon image
   template            String?  // gaming, friends, study, creative
+  visibility          String   @default("public") // public, private, approval
   isActive            Boolean  @default(true) @map("is_active")
   allowMemberInvites  Boolean  @default(true) @map("allow_member_invites") // Whether members can invite others
   createdAt           DateTime @default(now()) @map("created_at")

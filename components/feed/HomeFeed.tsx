@@ -154,7 +154,7 @@ export function HomeFeed() {
                 : "The people you follow haven't posted yet"}
             </p>
             <a
-              href="/explore"
+              href="/community"
               className="inline-flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full transition-colors"
             >
               Discover Creators

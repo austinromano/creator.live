@@ -174,8 +174,8 @@ export function Homepage() {
   if (status === 'authenticated') {
     return (
       <div className="flex-1 flex flex-col relative">
-        {/* Instagram-style Top Navbar */}
-        <header className="sticky top-0 z-40 bg-black/10 backdrop-blur-[4px] border-b border-white/5">
+        {/* Instagram-style Top Navbar - Only show on mobile (desktop uses main Header) */}
+        <header className="sticky top-0 z-40 bg-black/10 backdrop-blur-[4px] lg:hidden">
           <div className="flex items-center justify-between px-4 py-2">
             {/* Left - Messages Icon */}
             <Link href="/messages" className="p-1">

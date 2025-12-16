@@ -3,7 +3,22 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Home, Radio, Camera, Compass, User } from 'lucide-react';
+import { Home, Radio, Camera, User } from 'lucide-react';
+
+// Custom 3-person community icon
+const CommunityIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {/* Center person */}
+    <circle cx="12" cy="7" r="3" />
+    <path d="M12 13c-3.5 0-6 2-6 4v1h12v-1c0-2-2.5-4-6-4z" />
+    {/* Left person (smaller, behind) */}
+    <circle cx="5" cy="8" r="2" />
+    <path d="M5 12c-2 0-3.5 1.2-3.5 2.5V15h4" />
+    {/* Right person (smaller, behind) */}
+    <circle cx="19" cy="8" r="2" />
+    <path d="M19 12c2 0 3.5 1.2 3.5 2.5V15h-4" />
+  </svg>
+);
 
 export function MobileBottomNav() {
   const pathname = usePathname();
@@ -35,7 +50,7 @@ export function MobileBottomNav() {
     { href: '/', icon: Home, label: 'Home' },
     { href: '/live', icon: Radio, label: 'Live' },
     { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
-    { href: '/explore', icon: Compass, label: 'Explore' },
+    { href: '/community', icon: CommunityIcon, label: 'Community', iconSize: 'h-7 w-7' },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
 
@@ -70,13 +85,14 @@ export function MobileBottomNav() {
             );
           }
 
+          const iconSizeClass = (item as any).iconSize || 'h-6 w-6';
           return (
             <Link
               key={item.href}
               href={item.href}
               className="flex flex-col items-center justify-center pt-2"
             >
-              <Icon className={`h-6 w-6 ${isActive ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/80'}`} />
+              <Icon className={`${iconSizeClass} ${isActive ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/80'}`} />
               <span className={`text-[10px] mt-1 ${isActive ? 'text-purple-400' : 'text-white/60'}`}>
                 {item.label}
               </span>

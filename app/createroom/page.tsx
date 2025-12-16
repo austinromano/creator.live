@@ -228,7 +228,7 @@ export default function CreateRoomPage() {
               Have an invite already?
             </p>
             <Link
-              href="/explore"
+              href="/community"
               className="block w-full py-3 bg-[#252033] hover:bg-[#2d2640] text-white font-medium rounded-lg transition-colors"
             >
               Join a Room
