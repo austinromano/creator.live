@@ -1,73 +1,79 @@
 'use client';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { UserMenu } from './UserMenu';
 import { Sparkles, LogIn, Star, Bell } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useSession } from 'next-auth/react';
+import { authGet } from '@/lib/fetch';
 
 export function Header() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const { setShowAuthModal } = useAuthStore();
   const isAuthenticated = !!session?.user;
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const fetchNotifications = useCallback(async () => {
-    if (!session?.user) return;
-    try {
-      const response = await fetch('/api/notifications?unread=true');
-      if (response.ok) {
-        const data = await response.json();
-        setUnreadCount(data.unreadCount || 0);
-      }
-    } catch {
-      // Silently ignore fetch errors (common during HMR/navigation)
-    }
-  }, [session]);
+  // Use refs to prevent duplicate intervals and track component mount
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    if (!session?.user) return;
+    isMountedRef.current = true;
 
-    fetchNotifications();
-
-    // Poll for notifications every 30 seconds, but only when tab is visible
-    let interval: NodeJS.Timeout | null = null;
-
-    const startPolling = () => {
-      if (!interval) {
-        interval = setInterval(fetchNotifications, 30000);
+    const fetchNotifications = async () => {
+      if (!isMountedRef.current) return;
+      try {
+        const response = await authGet('/api/notifications?unread=true');
+        if (response.ok && isMountedRef.current) {
+          const data = await response.json();
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } catch {
+        // Silently ignore fetch errors
       }
     };
 
+    const startPolling = () => {
+      // Clear any existing interval first
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      intervalRef.current = setInterval(fetchNotifications, 30000);
+    };
+
     const stopPolling = () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
         stopPolling();
-      } else {
-        fetchNotifications(); // Fetch immediately when becoming visible
+      } else if (isAuthenticated) {
+        fetchNotifications();
         startPolling();
       }
     };
 
-    // Start polling if visible
-    if (!document.hidden) {
-      startPolling();
+    // Only start polling if authenticated and visible
+    if (isAuthenticated && status === 'authenticated') {
+      fetchNotifications();
+      if (!document.hidden) {
+        startPolling();
+      }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      isMountedRef.current = false;
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchNotifications, session?.user]);
+  }, [isAuthenticated, status]);
 
   // Hide header on mobile when authenticated (only show on lg screens and up)
   const headerClassName = isAuthenticated
@@ -94,12 +100,11 @@ export function Header() {
             ) : (
               <UserMenu />
             )}
-
           </div>
 
           {/* Center - Logo */}
           <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
-            <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-purple-500 animate-pulse" />
+            <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-purple-500" />
             <span
               className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent font-[family-name:var(--font-pacifico)]"
             >

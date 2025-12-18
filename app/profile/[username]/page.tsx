@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { Loader2, Camera, Settings, LogOut } from 'lucide-react';
 import {
@@ -16,6 +16,7 @@ import {
   PostDetailModal,
   EditProfileModal,
 } from '@/components/profile';
+import { authGet, authPost, authDelete } from '@/lib/fetch';
 
 interface LiveStreamInfo {
   id: string;
@@ -50,9 +51,8 @@ interface ProfileData {
 
 export default function ProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const username = params.username as string;
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [posts, setPosts] = useState<ContentGridItem[]>([]);
@@ -66,40 +66,56 @@ export default function ProfilePage() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Fetch options to ensure cookies are sent on mobile
-  const fetchOptions: RequestInit = {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-  };
+  // Refs to prevent race conditions
+  const isMountedRef = useRef(true);
+  const fetchInProgressRef = useRef(false);
+  const currentUsernameRef = useRef(username);
 
-  // Fetch current user's username from database
+  // Update ref when username changes
   useEffect(() => {
-    const fetchCurrentUser = async () => {
-      if (!session?.user) return;
-      try {
-        const response = await fetch('/api/user/me', { credentials: 'include' });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user?.username) {
-            setCurrentUserUsername(data.user.username.toLowerCase());
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching current user:', error);
-      }
-    };
-    fetchCurrentUser();
-  }, [session]);
+    currentUsernameRef.current = username;
+  }, [username]);
 
   // Check if viewing own profile (case-insensitive)
   const isOwnProfile = currentUserUsername === username.toLowerCase();
 
+  // Fetch current user info
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const response = await authGet('/api/user/me');
+      if (response.ok && isMountedRef.current) {
+        const data = await response.json();
+        if (data.user?.username) {
+          setCurrentUserUsername(data.user.username.toLowerCase());
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  }, []);
+
+  // Fetch profile and posts
   const fetchProfile = useCallback(async () => {
+    if (fetchInProgressRef.current) return;
+    fetchInProgressRef.current = true;
+
+    const targetUsername = currentUsernameRef.current;
+
     try {
       setLoading(true);
+      setError(null);
 
-      // Fetch profile data
-      const profileRes = await fetch(`/api/user/profile/${username}`, { credentials: 'include' });
+      // Fetch profile and posts in parallel
+      const [profileRes, postsRes] = await Promise.all([
+        authGet(`/api/user/profile/${targetUsername}`),
+        authGet(`/api/user/profile/${targetUsername}/posts`),
+      ]);
+
+      // Check if component unmounted or username changed
+      if (!isMountedRef.current || currentUsernameRef.current !== targetUsername) {
+        return;
+      }
+
       if (!profileRes.ok) {
         if (profileRes.status === 404) {
           setError('Profile not found');
@@ -109,113 +125,138 @@ export default function ProfilePage() {
         setLoading(false);
         return;
       }
+
       const profileData = await profileRes.json();
       setProfile(profileData.profile);
 
-      // Fetch posts
-      const postsRes = await fetch(`/api/user/profile/${username}/posts`, { credentials: 'include' });
       if (postsRes.ok) {
         const postsData = await postsRes.json();
-        setPosts(postsData.posts);
+        setPosts(postsData.posts || []);
       }
 
       setLoading(false);
     } catch (err) {
       console.error('Error fetching profile:', err);
-      setError('Failed to load profile');
-      setLoading(false);
+      if (isMountedRef.current) {
+        setError('Failed to load profile');
+        setLoading(false);
+      }
+    } finally {
+      fetchInProgressRef.current = false;
+    }
+  }, []);
+
+  // Check follow status
+  const checkFollowStatus = useCallback(async () => {
+    if (!username) return;
+    try {
+      const response = await authGet(`/api/user/follow?username=${encodeURIComponent(username)}`);
+      if (response.ok && isMountedRef.current) {
+        const data = await response.json();
+        setIsFollowing(data.isFollowing);
+      }
+    } catch (error) {
+      console.error('Error checking follow status:', error);
     }
   }, [username]);
 
+  // Initial fetch when component mounts or username changes
   useEffect(() => {
-    if (username) {
-      fetchProfile();
-    }
-  }, [username, fetchProfile]);
+    isMountedRef.current = true;
+    fetchInProgressRef.current = false;
 
-  // Check if following this user
-  useEffect(() => {
-    const checkFollowStatus = async () => {
-      if (!session?.user || !username) return;
-      try {
-        const response = await fetch(`/api/user/follow?username=${encodeURIComponent(username)}`, { credentials: 'include' });
-        if (response.ok) {
-          const data = await response.json();
-          setIsFollowing(data.isFollowing);
-        }
-      } catch (error) {
-        console.error('Error checking follow status:', error);
-      }
-    };
-    checkFollowStatus();
-  }, [session, username]);
+    // Reset state when username changes
+    setProfile(null);
+    setPosts([]);
+    setError(null);
+    setLoading(true);
 
-  const handleFollow = async () => {
-    if (!session?.user) {
-      // User not logged in - could redirect to login
+    // Don't fetch while session is loading
+    if (status === 'loading') {
       return;
     }
 
-    if (isFollowing) {
-      // Unfollow
-      try {
-        const response = await fetch('/api/user/follow', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username }),
-          credentials: 'include',
-        });
-        if (response.ok) {
-          setIsFollowing(false);
-          // Update follower count locally
-          if (profile) {
-            setProfile({
-              ...profile,
-              stats: {
-                ...profile.stats,
-                followers: Math.max(0, profile.stats.followers - 1),
-              },
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Failed to unfollow:', error);
+    // Fetch profile data
+    fetchProfile();
+    fetchCurrentUser();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [username, status, fetchProfile, fetchCurrentUser]);
+
+  // Check follow status when session is ready
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user && username) {
+      checkFollowStatus();
+    }
+  }, [status, session, username, checkFollowStatus]);
+
+  // Refetch on visibility change (mobile app resume)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && profile) {
+        fetchProfile();
       }
-    } else {
-      // Follow
-      try {
-        const response = await fetch('/api/user/follow', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username }),
-          credentials: 'include',
-        });
-        if (response.ok) {
-          setIsFollowing(true);
-          // Update follower count locally
-          if (profile) {
-            setProfile({
-              ...profile,
-              stats: {
-                ...profile.stats,
-                followers: profile.stats.followers + 1,
-              },
-            });
-          }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [profile, fetchProfile]);
+
+  const handleFollow = async () => {
+    if (!session?.user) return;
+
+    const wasFollowing = isFollowing;
+
+    // Optimistic update
+    setIsFollowing(!isFollowing);
+    if (profile) {
+      setProfile({
+        ...profile,
+        stats: {
+          ...profile.stats,
+          followers: wasFollowing
+            ? Math.max(0, profile.stats.followers - 1)
+            : profile.stats.followers + 1,
+        },
+      });
+    }
+
+    try {
+      const response = wasFollowing
+        ? await authDelete('/api/user/follow', { username })
+        : await authPost('/api/user/follow', { username });
+
+      if (!response.ok) {
+        // Revert on error
+        setIsFollowing(wasFollowing);
+        if (profile) {
+          setProfile({
+            ...profile,
+            stats: {
+              ...profile.stats,
+              followers: wasFollowing
+                ? profile.stats.followers + 1
+                : Math.max(0, profile.stats.followers - 1),
+            },
+          });
         }
-      } catch (error) {
-        console.error('Failed to follow:', error);
       }
+    } catch (error) {
+      console.error('Failed to update follow status:', error);
+      // Revert on error
+      setIsFollowing(wasFollowing);
     }
   };
 
   const handleTip = () => {
-    // TODO: Implement tip functionality
     console.log('Tip clicked');
   };
 
   const handleSubscribe = () => {
-    // TODO: Implement subscribe functionality
     console.log('Subscribe clicked');
   };
 
@@ -230,14 +271,13 @@ export default function ProfilePage() {
         ...profile,
         stats: {
           ...profile.stats,
-          posts: profile.stats.posts - 1,
+          posts: Math.max(0, profile.stats.posts - 1),
         },
       });
     }
   };
 
   const handlePostCreated = () => {
-    // Refresh posts after creating a new one
     fetchProfile();
   };
 
@@ -245,7 +285,8 @@ export default function ProfilePage() {
     setShowEditProfile(true);
   };
 
-  if (loading) {
+  // Show loading while session or profile is loading
+  if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
         <div className="text-center">
@@ -260,7 +301,16 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-400 text-xl">{error || 'Profile not found'}</p>
+          <p className="text-gray-400 text-xl mb-4">{error || 'Profile not found'}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              fetchProfile();
+            }}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -316,7 +366,7 @@ export default function ProfilePage() {
         onEditProfile={handleEditProfile}
       />
 
-      {/* Stats - TikTok style: right after username */}
+      {/* Stats */}
       <ProfileStats
         posts={profile.stats.posts}
         followers={profile.stats.followers}
@@ -324,7 +374,7 @@ export default function ProfilePage() {
         isSubscriber={false}
       />
 
-      {/* Bio - TikTok style: centered, below stats */}
+      {/* Bio */}
       {profile.bio && (
         <div className="px-8 pb-3">
           <p className="text-gray-300 text-sm text-center">{profile.bio}</p>
@@ -367,7 +417,6 @@ export default function ProfilePage() {
             onAddClick={() => setShowCreatePost(true)}
           />
 
-          {/* Empty state text for own profile */}
           {posts.length === 0 && isOwnProfile && (
             <div className="text-center py-4 px-4 -mt-4">
               <p className="text-gray-400 font-medium">No posts yet</p>
@@ -377,7 +426,6 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Empty state for no posts - only show for other users viewing */}
           {posts.length === 0 && !isOwnProfile && (
             <div className="text-center py-12 px-4">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
@@ -389,7 +437,6 @@ export default function ProfilePage() {
         </>
       )}
 
-      {/* Replays tab - placeholder */}
       {activeTab === 'replays' && (
         <div className="text-center py-12 px-4">
           <p className="text-gray-400 font-medium">No replays yet</p>
@@ -399,7 +446,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Sparked tab - placeholder */}
       {activeTab === 'liked' && (
         <div className="text-center py-12 px-4">
           <p className="text-gray-400 font-medium">No sparked content yet</p>
@@ -409,14 +455,13 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Create Post Modal */}
+      {/* Modals */}
       <CreatePostModal
         isOpen={showCreatePost}
         onClose={() => setShowCreatePost(false)}
         onPostCreated={handlePostCreated}
       />
 
-      {/* Post Detail Modal */}
       <PostDetailModal
         post={selectedPost}
         isOpen={!!selectedPost}
@@ -425,7 +470,6 @@ export default function ProfilePage() {
         isOwnPost={isOwnProfile}
       />
 
-      {/* Edit Profile Modal */}
       {profile && (
         <EditProfileModal
           isOpen={showEditProfile}
