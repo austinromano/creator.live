@@ -377,7 +377,15 @@ export default function CameraPage() {
           /* Camera Controls */
           <div className="p-4 pb-12">
             {/* Action Button - changes based on mode */}
-            <div className="flex items-center justify-center mb-6">
+            <div className="relative flex items-center justify-center mb-6">
+              {/* Flip Camera Button - Left Side */}
+              <button
+                onClick={flipCamera}
+                className="absolute left-8 p-3 bg-black/40 backdrop-blur-sm rounded-full"
+              >
+                <FlipHorizontal className="h-7 w-7 text-white" />
+              </button>
+
               {mode === 'POST' ? (
                 /* Capture Button for POST */
                 <button
