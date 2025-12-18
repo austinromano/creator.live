@@ -8,7 +8,10 @@
       "Bash(git restore:*)",
       "Bash(curl:*)",
       "Bash(npx vercel ls)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vercel --prod)"
     ],
     "deny": [],
     "ask": []

@@ -126,7 +126,7 @@ export function PostDetailModal({
         </button>
 
         {/* Post content */}
-        <div className={`relative w-full rounded-2xl overflow-hidden bg-[#1a1a1d] ${isVideo ? 'aspect-video' : 'aspect-[3/4]'}`}>
+        <div className={`relative w-full rounded-2xl overflow-hidden bg-[#1a1a1d] aspect-[3/4]`}>
           {isVideo && mediaUrl ? (
             <div className="relative w-full h-full cursor-pointer" onClick={togglePlayPause}>
               <video

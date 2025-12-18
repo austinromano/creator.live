@@ -74,8 +74,32 @@ export function FeedPost({ post }: FeedPostProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<string | null>(null);
+  const [imageAspectRatio, setImageAspectRatio] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Detect video aspect ratio from metadata
+  const detectVideoAspectRatio = () => {
+    if (videoRef.current) {
+      const { videoWidth, videoHeight } = videoRef.current;
+      if (videoWidth && videoHeight) {
+        const ratio = videoWidth / videoHeight;
+        // Landscape video (wider than 1:1)
+        if (ratio > 1.1) {
+          setVideoAspectRatio('16/9');
+        }
+        // Portrait video (taller than 1:1)
+        else if (ratio < 0.9) {
+          setVideoAspectRatio('9/16');
+        }
+        // Square-ish video
+        else {
+          setVideoAspectRatio('1/1');
+        }
+      }
+    }
+  };
 
   // Comment states
   const [showAllComments, setShowAllComments] = useState(false);
@@ -395,7 +419,7 @@ export function FeedPost({ post }: FeedPostProps) {
           isVideo ? (
             <div
               className="relative w-full cursor-pointer bg-black"
-              style={{ aspectRatio: '16/9' }}
+              style={{ aspectRatio: videoAspectRatio || '16/9' }}
               onClick={togglePlayPause}
             >
               {/* Thumbnail shows instantly if available */}
@@ -425,7 +449,11 @@ export function FeedPost({ post }: FeedPostProps) {
                 playsInline
                 preload={isInView ? "auto" : "metadata"}
                 autoPlay={!post.thumbnailUrl && isInView}
-                onCanPlay={() => setVideoLoaded(true)}
+                onLoadedMetadata={detectVideoAspectRatio}
+                onCanPlay={() => {
+                  setVideoLoaded(true);
+                  detectVideoAspectRatio();
+                }}
               />
               {/* Mute/unmute button */}
               <button
@@ -448,7 +476,7 @@ export function FeedPost({ post }: FeedPostProps) {
               )}
             </div>
           ) : (
-            <div className="relative w-full" style={{ aspectRatio: '4/5' }}>
+            <div className="relative w-full" style={{ aspectRatio: imageAspectRatio || '4/5' }}>
               <Image
                 src={contentUrl}
                 alt={post.title || 'Post'}
@@ -456,6 +484,19 @@ export function FeedPost({ post }: FeedPostProps) {
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 600px"
                 onError={() => setImageError(true)}
+                onLoad={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  if (img.naturalWidth && img.naturalHeight) {
+                    const ratio = img.naturalWidth / img.naturalHeight;
+                    if (ratio > 1.1) {
+                      setImageAspectRatio('16/9');
+                    } else if (ratio < 0.9) {
+                      setImageAspectRatio('9/16');
+                    } else {
+                      setImageAspectRatio('1/1');
+                    }
+                  }
+                }}
               />
             </div>
           )

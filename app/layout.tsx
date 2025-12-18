@@ -10,6 +10,7 @@ import { AudioUnlockProvider } from "@/components/providers/AudioUnlockProvider"
 import { HeartbeatProvider } from "@/components/HeartbeatProvider";
 import { ClientBackgrounds } from "@/components/ui/ClientBackgrounds";
 import { MobileSwipeNavigator } from "@/components/layout/MobileSwipeNavigator";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,8 +54,9 @@ export default function RootLayout({
       >
         <ClientBackgrounds />
         <SessionProvider>
-          <SolanaWalletProvider>
-            <AudioUnlockProvider>
+          <QueryProvider>
+            <SolanaWalletProvider>
+              <AudioUnlockProvider>
               <HeartbeatProvider>
                 <Header />
                 {/* Mobile with swipe navigation */}
@@ -71,7 +73,8 @@ export default function RootLayout({
                 <AuthModal />
               </HeartbeatProvider>
             </AudioUnlockProvider>
-          </SolanaWalletProvider>
+            </SolanaWalletProvider>
+          </QueryProvider>
         </SessionProvider>
       </body>
     </html>

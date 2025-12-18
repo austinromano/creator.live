@@ -39,14 +39,8 @@ export function HomeFeed() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Wait for session to be determined
+      // Wait for session status to be determined (but don't block on unauthenticated)
       if (status === 'loading') {
-        return;
-      }
-
-      // No session - stop loading and show empty state
-      if (status === 'unauthenticated' || !session?.user) {
-        setLoading(false);
         return;
       }
 
@@ -54,20 +48,26 @@ export function HomeFeed() {
         setLoading(true);
         setError(null);
 
-        // Fetch feed posts, friends, current user, and rooms in parallel
+        // Fetch with credentials to ensure cookies are sent on mobile
+        const fetchOptions: RequestInit = {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        };
+
+        // Always try to fetch - let the API determine auth status
+        // This works around useSession not detecting session on mobile
         const [feedRes, friendsRes, userRes, roomsRes] = await Promise.all([
-          fetch('/api/feed'),
-          fetch('/api/user/friends'),
-          fetch('/api/user/me'),
-          fetch('/api/rooms'),
+          fetch('/api/feed', fetchOptions),
+          fetch('/api/user/friends', fetchOptions),
+          fetch('/api/user/me', fetchOptions),
+          fetch('/api/rooms', fetchOptions),
         ]);
 
-        // Parse responses safely - check ok before parsing
         if (feedRes.ok) {
           const feedData = await feedRes.json();
           setPosts(feedData.posts || []);
-        } else {
-          console.error('Feed API error:', feedRes.status);
         }
 
         if (friendsRes.ok) {
@@ -82,8 +82,6 @@ export function HomeFeed() {
             hasStory: false,
           }));
           setFriends(storyUsers);
-        } else {
-          console.error('Friends API error:', friendsRes.status);
         }
 
         if (userRes.ok) {
@@ -95,8 +93,6 @@ export function HomeFeed() {
               avatar: userData.user.avatar,
             });
           }
-        } else {
-          console.error('User API error:', userRes.status);
         }
 
         if (roomsRes.ok) {
@@ -108,8 +104,6 @@ export function HomeFeed() {
             template: r.template,
           }));
           setRooms(userRooms);
-        } else {
-          console.error('Rooms API error:', roomsRes.status);
         }
       } catch (err) {
         console.error('Error fetching feed data:', err);
@@ -120,20 +114,37 @@ export function HomeFeed() {
     };
 
     fetchData();
-  }, [session, status]);
+  }, [status]);
 
-  if (loading) {
+  // Show loading while session is loading
+  if (status === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
       </div>
     );
   }
 
+  // Show loading while fetching data
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      </div>
+    );
+  }
+
+  // Show error state
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <p className="text-red-400">{error}</p>
+      <div className="flex flex-col items-center justify-center py-20 px-4">
+        <p className="text-red-400 text-center mb-4">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -146,36 +157,16 @@ export function HomeFeed() {
         rooms={rooms}
         currentUserAvatar={currentUser?.avatar}
         onAddStoryClick={() => {
-          // Navigate to create room page
           window.location.href = '/createroom';
         }}
       />
 
       {/* Feed Posts */}
-      {posts.length > 0 ? (
+      {posts.length > 0 && (
         <div>
           {posts.map((post) => (
             <FeedPost key={post.id} post={post} />
           ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 px-4">
-          <div className="text-center">
-            <h3 className="text-xl font-semibold text-white mb-2">
-              Welcome to your feed
-            </h3>
-            <p className="text-gray-400 mb-6">
-              {friends.length === 0
-                ? "Follow some creators to see their posts here"
-                : "The people you follow haven't posted yet"}
-            </p>
-            <a
-              href="/community"
-              className="inline-flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full transition-colors"
-            >
-              Discover Creators
-            </a>
-          </div>
         </div>
       )}
     </div>

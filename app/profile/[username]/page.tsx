@@ -52,7 +52,7 @@ export default function ProfilePage() {
   const params = useParams();
   const router = useRouter();
   const username = params.username as string;
-  const { data: session, status: sessionStatus } = useSession();
+  const { data: session } = useSession();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [posts, setPosts] = useState<ContentGridItem[]>([]);
@@ -66,15 +66,18 @@ export default function ProfilePage() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Fetch current user's username from database - wait for session to be ready
+  // Fetch options to ensure cookies are sent on mobile
+  const fetchOptions: RequestInit = {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  };
+
+  // Fetch current user's username from database
   useEffect(() => {
     const fetchCurrentUser = async () => {
-      // Wait for session to be determined
-      if (sessionStatus === 'loading') return;
-      if (sessionStatus === 'unauthenticated' || !session?.user) return;
-
+      if (!session?.user) return;
       try {
-        const response = await fetch('/api/user/me');
+        const response = await fetch('/api/user/me', { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
           if (data.user?.username) {
@@ -86,7 +89,7 @@ export default function ProfilePage() {
       }
     };
     fetchCurrentUser();
-  }, [session, sessionStatus]);
+  }, [session]);
 
   // Check if viewing own profile (case-insensitive)
   const isOwnProfile = currentUserUsername === username.toLowerCase();
@@ -96,7 +99,7 @@ export default function ProfilePage() {
       setLoading(true);
 
       // Fetch profile data
-      const profileRes = await fetch(`/api/user/profile/${username}`);
+      const profileRes = await fetch(`/api/user/profile/${username}`, { credentials: 'include' });
       if (!profileRes.ok) {
         if (profileRes.status === 404) {
           setError('Profile not found');
@@ -110,7 +113,7 @@ export default function ProfilePage() {
       setProfile(profileData.profile);
 
       // Fetch posts
-      const postsRes = await fetch(`/api/user/profile/${username}/posts`);
+      const postsRes = await fetch(`/api/user/profile/${username}/posts`, { credentials: 'include' });
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         setPosts(postsData.posts);
@@ -130,16 +133,12 @@ export default function ProfilePage() {
     }
   }, [username, fetchProfile]);
 
-  // Check if following this user - wait for session to be determined
+  // Check if following this user
   useEffect(() => {
     const checkFollowStatus = async () => {
-      // Wait for session to be determined
-      if (sessionStatus === 'loading') return;
-      if (sessionStatus === 'unauthenticated' || !session?.user) return;
-      if (!username) return;
-
+      if (!session?.user || !username) return;
       try {
-        const response = await fetch(`/api/user/follow?username=${encodeURIComponent(username)}`);
+        const response = await fetch(`/api/user/follow?username=${encodeURIComponent(username)}`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
           setIsFollowing(data.isFollowing);
@@ -149,7 +148,7 @@ export default function ProfilePage() {
       }
     };
     checkFollowStatus();
-  }, [session, sessionStatus, username]);
+  }, [session, username]);
 
   const handleFollow = async () => {
     if (!session?.user) {
@@ -164,6 +163,7 @@ export default function ProfilePage() {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username }),
+          credentials: 'include',
         });
         if (response.ok) {
           setIsFollowing(false);
@@ -188,6 +188,7 @@ export default function ProfilePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username }),
+          credentials: 'include',
         });
         if (response.ok) {
           setIsFollowing(true);
