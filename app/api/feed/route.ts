@@ -15,11 +15,19 @@ export const GET = createRoute(
     const userIdsForFeed = [...followingIds, userId!];
 
     // Get posts from followed users AND own posts in chronological order (newest first)
+    // Own posts show regardless of type, but followed users' paid/locked posts are hidden
     const posts = await prisma.post.findMany({
       where: {
-        userId: { in: userIdsForFeed },
         isPublished: true,
-        type: { notIn: ['paid', 'locked'] },
+        OR: [
+          // User's own posts - show all types
+          { userId: userId! },
+          // Followed users' posts - only free/replay types
+          {
+            userId: { in: followingIds },
+            type: { notIn: ['paid', 'locked'] },
+          },
+        ],
       },
       include: {
         user: {
