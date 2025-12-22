@@ -171,12 +171,8 @@ export default function ProfilePage() {
     setError(null);
     setLoading(true);
 
-    // Don't fetch while session is loading
-    if (status === 'loading') {
-      return;
-    }
-
-    // Fetch profile data
+    // Fetch profile data regardless of session status
+    // The API will handle authentication
     fetchProfile();
     fetchCurrentUser();
 
@@ -285,8 +281,8 @@ export default function ProfilePage() {
     setShowEditProfile(true);
   };
 
-  // Show loading while session or profile is loading
-  if (status === 'loading' || loading) {
+  // Show loading while profile is loading
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
         <div className="text-center">
