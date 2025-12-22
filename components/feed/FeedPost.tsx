@@ -418,7 +418,7 @@ export function FeedPost({ post }: FeedPostProps) {
         {contentUrl && !imageError ? (
           isVideo ? (
             <div
-              className="relative w-full cursor-pointer bg-black max-h-[calc(100vh-280px)] lg:max-h-[600px]"
+              className="relative w-full cursor-pointer bg-black max-h-[450px] lg:max-h-[600px]"
               style={{ aspectRatio: videoAspectRatio || '16/9' }}
               onClick={togglePlayPause}
             >
@@ -476,7 +476,7 @@ export function FeedPost({ post }: FeedPostProps) {
               )}
             </div>
           ) : (
-            <div className="relative w-full max-h-[calc(100vh-280px)] lg:max-h-[600px]" style={{ aspectRatio: imageAspectRatio || '4/5' }}>
+            <div className="relative w-full max-h-[450px] lg:max-h-[600px]" style={{ aspectRatio: imageAspectRatio || '4/5' }}>
               <Image
                 src={contentUrl}
                 alt={post.title || 'Post'}
