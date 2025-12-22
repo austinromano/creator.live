@@ -488,12 +488,25 @@ export function FeedPost({ post }: FeedPostProps) {
                   const img = e.target as HTMLImageElement;
                   if (img.naturalWidth && img.naturalHeight) {
                     const ratio = img.naturalWidth / img.naturalHeight;
+                    // Landscape
                     if (ratio > 1.1) {
                       setImageAspectRatio('16/9');
-                    } else if (ratio < 0.9) {
+                    }
+                    // Instagram portrait (4:5 = 0.8)
+                    else if (ratio >= 0.75 && ratio <= 0.85) {
+                      setImageAspectRatio('4/5');
+                    }
+                    // Tall portrait (9:16 = 0.5625)
+                    else if (ratio < 0.75) {
                       setImageAspectRatio('9/16');
-                    } else {
+                    }
+                    // Square
+                    else if (ratio >= 0.9 && ratio <= 1.1) {
                       setImageAspectRatio('1/1');
+                    }
+                    // Default to 4/5 for anything in between
+                    else {
+                      setImageAspectRatio('4/5');
                     }
                   }
                 }}

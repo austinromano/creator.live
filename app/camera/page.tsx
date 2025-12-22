@@ -132,18 +132,44 @@ export default function CameraPage() {
 
     if (!context) return;
 
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Instagram portrait aspect ratio (4:5)
+    const targetAspectRatio = 4 / 5;
+    const videoAspectRatio = video.videoWidth / video.videoHeight;
+
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = video.videoWidth;
+    let sourceHeight = video.videoHeight;
+
+    // Calculate crop dimensions to achieve 4:5 aspect ratio
+    if (videoAspectRatio > targetAspectRatio) {
+      // Video is wider than target, crop width
+      sourceWidth = video.videoHeight * targetAspectRatio;
+      sourceX = (video.videoWidth - sourceWidth) / 2;
+    } else {
+      // Video is taller than target, crop height
+      sourceHeight = video.videoWidth / targetAspectRatio;
+      sourceY = (video.videoHeight - sourceHeight) / 2;
+    }
+
+    // Set canvas to portrait dimensions (e.g., 1080x1350)
+    const canvasWidth = 1080;
+    const canvasHeight = 1350;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
 
     // Flip horizontally if using front camera
     if (facingMode === 'user') {
-      context.translate(canvas.width, 0);
+      context.translate(canvasWidth, 0);
       context.scale(-1, 1);
     }
 
-    // Draw the video frame
-    context.drawImage(video, 0, 0);
+    // Draw the cropped video frame
+    context.drawImage(
+      video,
+      sourceX, sourceY, sourceWidth, sourceHeight,
+      0, 0, canvasWidth, canvasHeight
+    );
 
     // Get the image data
     const imageData = canvas.toDataURL('image/jpeg', 0.9);
