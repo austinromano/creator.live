@@ -174,7 +174,7 @@ export default function OnboardingPage() {
           </div>
           <CardTitle className="text-2xl text-white">Welcome to OSHO!</CardTitle>
           <CardDescription className="text-gray-400">
-            Let's set up your profile so you can start streaming
+            Let&apos;s set up your profile so you can start streaming
           </CardDescription>
         </CardHeader>
 

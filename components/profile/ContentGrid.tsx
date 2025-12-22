@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, Zap, Play, Camera } from 'lucide-react';
+import { Lock, Star, Play, Camera } from 'lucide-react';
 import Image from 'next/image';
 
 export interface ContentGridItem {
@@ -121,7 +121,7 @@ function ContentGridItemComponent({
       {/* Viewer count badge - bottom left */}
       {item.viewerCount !== undefined && item.viewerCount > 0 && item.type === 'free' && (
         <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/60 rounded-full px-2 py-0.5">
-          <Zap className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+          <Star className="h-3 w-3 text-purple-500 fill-purple-500" />
           <span className="text-white text-xs font-semibold">
             {formatViewerCount(item.viewerCount)}
           </span>

@@ -253,13 +253,13 @@ export function successResponse<T>(data: T, status: number = 200): NextResponse 
 export function createRoute<TBody = unknown, TParams = Record<string, string>>(
   handler: RouteHandler<TBody, TParams>,
   options: RouteOptions<TBody> = {}
-): (request: NextRequest, context?: { params?: Promise<TParams> }) => Promise<NextResponse> {
+): (request: NextRequest, segmentData?: { params?: Promise<TParams> }) => Promise<NextResponse> {
   const { auth = 'none', authMode = 'full', bodySchema } = options;
 
-  return async (request: NextRequest, routeContext?: { params?: Promise<TParams> }) => {
+  return async (request: NextRequest, segmentData?: { params?: Promise<TParams> }): Promise<NextResponse> => {
     try {
       const context: RouteContext<TParams> = {
-        params: routeContext?.params ? await routeContext.params : {} as TParams,
+        params: segmentData?.params ? await segmentData.params : {} as TParams,
       };
 
       // Handle authentication

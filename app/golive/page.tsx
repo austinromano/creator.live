@@ -32,7 +32,6 @@ import {
   Music,
   Camera,
   Zap,
-  FlipHorizontal,
   Settings,
   Scissors,
   CircleDot,
@@ -105,7 +104,7 @@ function GoLiveContent() {
   const [clipPrice, setClipPrice] = useState('');
   const [clipPostType, setClipPostType] = useState<'free' | 'paid'>('free');
   const [isPostingClip, setIsPostingClip] = useState(false);
-  const [isUploadingClip, setIsUploadingClip] = useState(false);
+  const [_isUploadingClip, setIsUploadingClip] = useState(false);
   const clipRecorderRef = React.useRef<MediaRecorder | null>(null);
   const clipChunksRef = React.useRef<Blob[]>([]);
   const clipTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -125,16 +124,16 @@ function GoLiveContent() {
   const [desktopAudioEnabled, setDesktopAudioEnabled] = useState(true);
   const desktopAudioTrackRef = React.useRef<MediaStreamTrack | null>(null);
   const screenStreamRef = React.useRef<MediaStream | null>(null);
-  const pipVideoRef = React.useRef<HTMLVideoElement>(null);
+  const _pipVideoRef = React.useRef<HTMLVideoElement>(null);
   const compositeCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const compositeAnimationRef = React.useRef<number | null>(null);
   const compositeStreamRef = React.useRef<MediaStream | null>(null); // Store canvas capture stream to avoid multiple captureStream() calls
   const mixedAudioContextRef = React.useRef<AudioContext | null>(null);
-  const mixedAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
+  const _mixedAudioDestinationRef = React.useRef<MediaStreamAudioDestinationNode | null>(null);
   const originalMicTrackRef = React.useRef<MediaStreamTrack | null>(null);
-  const screenAudioSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
-  const screenAudioGainRef = React.useRef<GainNode | null>(null);
-  const micAudioGainRef = React.useRef<GainNode | null>(null);
+  const _screenAudioSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
+  const _screenAudioGainRef = React.useRef<GainNode | null>(null);
+  const _micAudioGainRef = React.useRef<GainNode | null>(null);
 
   // PiP position and size state (for 1080p canvas)
   const [pipPosition, setPipPosition] = useState({ x: 1440, y: 30 }); // top-right default
@@ -377,10 +376,10 @@ function GoLiveContent() {
         streamRef.current = stream;
         setStreamReady(true);
 
-        // Show in video element
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(console.error);
+        // Show in desktop video element for preview
+        if (desktopVideoRef.current) {
+          desktopVideoRef.current.srcObject = stream;
+          desktopVideoRef.current.play().catch(console.error);
         }
 
         // Create preview room with user-based name
@@ -526,7 +525,7 @@ function GoLiveContent() {
   useEffect(() => {
     // Use a small delay to ensure the video elements are fully mounted
     const timer = setTimeout(() => {
-      if (isLive && streamRef.current) {
+      if (streamRef.current) {
         // Assign to mobile video ref
         if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
           console.log('Assigning stream to mobile video element');
@@ -539,15 +538,11 @@ function GoLiveContent() {
           desktopVideoRef.current.srcObject = streamRef.current;
           desktopVideoRef.current.play().catch(err => console.error('Error playing desktop video:', err));
         }
-      } else if (!isLive) {
-        // Clear videos when not live
-        if (videoRef.current) videoRef.current.srcObject = null;
-        if (desktopVideoRef.current) desktopVideoRef.current.srcObject = null;
       }
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [isLive]);
+  }, [isLive, streamReady]);
 
   // Cleanup on unmount - inline the cleanup to avoid hoisting issues
   useEffect(() => {
@@ -897,7 +892,7 @@ function GoLiveContent() {
   // Live stream clipping functions - records from original high-quality streams
   const startClip = () => {
     // Build a recording stream from original sources (not WebRTC compressed)
-    let recordStream = new MediaStream();
+    const recordStream = new MediaStream();
 
     console.log('[Clip] Starting clip...', {
       screenSharing,
@@ -3517,7 +3512,7 @@ function GoLiveContent() {
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${isLive ? '' : 'hidden'}`}
+                className="w-full h-full object-cover"
               />
               {/* Draggable/Resizable PiP control overlay when screen sharing and camera on */}
               {isLive && screenSharing && cameraEnabled && (

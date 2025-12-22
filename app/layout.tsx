@@ -32,6 +32,17 @@ export const metadata: Metadata = {
   title: "OSHO - Where creators launch tokens and fans get rich",
   description: "The ultimate platform for content creators to launch their own tokens with bonding curves, go live stream, and let fans trade their tokens.",
   keywords: ["creator tokens", "bonding curve", "live streaming", "crypto", "web3"],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "OSHO",
+  },
+  themeColor: "#a855f7",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {

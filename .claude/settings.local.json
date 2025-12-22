@@ -11,7 +11,10 @@
       "Bash(npx tsc:*)",
       "Bash(ls:*)",
       "Bash(npm install:*)",
-      "Bash(npx vercel --prod)"
+      "Bash(npx vercel --prod)",
+      "Bash(npx next dev --turbopack=false)",
+      "Bash(npx eslint .)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

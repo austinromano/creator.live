@@ -4,7 +4,7 @@
 
 let audioUnlocked = false;
 let audioContext: AudioContext | null = null;
-let unlockCallbacks: Set<() => void> = new Set(); // Use Set to prevent duplicate callbacks
+const unlockCallbacks: Set<() => void> = new Set(); // Use Set to prevent duplicate callbacks
 let isUnlocking = false; // Prevent multiple unlock attempts
 
 export function isAudioUnlocked(): boolean {
