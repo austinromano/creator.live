@@ -169,9 +169,9 @@ export function HomeFeed() {
         const deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        // Scroll down very slowly and smoothly - 0.01 pixels per millisecond (10 pixels per second)
+        // Scroll down smoothly - 0.02 pixels per millisecond (20 pixels per second)
         window.scrollBy({
-          top: 0.01 * deltaTime,
+          top: 0.02 * deltaTime,
           behavior: 'auto'
         });
       }
