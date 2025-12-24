@@ -42,41 +42,41 @@ export function LiveCommentOverlay({ comments, isVisible = true }: LiveCommentOv
       return;
     }
 
-    // Cycle through comments one at a time when visible
+    // Cycle through comments one at a time when visible - start immediately
     if (comments.length > 0 && !intervalRef.current) {
-      // Wait 5 seconds before showing first comment
-      const initialDelay = setTimeout(() => {
-        const firstComment: LiveComment = {
-          ...comments[0],
-          timestamp: Date.now(),
-        };
-        setLiveComments([firstComment]);
-        commentIndexRef.current = 1;
+      // Show first comment immediately
+      const firstComment: LiveComment = {
+        ...comments[0],
+        timestamp: Date.now(),
+      };
+      setLiveComments([firstComment]);
+      commentIndexRef.current = 1;
 
-        // Then cycle through remaining comments
-        intervalRef.current = setInterval(() => {
-          if (commentIndexRef.current < comments.length) {
-            const newComment: LiveComment = {
-              ...comments[commentIndexRef.current],
-              timestamp: Date.now(),
-            };
+      // Then cycle through remaining comments, only once
+      intervalRef.current = setInterval(() => {
+        if (commentIndexRef.current < comments.length) {
+          const newComment: LiveComment = {
+            ...comments[commentIndexRef.current],
+            timestamp: Date.now(),
+          };
 
-            setLiveComments((prev) => {
-              // Keep max 3 comments visible
-              const updated = [newComment, ...prev].slice(0, 3);
-              return updated;
-            });
+          setLiveComments((prev) => {
+            // Keep max 3 comments visible
+            const updated = [newComment, ...prev].slice(0, 3);
+            return updated;
+          });
 
-            commentIndexRef.current++;
-          } else {
-            // Reset and loop
-            commentIndexRef.current = 0;
+          commentIndexRef.current++;
+        } else {
+          // Stop after showing all comments once
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
           }
-        }, 2000); // New comment every 2 seconds
-      }, 5000); // Wait 5 seconds before first comment
+        }
+      }, 2000); // New comment every 2 seconds
 
       return () => {
-        clearTimeout(initialDelay);
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
