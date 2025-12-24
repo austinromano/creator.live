@@ -169,15 +169,15 @@ export default function CommunityPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`pb-3 text-xs font-semibold transition-all relative ${
+                className={`pb-2 text-xs font-semibold transition-all relative ${
                   activeTab === tab.id
                     ? 'text-white'
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <div className="flex items-center gap-1.5">
-                  {tab.icon && <tab.icon className={`h-4 w-4 ${activeTab === tab.id ? 'text-white' : 'text-gray-400'}`} />}
-                  <span>{tab.label}</span>
+                <div className="flex flex-col items-center gap-1">
+                  {tab.icon && <tab.icon className={`h-5 w-5 ${activeTab === tab.id ? 'text-white' : 'text-gray-400'}`} />}
+                  <span className="text-[10px]">{tab.label}</span>
                 </div>
                 {activeTab === tab.id && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
