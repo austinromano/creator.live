@@ -120,8 +120,8 @@ export function FeedPost({ post }: FeedPostProps) {
     if (b.starCount !== a.starCount) return b.starCount - a.starCount;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-  const previewComments = sortedComments.slice(0, 2);
-  const hasMoreComments = comments.length > 2;
+  const previewComments = sortedComments.slice(0, 3);
+  const hasMoreComments = comments.length > 3;
 
   const fetchComments = async () => {
     if (hasFetchedComments || loadingComments) return;
