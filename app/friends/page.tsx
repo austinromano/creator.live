@@ -287,7 +287,7 @@ export default function CommunityPage() {
       {activeTab === 'notifications' && (
         <Link
           href="/addfriend"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-28 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Add Friend</span>
@@ -298,7 +298,7 @@ export default function CommunityPage() {
       {activeTab === 'rooms' && (
         <Link
           href="/creategroup"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-28 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create room</span>
@@ -309,7 +309,7 @@ export default function CommunityPage() {
       {activeTab === 'community' && (
         <Link
           href="/createcommunity"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-28 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create community</span>
@@ -320,7 +320,7 @@ export default function CommunityPage() {
       {activeTab === 'groups' && (
         <Link
           href="/creategroup"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-28 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create group</span>

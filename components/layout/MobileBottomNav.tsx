@@ -60,7 +60,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-black/10 backdrop-blur-[4px] border-t border-white/5 z-50 pb-[env(safe-area-inset-bottom,24px)]">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-t from-black/30 via-black/15 to-black/10 backdrop-blur-[8px] border-t border-white/10 shadow-[0_-8px_24px_rgba(0,0,0,0.4)] z-50 pb-[env(safe-area-inset-bottom,24px)]">
       <div className="grid grid-cols-5 h-16">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -77,7 +77,10 @@ export function MobileBottomNav() {
                   {/* Breathing glow effect */}
                   <div className="absolute -inset-1 bg-purple-500 rounded-xl blur-md animate-[pulse_2s_ease-in-out_infinite] opacity-30" />
                   <div className="absolute -inset-0.5 bg-purple-400 rounded-xl blur-sm animate-[pulse_2s_ease-in-out_infinite_0.5s] opacity-20" />
-                  <div className="relative w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+                  <div
+                    className="relative w-10 h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30 animate-[gradient_6s_ease_infinite]"
+                    style={{ backgroundSize: '200% 200%' }}
+                  >
                     <Icon className="h-5 w-5 text-white" />
                   </div>
                 </div>

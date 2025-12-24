@@ -158,28 +158,8 @@ export function LiveStreamGrid() {
     <>
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
-        {/* Category Tabs */}
-        <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-black/20 backdrop-blur-sm">
-          {MOBILE_TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`relative whitespace-nowrap text-sm font-semibold pb-2 transition-all ${
-                activeTab === tab
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              {tab}
-              {activeTab === tab && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-
         {/* Two Column Grid Layout */}
-        <div className="grid grid-cols-2 gap-2 px-2 pt-3 pb-24">
+        <div className="grid grid-cols-2 gap-2 px-2 pt-3 pb-32">
           {streamsToShow
             .filter((stream) => {
               // For You and Popular show all streams
@@ -194,6 +174,27 @@ export function LiveStreamGrid() {
                 size="medium"
               />
             ))}
+        </div>
+
+        {/* Fixed Live Navbar - Above Bottom Navbar */}
+        <div className="fixed bottom-16 left-0 right-0 z-50 flex justify-between items-center px-4 py-3 bg-gradient-to-t from-black/20 via-black/10 to-transparent backdrop-blur-[8px] border-t border-white/10 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
+          {MOBILE_TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative whitespace-nowrap text-sm font-bold pb-2 transition-all drop-shadow-[0_0_8px_rgba(0,0,0,1)] ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-[gradient_6s_ease_infinite] drop-shadow-[0_0_12px_rgba(168,85,247,0.6)]'
+                  : 'text-white hover:text-purple-300'
+              }`}
+              style={activeTab === tab ? { backgroundSize: '200% 200%' } : undefined}
+            >
+              {tab}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
+              )}
+            </button>
+          ))}
         </div>
       </section>
 

@@ -184,15 +184,17 @@ export function HomeFeed() {
 
   return (
     <div className="pb-20">
-      {/* Stories Row - always show */}
-      <StoriesRow
-        users={friends}
-        rooms={rooms}
-        currentUserAvatar={currentUser?.avatar}
-        onAddStoryClick={() => {
-          window.location.href = '/createroom';
-        }}
-      />
+      {/* Stories Row - sticky with background */}
+      <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-sm border-b border-white/5">
+        <StoriesRow
+          users={friends}
+          rooms={rooms}
+          currentUserAvatar={currentUser?.avatar}
+          onAddStoryClick={() => {
+            window.location.href = '/createroom';
+          }}
+        />
+      </div>
 
       {/* Feed Posts */}
       {posts.length > 0 && (

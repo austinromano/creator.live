@@ -76,8 +76,8 @@ export function StoriesRow({ users, rooms = [], currentUserAvatar, onAddStoryCli
               <Plus className="h-3 w-3 text-white" />
             </div>
           </div>
-          <span className="text-[10px] text-gray-400 max-w-[60px] truncate">
-            Make room
+          <span className="text-[10px] text-gray-400 max-w-[70px] truncate">
+            Create room
           </span>
         </button>
 

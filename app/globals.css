@@ -261,3 +261,13 @@
 .animate-aurora-float {
   animation: aurora-float 15s ease-in-out infinite;
 }
+
+/* Moving gradient animation for active tabs */
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
