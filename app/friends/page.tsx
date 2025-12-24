@@ -141,18 +141,6 @@ export default function CommunityPage() {
       {/* Header */}
       <div className="sticky top-0 z-40 bg-black/40 backdrop-blur-xl border-b border-white/5">
         <div className="pt-4 pb-2 px-4">
-          {/* Search Bar */}
-          <div className="relative mb-3">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-            <input
-              type="text"
-              placeholder="Search friends..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-900/30 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:bg-gray-900/40 border border-gray-800/50 transition-all"
-            />
-          </div>
-
           {/* Stories/Online Friends Section */}
           <div className="-mx-4">
             <StoriesRow
@@ -295,11 +283,22 @@ export default function CommunityPage() {
         )}
       </div>
 
+      {/* Floating Add Friend Button - Only show on Notifications tab */}
+      {activeTab === 'notifications' && (
+        <Link
+          href="/addfriend"
+          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+        >
+          <Plus className="h-5 w-5" />
+          <span>Add Friend</span>
+        </Link>
+      )}
+
       {/* Floating Create Room Button - Only show on Rooms tab */}
       {activeTab === 'rooms' && (
         <Link
           href="/creategroup"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-white text-black font-semibold rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create room</span>
@@ -310,7 +309,7 @@ export default function CommunityPage() {
       {activeTab === 'community' && (
         <Link
           href="/createcommunity"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-white text-black font-semibold rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create community</span>
@@ -321,7 +320,7 @@ export default function CommunityPage() {
       {activeTab === 'groups' && (
         <Link
           href="/creategroup"
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-white text-black font-semibold rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create group</span>
