@@ -43,6 +43,8 @@ export function HomeFeed() {
   const isMountedRef = useRef(true);
   // Use ref to track ongoing fetch to prevent duplicates
   const fetchInProgressRef = useRef(false);
+  // Auto-scroll state
+  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
 
   const fetchData = useCallback(async () => {
     // Prevent duplicate fetches
@@ -154,6 +156,62 @@ export function HomeFeed() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [hasFetched, fetchData]);
+
+  // Auto-scroll effect - very slow continuous scroll
+  useEffect(() => {
+    let animationFrame: number;
+    let lastTime = Date.now();
+    let resumeTimeout: NodeJS.Timeout;
+
+    const scroll = () => {
+      if (isAutoScrolling) {
+        const currentTime = Date.now();
+        const deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        // Scroll down very slowly and smoothly - 0.01 pixels per millisecond (10 pixels per second)
+        window.scrollBy({
+          top: 0.01 * deltaTime,
+          behavior: 'auto'
+        });
+      }
+
+      animationFrame = requestAnimationFrame(scroll);
+    };
+
+    animationFrame = requestAnimationFrame(scroll);
+
+    // Pause when finger touches screen
+    const handleTouchStart = () => {
+      setIsAutoScrolling(false);
+      clearTimeout(resumeTimeout);
+    };
+
+    // Resume 3 seconds after finger is lifted
+    const handleTouchEnd = () => {
+      clearTimeout(resumeTimeout);
+      resumeTimeout = setTimeout(() => setIsAutoScrolling(true), 3000);
+    };
+
+    // Pause on wheel scroll
+    const handleWheel = () => {
+      setIsAutoScrolling(false);
+      clearTimeout(resumeTimeout);
+      resumeTimeout = setTimeout(() => setIsAutoScrolling(true), 3000);
+    };
+
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('wheel', handleWheel);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('wheel', handleWheel);
+      clearTimeout(resumeTimeout);
+    };
+  }, [isAutoScrolling]);
 
   // Show loading spinner while session is loading or initial fetch
   if (status === 'loading' || (loading && !hasFetched)) {

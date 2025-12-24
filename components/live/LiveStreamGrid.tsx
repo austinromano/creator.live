@@ -159,7 +159,7 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Live Navbar - At Top */}
-        <div className="flex justify-between items-center px-4 py-2 bg-gradient-to-t from-black/20 via-black/10 to-transparent backdrop-blur-[8px] shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
+        <div className="flex justify-between items-center px-4 py-2 backdrop-blur-[8px]">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
