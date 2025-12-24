@@ -158,26 +158,8 @@ export function LiveStreamGrid() {
     <>
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
-        {/* Two Column Grid Layout */}
-        <div className="grid grid-cols-2 gap-2 px-2 pt-3 pb-32">
-          {streamsToShow
-            .filter((stream) => {
-              // For You and Popular show all streams
-              if (activeTab === 'For You' || activeTab === 'Popular') return true;
-              // Filter by category for IRL, Gaming, Music tabs
-              return stream.category === activeTab;
-            })
-            .map((stream) => (
-              <MobileStreamCard
-                key={stream.id}
-                stream={stream}
-                size="medium"
-              />
-            ))}
-        </div>
-
-        {/* Fixed Live Navbar - Above Bottom Navbar */}
-        <div className="fixed bottom-16 left-0 right-0 z-50 flex justify-between items-center px-4 py-3 bg-gradient-to-t from-black/20 via-black/10 to-transparent backdrop-blur-[8px] border-t border-white/10 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
+        {/* Live Navbar - At Top */}
+        <div className="flex justify-between items-center px-4 py-2 bg-gradient-to-t from-black/20 via-black/10 to-transparent backdrop-blur-[8px] shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
@@ -195,6 +177,24 @@ export function LiveStreamGrid() {
               )}
             </button>
           ))}
+        </div>
+
+        {/* Two Column Grid Layout */}
+        <div className="grid grid-cols-2 gap-2 px-2 pt-1 pb-24">
+          {streamsToShow
+            .filter((stream) => {
+              // For You and Popular show all streams
+              if (activeTab === 'For You' || activeTab === 'Popular') return true;
+              // Filter by category for IRL, Gaming, Music tabs
+              return stream.category === activeTab;
+            })
+            .map((stream) => (
+              <MobileStreamCard
+                key={stream.id}
+                stream={stream}
+                size="medium"
+              />
+            ))}
         </div>
       </section>
 
