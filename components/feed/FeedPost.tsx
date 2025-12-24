@@ -7,6 +7,7 @@ import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Star, Volume
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
 import { LiveCommentOverlay } from './LiveCommentOverlay';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CommentData {
   id: string;
@@ -77,6 +78,7 @@ export function FeedPost({ post }: FeedPostProps) {
   const [isInView, setIsInView] = useState(false);
   const [videoAspectRatio, setVideoAspectRatio] = useState<string | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<string | null>(null);
+  const [showStarAnimation, setShowStarAnimation] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -290,6 +292,9 @@ export function FeedPost({ post }: FeedPostProps) {
     } else {
       setSparked(true);
       setSparkCount((prev) => prev + 1);
+      // Trigger star animation
+      setShowStarAnimation(true);
+      setTimeout(() => setShowStarAnimation(false), 1000);
     }
 
     try {
@@ -327,6 +332,9 @@ export function FeedPost({ post }: FeedPostProps) {
       // Optimistic update
       setSparked(true);
       setSparkCount((prev) => prev + 1);
+      // Trigger star animation
+      setShowStarAnimation(true);
+      setTimeout(() => setShowStarAnimation(false), 1000);
 
       try {
         const response = await fetch('/api/sparks', {
@@ -531,7 +539,7 @@ export function FeedPost({ post }: FeedPostProps) {
             {/* Like Button - Star */}
             <button
               onClick={handleSpark}
-              className="flex items-center justify-center transition-transform active:scale-125"
+              className="flex items-center justify-center transition-transform active:scale-125 relative"
             >
               <Star
                 className={`h-7 w-7 transition-colors ${
@@ -540,6 +548,35 @@ export function FeedPost({ post }: FeedPostProps) {
                     : 'text-white hover:text-gray-300'
                 }`}
               />
+
+              {/* Star explosion animation */}
+              <AnimatePresence>
+                {showStarAnimation && (
+                  <>
+                    {[...Array(8)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+                        animate={{
+                          scale: [0, 1.5, 0.5],
+                          x: Math.cos((i * Math.PI * 2) / 8) * 200,
+                          y: Math.sin((i * Math.PI * 2) / 8) * 200,
+                          opacity: [1, 1, 0],
+                        }}
+                        exit={{ opacity: 0 }}
+                        transition={{
+                          duration: 0.8,
+                          ease: "easeOut",
+                        }}
+                        className="absolute pointer-events-none"
+                        style={{ left: '50%', top: '50%' }}
+                      >
+                        <Star className="h-6 w-6 text-purple-500 fill-purple-500" />
+                      </motion.div>
+                    ))}
+                  </>
+                )}
+              </AnimatePresence>
             </button>
 
             {/* Comment Button */}
@@ -576,6 +613,18 @@ export function FeedPost({ post }: FeedPostProps) {
           </div>
         )}
 
+        {/* Comment Count - clickable to view all */}
+        {comments.length > 0 && (
+          <div className="mt-2">
+            <button
+              onClick={handleCommentClick}
+              className="font-semibold text-white text-sm hover:text-gray-300"
+            >
+              View all {comments.length} comment{comments.length !== 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
+
         {/* Caption */}
         {(post.title || post.description) && (
           <div className="mt-1">
@@ -588,17 +637,17 @@ export function FeedPost({ post }: FeedPostProps) {
           </div>
         )}
 
-        {/* Comments Section - Always show top 2, expand on click */}
-        {(previewComments.length > 0 || showAllComments) && (
+        {/* Comments Section - Only show when expanded */}
+        {showAllComments && (
           <div className="mt-3 border-t border-gray-800 pt-3">
             {/* Comments List */}
             {loadingComments ? (
               <div className="flex justify-center py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
               </div>
-            ) : (showAllComments ? sortedComments : previewComments).length > 0 ? (
-              <div className={`space-y-3 ${showAllComments ? 'max-h-48 overflow-y-auto' : ''}`}>
-                {(showAllComments ? sortedComments : previewComments).map((comment) => (
+            ) : sortedComments.length > 0 ? (
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {sortedComments.map((comment) => (
                   <div key={comment.id} className="flex gap-2 group">
                     <Link href={`/profile/${comment.user.username}`}>
                       <Avatar className="h-6 w-6">
@@ -655,19 +704,10 @@ export function FeedPost({ post }: FeedPostProps) {
                     </div>
                   </div>
                 ))}
-                {/* Show "View all comments" link if there are more */}
-                {!showAllComments && hasMoreComments && (
-                  <button
-                    onClick={handleCommentClick}
-                    className="text-gray-500 text-sm hover:text-gray-300 transition-colors"
-                  >
-                    View all {comments.length} comments
-                  </button>
-                )}
               </div>
-            ) : showAllComments ? (
+            ) : (
               <p className="text-gray-500 text-sm text-center py-2">No comments yet</p>
-            ) : null}
+            )}
           </div>
         )}
 
