@@ -178,9 +178,9 @@ export function HomeFeed() {
         const deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        // Scroll down faster - 0.03 pixels per millisecond (30 pixels per second)
+        // Scroll optimized for Gen Z - 0.045 pixels per millisecond (45 pixels per second)
         window.scrollBy({
-          top: 0.03 * deltaTime,
+          top: 0.045 * deltaTime,
           behavior: 'auto'
         });
       }
