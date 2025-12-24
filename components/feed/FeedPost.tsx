@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Star, Volume2, VolumeX, Loader2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
+import { LiveCommentOverlay } from './LiveCommentOverlay';
 
 interface CommentData {
   id: string;
@@ -518,6 +519,9 @@ export function FeedPost({ post }: FeedPostProps) {
             <span className="text-gray-500">No media</span>
           </div>
         )}
+
+        {/* TikTok-style Live Comment Overlay - Only shows when post is visible */}
+        <LiveCommentOverlay comments={previewComments} isVisible={isInView} />
       </div>
 
       {/* Action Buttons */}
