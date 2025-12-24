@@ -43,8 +43,8 @@ export function HomeFeed() {
   const isMountedRef = useRef(true);
   // Use ref to track ongoing fetch to prevent duplicates
   const fetchInProgressRef = useRef(false);
-  // Auto-scroll state
-  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
+  // Auto-scroll state - start as false, will enable after delay
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
 
   const fetchData = useCallback(async () => {
     // Prevent duplicate fetches
@@ -157,7 +157,16 @@ export function HomeFeed() {
     };
   }, [hasFetched, fetchData]);
 
-  // Auto-scroll effect - very slow continuous scroll
+  // Start auto-scroll after 3 second delay
+  useEffect(() => {
+    const startDelay = setTimeout(() => {
+      setIsAutoScrolling(true);
+    }, 3000);
+
+    return () => clearTimeout(startDelay);
+  }, []);
+
+  // Auto-scroll effect - smooth continuous scroll
   useEffect(() => {
     let animationFrame: number;
     let lastTime = Date.now();
@@ -169,9 +178,9 @@ export function HomeFeed() {
         const deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        // Scroll down smoothly - 0.02 pixels per millisecond (20 pixels per second)
+        // Scroll down faster - 0.03 pixels per millisecond (30 pixels per second)
         window.scrollBy({
-          top: 0.02 * deltaTime,
+          top: 0.03 * deltaTime,
           behavior: 'auto'
         });
       }
