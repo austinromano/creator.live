@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
 // Pages in order for swipe navigation
-const NAV_PAGES = ['/', '/live', '/community', '/profile'];
+const NAV_PAGES = ['/', '/live', '/friends', '/profile'];
 
 interface MobileSwipeNavigatorProps {
   children: React.ReactNode;
@@ -46,7 +46,7 @@ export function MobileSwipeNavigator({ children }: MobileSwipeNavigatorProps) {
   const getCurrentPageIndex = useCallback(() => {
     if (pathname === '/') return 0;
     if (pathname === '/live') return 1;
-    if (pathname === '/community') return 2;
+    if (pathname === '/friends') return 2;
     if (pathname.startsWith('/profile')) return 3;
     return -1; // Not a swipeable page
   }, [pathname]);

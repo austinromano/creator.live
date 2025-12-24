@@ -42,10 +42,7 @@ export function ProfileAvatar({
   onEditProfile,
   onCoverUpdate,
 }: ProfileAvatarProps) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [currentCoverUrl, setCurrentCoverUrl] = useState(coverUrl);
   const [isStreamConnected, setIsStreamConnected] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamerRef = useRef<LiveKitStreamer | null>(null);
 
@@ -89,59 +86,6 @@ export function ProfileAvatar({
     };
   }, [isLive, liveStream?.roomName]);
 
-  const handleCoverClick = () => {
-    if (isOwnProfile && fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
-    }
-
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be under 10MB');
-      return;
-    }
-
-    setIsUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/user/cover', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload cover image');
-      }
-
-      setCurrentCoverUrl(data.coverUrl);
-      onCoverUpdate?.(data.coverUrl);
-    } catch (error) {
-      console.error('Error uploading cover:', error);
-      alert('Failed to upload cover image. Please try again.');
-    } finally {
-      setIsUploading(false);
-      // Reset input so same file can be selected again
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -154,40 +98,29 @@ export function ProfileAvatar({
     <div className="relative h-24 w-24">
       {/* Live stream video in avatar circle - always render when live */}
       {isLive && liveStream && (
-        <>
-          {/* Video container - circular clip */}
-          <div className="absolute inset-0 h-24 w-24 rounded-full overflow-hidden border-4 border-red-500 z-10 bg-black">
-            <video
-              ref={videoRef}
-              className="w-full h-full object-cover"
-              autoPlay
-              muted
-              playsInline
-              webkit-playsinline="true"
-            />
-          </div>
-          {/* Pulsing glow effect behind */}
-          <div className="absolute inset-0 h-24 w-24 rounded-full bg-red-500/30 blur-md animate-pulse -z-10" />
-        </>
+        <div className="absolute inset-0 h-24 w-24 rounded-full overflow-hidden border-4 border-red-500 z-10 bg-black">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            webkit-playsinline="true"
+          />
+        </div>
       )}
 
       {/* Regular avatar (shows when not live) */}
       {!isLive && (
-        <>
-          {/* Green glow effect when online - breathing animation */}
-          {isOnline && (
-            <div className="absolute inset-0 h-24 w-24 rounded-full bg-green-500 blur-md animate-breathe -z-10" />
-          )}
-          <Avatar
-            className={`h-24 w-24 border-4 ${isOnline ? 'border-green-500' : 'border-[#0f0a15]'} relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
-            onClick={isOwnProfile ? onEditProfile : undefined}
-          >
-            <AvatarImage src={avatarUrl} alt={name} />
-            <AvatarFallback className="bg-purple-600 text-white text-2xl">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-        </>
+        <Avatar
+          className={`h-24 w-24 border-4 ${isOnline ? 'border-green-500' : 'border-[#0f0a15]'} relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
+          onClick={isOwnProfile ? onEditProfile : undefined}
+        >
+          <AvatarImage src={avatarUrl} alt={name} />
+          <AvatarFallback className="bg-purple-600 text-white text-2xl">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
       )}
 
       {/* Fallback avatar shown while stream connects */}
@@ -218,42 +151,11 @@ export function ProfileAvatar({
   );
 
   return (
-    <div className="flex flex-col">
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
-      {/* Cover Image - TikTok style (shorter) */}
-      <div className="relative h-24 w-full bg-gradient-to-b from-[#1a1225] to-[#0f0a15]">
-        {currentCoverUrl && (
-          <img src={currentCoverUrl} alt="Cover" className="w-full h-full object-cover opacity-60" />
-        )}
-        {/* Upload overlay while uploading */}
-        {isUploading && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 text-white animate-spin" />
-          </div>
-        )}
-        {/* Edit cover button for own profile */}
-        {isOwnProfile && !isUploading && (
-          <button
-            onClick={handleCoverClick}
-            className="absolute top-2 right-2 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
-          >
-            <Camera className="h-4 w-4 text-white" />
-          </button>
-        )}
-      </div>
-
-      {/* Content below cover - TikTok centered layout */}
-      <div className="relative px-4">
-        {/* Avatar overlapping cover - centered */}
-        <div className="flex flex-col items-center -mt-12">
+    <div className="flex flex-col bg-transparent">
+      {/* Content - TikTok centered layout */}
+      <div className="relative px-4 pt-6 pb-4 bg-transparent overflow-hidden">
+        {/* Avatar - centered */}
+        <div className="flex flex-col items-center">
           {/* Avatar - wrapped in Link when live to go to stream */}
           {isLive && liveStream ? (
             <Link href={`/live/${liveStream.roomName}`} className="cursor-pointer">

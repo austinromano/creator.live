@@ -172,65 +172,7 @@ export function Homepage() {
 
   // Show feed for authenticated users
   if (status === 'authenticated') {
-    return (
-      <div className="flex-1 flex flex-col relative">
-        {/* Instagram-style Top Navbar - Only show on mobile (desktop uses main Header) */}
-        <header className="sticky top-0 z-40 bg-black/10 backdrop-blur-[4px] lg:hidden">
-          <div className="flex items-center justify-between px-4 py-2">
-            {/* Left - Messages Icon */}
-            <Link href="/messages" className="p-1">
-              <MessageCircle className="h-7 w-7 text-white" strokeWidth={1.5} />
-            </Link>
-
-            {/* Center - Osho Logo (Script Font) */}
-            <h1
-              className="text-3xl text-white tracking-wide font-[family-name:var(--font-pacifico)]"
-              style={{
-                animation: 'breathe 5s ease-in-out infinite',
-              }}
-            >
-              Osho
-            </h1>
-            <style jsx>{`
-              @keyframes breathe {
-                0%, 100% {
-                  text-shadow: none;
-                  filter: none;
-                }
-                50% {
-                  text-shadow: 0 0 4px rgba(168, 85, 247, 0.3), 0 0 8px rgba(168, 85, 247, 0.25), 0 0 12px rgba(147, 51, 234, 0.2);
-                  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.3));
-                }
-              }
-            `}</style>
-
-            {/* Right - Remote Control Icon */}
-            <Link href="/remote" className="p-1">
-              <svg
-                className="h-7 w-7 text-white"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                {/* Remote control icon */}
-                <rect x="6" y="2" width="12" height="20" rx="3" />
-                <circle cx="12" cy="7" r="2" />
-                <line x1="10" y1="12" x2="10" y2="12.01" />
-                <line x1="14" y1="12" x2="14" y2="12.01" />
-                <line x1="10" y1="15" x2="10" y2="15.01" />
-                <line x1="14" y1="15" x2="14" y2="15.01" />
-                <line x1="12" y1="18" x2="12" y2="18.01" />
-              </svg>
-            </Link>
-          </div>
-        </header>
-
-        <HomeFeed />
-      </div>
-    );
+    return <HomeFeed />;
   }
 
   // Show sign in/sign up for unauthenticated users

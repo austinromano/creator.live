@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, Bell, Users, UserPlus } from 'lucide-react';
+import { Loader2, Bell, Users, UserPlus, Star } from 'lucide-react';
 
 interface NotificationData {
   id: string;
@@ -46,7 +46,7 @@ function formatTimeAgo(dateString: string): string {
 function getNotificationText(notification: NotificationData): string {
   switch (notification.type) {
     case 'spark':
-      return 'sparked your post';
+      return 'gave you a star';
     case 'follow':
       return 'started following you';
     case 'comment':
@@ -67,20 +67,7 @@ function getNotificationText(notification: NotificationData): string {
 function getNotificationIcon(type: string): React.ReactNode {
   switch (type) {
     case 'spark':
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          className="h-4 w-4 text-purple-400"
-          fill="currentColor"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path
-            d="M12 3L13.5 9.5L20 11L13.5 12.5L12 19L10.5 12.5L4 11L10.5 9.5L12 3Z"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
+      return <Star className="h-4 w-4 text-purple-400 fill-purple-400" />;
     case 'follow':
       return (
         <svg viewBox="0 0 24 24" className="h-4 w-4 text-blue-400" fill="currentColor">
@@ -206,7 +193,7 @@ export function NotificationsList() {
   }
 
   return (
-    <div className="divide-y divide-gray-800">
+    <div className="space-y-2">
       {notifications.map((notification) => (
         <Link
           key={notification.id}
@@ -219,8 +206,10 @@ export function NotificationsList() {
               ? `/post/${notification.post.id}`
               : `/profile/${notification.fromUser.username}`
           }
-          className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-900/50 transition-colors ${
-            !notification.isRead ? 'bg-purple-900/10' : ''
+          className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl backdrop-blur-sm border transition-colors ${
+            !notification.isRead
+              ? 'bg-purple-900/15 border-purple-500/15 hover:bg-purple-900/25'
+              : 'bg-gray-800/30 border-white/5 hover:bg-gray-800/50'
           }`}
         >
           {/* Avatar with notification type icon */}

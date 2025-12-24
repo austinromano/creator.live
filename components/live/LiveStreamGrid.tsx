@@ -7,8 +7,121 @@ import { Radio } from 'lucide-react';
 import { TIME, MOBILE_TABS } from '@/lib/constants';
 import type { Stream } from '@/lib/types/stream';
 
-// Demo streams DISABLED - were causing LiveKit connection attempts
-const DEMO_STREAMS: Stream[] = [];
+// Demo streams for display purposes
+const DEMO_STREAMS: Stream[] = [
+  {
+    id: 'demo-1',
+    roomName: 'demo-1',
+    user: {
+      username: 'sarah_music',
+      displayName: 'Sarah Johnson',
+      avatar: 'https://i.pravatar.cc/150?img=1',
+    },
+    title: 'Chill vibes and acoustic covers 🎸',
+    category: 'Music',
+    viewerCount: 1234,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-2',
+    roomName: 'demo-2',
+    user: {
+      username: 'gamer_pro',
+      displayName: 'Alex Chen',
+      avatar: 'https://i.pravatar.cc/150?img=12',
+    },
+    title: 'Valorant Ranked - Road to Radiant!',
+    category: 'Gaming',
+    viewerCount: 3456,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-3',
+    roomName: 'demo-3',
+    user: {
+      username: 'travel_kate',
+      displayName: 'Kate Wilson',
+      avatar: 'https://i.pravatar.cc/150?img=5',
+    },
+    title: 'Exploring Tokyo Streets 🗾',
+    category: 'IRL',
+    viewerCount: 892,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-4',
+    roomName: 'demo-4',
+    user: {
+      username: 'dj_mike',
+      displayName: 'Mike Rodriguez',
+      avatar: 'https://i.pravatar.cc/150?img=13',
+    },
+    title: 'House Mix Session - Feel Good Friday',
+    category: 'Music',
+    viewerCount: 2156,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1571330735066-03aaa9429d89?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-5',
+    roomName: 'demo-5',
+    user: {
+      username: 'chef_emma',
+      displayName: 'Emma Davis',
+      avatar: 'https://i.pravatar.cc/150?img=9',
+    },
+    title: 'Making Homemade Pasta From Scratch 🍝',
+    category: 'IRL',
+    viewerCount: 567,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-6',
+    roomName: 'demo-6',
+    user: {
+      username: 'fps_legend',
+      displayName: 'Jake Morrison',
+      avatar: 'https://i.pravatar.cc/150?img=14',
+    },
+    title: 'CS2 - Competitive Gameplay',
+    category: 'Gaming',
+    viewerCount: 4523,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-7',
+    roomName: 'demo-7',
+    user: {
+      username: 'yoga_lily',
+      displayName: 'Lily Anderson',
+      avatar: 'https://i.pravatar.cc/150?img=10',
+    },
+    title: 'Morning Yoga Flow - Join Me! 🧘‍♀️',
+    category: 'IRL',
+    viewerCount: 678,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&h=600&fit=crop',
+  },
+  {
+    id: 'demo-8',
+    roomName: 'demo-8',
+    user: {
+      username: 'artist_noah',
+      displayName: 'Noah Taylor',
+      avatar: 'https://i.pravatar.cc/150?img=15',
+    },
+    title: 'Digital Art Stream - Character Design',
+    category: 'IRL',
+    viewerCount: 1089,
+    isLive: true,
+    thumbnail: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800&h=600&fit=crop',
+  },
+] as any;
 
 // Unified streaming model: all streams come from the database
 // Each user = 1 stream room (user-{userId})
@@ -46,18 +159,21 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Category Tabs */}
-        <div className="flex justify-between items-center px-4 py-2">
+        <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-black/20 backdrop-blur-sm">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap text-base font-medium pb-1 transition-colors ${
+              className={`relative whitespace-nowrap text-sm font-semibold pb-2 transition-all ${
                 activeTab === tab
-                  ? 'text-purple-500 border-b-2 border-purple-500'
-                  : 'text-gray-300 hover:text-white'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-gray-200'
               }`}
             >
               {tab}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
+              )}
             </button>
           ))}
         </div>

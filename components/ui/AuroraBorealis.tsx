@@ -154,13 +154,6 @@ export function AuroraBorealis() {
         }}
       />
 
-      {/* Bottom fade to blend with background */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-[40%]"
-        style={{
-          background: 'linear-gradient(to top, rgba(15,10,21,0.8) 0%, transparent 100%)',
-        }}
-      />
     </div>
   );
 }

@@ -75,10 +75,8 @@ export function Header() {
     };
   }, [isAuthenticated, status]);
 
-  // Hide header on mobile when authenticated (only show on lg screens and up)
-  const headerClassName = isAuthenticated
-    ? "sticky top-0 z-50 w-full bg-transparent hidden lg:block"
-    : "sticky top-0 z-50 w-full bg-transparent";
+  // Hide header on mobile, show only on desktop (lg screens and up)
+  const headerClassName = "sticky top-0 z-50 w-full bg-transparent hidden lg:block";
 
   return (
     <header className={headerClassName}>

@@ -11,6 +11,9 @@
     "postinstall": "node -e \"if(process.env.DATABASE_URL){require('child_process').execSync('prisma generate',{stdio:'inherit'})}\""
   },
   "dependencies": {
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
     "@noble/ed25519": "^3.0.0",
     "@noble/hashes": "^2.0.1",
     "@prisma/adapter-pg": "^7.0.0",

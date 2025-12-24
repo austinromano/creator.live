@@ -24,18 +24,18 @@ export function ProfileStats({
   isSubscriber = false,
 }: ProfileStatsProps) {
   return (
-    <div className="py-2">
+    <div className="py-4">
       {/* Stats row - TikTok style: centered, compact, horizontal dividers */}
-      <div className="flex justify-center items-center gap-5">
-        <div className="flex flex-col items-center">
+      <div className="flex justify-center items-center gap-8">
+        <div className="flex flex-col items-center min-w-[70px]">
           <span className="text-white font-bold text-lg">{formatNumber(following)}</span>
           <span className="text-gray-500 text-xs">Following</span>
         </div>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center min-w-[70px]">
           <span className="text-white font-bold text-lg">{formatNumber(followers)}</span>
           <span className="text-gray-500 text-xs">Followers</span>
         </div>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center min-w-[70px]">
           <span className="text-white font-bold text-lg">{formatNumber(posts)}</span>
           <span className="text-gray-500 text-xs">Posts</span>
         </div>

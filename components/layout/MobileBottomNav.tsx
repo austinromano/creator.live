@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Home, Radio, Camera, User } from 'lucide-react';
+import { Home, Search, Camera, MessageCircle, User, Radio, Users } from 'lucide-react';
 
 // Custom 3-person community icon
 const CommunityIcon = ({ className }: { className?: string }) => (
@@ -49,8 +49,8 @@ export function MobileBottomNav() {
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
     { href: '/live', icon: Radio, label: 'Live' },
-    { href: '/golive', icon: Camera, label: 'Create', isCenter: true },
-    { href: '/community', icon: CommunityIcon, label: 'Community', iconSize: 'h-7 w-7' },
+    { href: '/camera', icon: Camera, label: 'Camera', isCenter: true },
+    { href: '/friends', icon: Users, label: 'Friends' },
     { href: profileHref, icon: User, label: 'Profile' },
   ];
 
@@ -75,9 +75,9 @@ export function MobileBottomNav() {
               >
                 <div className="relative">
                   {/* Breathing glow effect */}
-                  <div className="absolute -inset-1 bg-purple-500 rounded-xl blur-md animate-[pulse_2s_ease-in-out_infinite] opacity-70" />
-                  <div className="absolute -inset-0.5 bg-purple-400 rounded-xl blur-sm animate-[pulse_2s_ease-in-out_infinite_0.5s] opacity-50" />
-                  <div className="relative w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50">
+                  <div className="absolute -inset-1 bg-purple-500 rounded-xl blur-md animate-[pulse_2s_ease-in-out_infinite] opacity-30" />
+                  <div className="absolute -inset-0.5 bg-purple-400 rounded-xl blur-sm animate-[pulse_2s_ease-in-out_infinite_0.5s] opacity-20" />
+                  <div className="relative w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
                     <Icon className="h-5 w-5 text-white" />
                   </div>
                 </div>
