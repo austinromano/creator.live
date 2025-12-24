@@ -92,12 +92,12 @@ export function LiveCommentOverlay({ comments, isVisible = true }: LiveCommentOv
     };
   }, [comments, isVisible]);
 
-  // Auto-remove old comments
+  // Auto-remove old comments - disappear after 3 seconds
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       const now = Date.now();
       setLiveComments((prev) =>
-        prev.filter((comment) => now - comment.timestamp < 6000)
+        prev.filter((comment) => now - comment.timestamp < 3000)
       );
     }, 1000);
 

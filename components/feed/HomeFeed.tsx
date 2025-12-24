@@ -178,9 +178,9 @@ export function HomeFeed() {
         const deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        // Slower, more relaxed scroll - 0.015 pixels per millisecond (15 pixels per second)
+        // Medium scroll speed - 0.035 pixels per millisecond (35 pixels per second)
         window.scrollBy({
-          top: 0.015 * deltaTime,
+          top: 0.035 * deltaTime,
           behavior: 'auto'
         });
       }
