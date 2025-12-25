@@ -293,19 +293,9 @@ export function HomeFeed() {
         </div>
       )}
 
-      {/* Stories Row */}
-      <StoriesRow
-        users={friends}
-        rooms={rooms}
-        currentUserAvatar={currentUser?.avatar}
-        onAddStoryClick={() => {
-          window.location.href = '/createroom';
-        }}
-      />
-
       {/* Feed Posts */}
       {posts.length > 0 && (
-        <div>
+        <div className="px-4 py-6">
           {posts.map((post) => (
             <FeedPost key={post.id} post={post} />
           ))}

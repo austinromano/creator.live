@@ -4,12 +4,12 @@ import React from 'react';
 
 export function AuroraBorealis() {
   return (
-    <div className="fixed inset-x-0 top-0 h-[20vh] pointer-events-none z-0 overflow-hidden">
+    <div className="fixed inset-x-0 bottom-0 h-[20vh] pointer-events-none z-0 overflow-hidden">
       {/* Main aurora curtain - green dominant like real aurora */}
       <motion.div
         className="absolute inset-0"
         style={{
-          background: `linear-gradient(180deg,
+          background: `linear-gradient(0deg,
             rgba(34, 197, 94, 0.4) 0%,
             rgba(74, 222, 128, 0.3) 20%,
             rgba(45, 212, 191, 0.2) 40%,
@@ -35,17 +35,17 @@ export function AuroraBorealis() {
           className="absolute"
           style={{
             left: `${i * 20}%`,
-            top: 0,
+            bottom: 0,
             width: '25%',
             height: '100%',
-            background: `linear-gradient(180deg,
+            background: `linear-gradient(0deg,
               rgba(74, 222, 128, ${0.3 - i * 0.03}) 0%,
               rgba(34, 197, 94, ${0.25 - i * 0.02}) 30%,
               rgba(45, 212, 191, ${0.15 - i * 0.01}) 60%,
               transparent 100%
             )`,
             filter: 'blur(15px)',
-            transformOrigin: 'top center',
+            transformOrigin: 'bottom center',
           }}
           animate={{
             scaleY: [1, 1.1, 0.95, 1.05, 1],
@@ -63,9 +63,9 @@ export function AuroraBorealis() {
 
       {/* Subtle purple/pink accent - appears occasionally in real aurora */}
       <motion.div
-        className="absolute right-[10%] top-0 w-[30%] h-[80%]"
+        className="absolute right-[10%] bottom-0 w-[30%] h-[80%]"
         style={{
-          background: `radial-gradient(ellipse at top,
+          background: `radial-gradient(ellipse at bottom,
             rgba(168, 85, 247, 0.15) 0%,
             rgba(139, 92, 246, 0.1) 30%,
             transparent 70%
@@ -86,9 +86,9 @@ export function AuroraBorealis() {
 
       {/* Secondary green wave */}
       <motion.div
-        className="absolute left-[5%] top-0 w-[40%] h-[90%]"
+        className="absolute left-[5%] bottom-0 w-[40%] h-[90%]"
         style={{
-          background: `linear-gradient(170deg,
+          background: `linear-gradient(10deg,
             rgba(74, 222, 128, 0.25) 0%,
             rgba(34, 197, 94, 0.2) 40%,
             rgba(16, 185, 129, 0.1) 70%,
@@ -110,9 +110,9 @@ export function AuroraBorealis() {
 
       {/* Bright core streak */}
       <motion.div
-        className="absolute left-[30%] top-0 w-[15%] h-[70%]"
+        className="absolute left-[30%] bottom-0 w-[15%] h-[70%]"
         style={{
-          background: `linear-gradient(180deg,
+          background: `linear-gradient(0deg,
             rgba(134, 239, 172, 0.4) 0%,
             rgba(74, 222, 128, 0.3) 30%,
             rgba(34, 197, 94, 0.15) 60%,
@@ -134,9 +134,9 @@ export function AuroraBorealis() {
 
       {/* Teal accent */}
       <motion.div
-        className="absolute left-[50%] top-0 w-[25%] h-[75%]"
+        className="absolute left-[50%] bottom-0 w-[25%] h-[75%]"
         style={{
-          background: `linear-gradient(175deg,
+          background: `linear-gradient(5deg,
             rgba(45, 212, 191, 0.2) 0%,
             rgba(20, 184, 166, 0.15) 40%,
             transparent 80%
