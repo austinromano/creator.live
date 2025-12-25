@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { FeedPost, FeedPostData } from './FeedPost';
 import { StoriesRow, StoryUser, UserRoom } from './StoriesRow';
 import { PostSkeleton } from './PostSkeleton';
@@ -279,40 +278,20 @@ export function HomeFeed() {
 
   return (
     <div ref={containerRef} className="pb-20 relative">
-      {/* Pull to refresh indicator with enhanced animations */}
-      <AnimatePresence>
-        {isPulling && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-              y: Math.min(pullDistance - 20, 60)
-            }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            className="absolute top-0 left-0 right-0 flex justify-center items-center z-50"
-          >
-            <motion.div
-              className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-full p-3 shadow-2xl"
-              animate={{
-                boxShadow: [
-                  "0 10px 30px rgba(168, 85, 247, 0.3)",
-                  "0 10px 50px rgba(168, 85, 247, 0.6)",
-                  "0 10px 30px rgba(168, 85, 247, 0.3)"
-                ]
-              }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              >
-                <Loader2 className="h-5 w-5 text-white" />
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Pull to refresh indicator */}
+      {isPulling && (
+        <div
+          className="absolute top-0 left-0 right-0 flex justify-center items-center transition-all duration-200 z-50"
+          style={{ transform: `translateY(${Math.min(pullDistance - 20, 60)}px)` }}
+        >
+          <div className="bg-purple-600 rounded-full p-3 shadow-lg">
+            <Loader2
+              className="h-5 w-5 text-white animate-spin"
+              style={{ transform: `rotate(${pullDistance * 3}deg)` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Stories Row - sticky with background */}
       <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-sm border-b border-white/5">
@@ -326,95 +305,23 @@ export function HomeFeed() {
         />
       </div>
 
-      {/* Feed Posts with staggered entrance animations */}
+      {/* Feed Posts */}
       {posts.length > 0 && (
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={{
-            visible: {
-              transition: {
-                staggerChildren: 0.15,
-                delayChildren: 0.1
-              }
-            }
-          }}
-        >
-          <AnimatePresence mode="popLayout">
-            {posts.map((post, index) => (
-              <motion.div
-                key={post.id}
-                variants={{
-                  hidden: {
-                    opacity: 0,
-                    y: 60,
-                    scale: 0.95,
-                    filter: "blur(10px)"
-                  },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    scale: 1,
-                    filter: "blur(0px)",
-                    transition: {
-                      type: "spring",
-                      stiffness: 100,
-                      damping: 15,
-                      mass: 1
-                    }
-                  }
-                }}
-                whileInView={{
-                  opacity: 1,
-                  y: 0,
-                  scale: 1,
-                  transition: {
-                    type: "spring",
-                    stiffness: 100,
-                    damping: 15
-                  }
-                }}
-                viewport={{ once: true, margin: "-50px" }}
-              >
-                <FeedPost post={post} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+        <div>
+          {posts.map((post) => (
+            <FeedPost key={post.id} post={post} />
+          ))}
+        </div>
       )}
 
-      {/* Infinite scroll sentinel with enhanced loading animation */}
+      {/* Infinite scroll sentinel */}
       <div ref={sentinelRef} className="h-20 flex items-center justify-center">
-        <AnimatePresence>
-          {loadingMore && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center gap-2"
-            >
-              <motion.div
-                animate={{
-                  rotate: 360,
-                  scale: [1, 1.2, 1]
-                }}
-                transition={{
-                  rotate: { duration: 1, repeat: Infinity, ease: "linear" },
-                  scale: { duration: 1, repeat: Infinity }
-                }}
-              >
-                <Loader2 className="h-6 w-6 text-purple-500" />
-              </motion.div>
-              <motion.span
-                className="text-sm text-gray-400"
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                Loading more posts...
-              </motion.span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {loadingMore && (
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+            <span className="text-sm text-gray-400">Loading more posts...</span>
+          </div>
+        )}
       </div>
 
       {/* Show subtle loading indicator when refreshing */}

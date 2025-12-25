@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Star, Volume2, VolumeX, Loader2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CommentData {
   id: string;
@@ -80,35 +80,6 @@ export function FeedPost({ post }: FeedPostProps) {
   const [showStarAnimation, setShowStarAnimation] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // 3D card tilt effect
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [8, -8]), {
-    stiffness: 300,
-    damping: 30
-  });
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-8, 8]), {
-    stiffness: 300,
-    damping: 30
-  });
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
-    const x = (e.clientX - rect.left) / width - 0.5;
-    const y = (e.clientY - rect.top) / height - 0.5;
-    mouseX.set(x);
-    mouseY.set(y);
-  };
-
-  const handleMouseLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
-  };
 
   // Detect video aspect ratio from metadata
   const detectVideoAspectRatio = () => {
@@ -416,38 +387,12 @@ export function FeedPost({ post }: FeedPostProps) {
   };
 
   return (
-    <motion.div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={{
-        perspective: 1000,
-      }}
-    >
-      <motion.article
-        className="mb-6 rounded-xl overflow-hidden bg-black shadow-lg shadow-purple-900/10 border border-gray-800/50 hover:shadow-purple-900/20 hover:shadow-2xl transition-shadow duration-300"
-        style={{
-          rotateX,
-          rotateY,
-          transformStyle: "preserve-3d",
-        }}
-        whileHover={{
-          scale: 1.02,
-          transition: {
-            type: "spring",
-            stiffness: 400,
-            damping: 30
-          }
-        }}
-        whileTap={{
-          scale: 0.98
-        }}
+    <article ref={containerRef} className="mb-6 rounded-xl overflow-hidden bg-black shadow-lg shadow-purple-900/10 border border-gray-800/50 hover:shadow-purple-900/20 transition-shadow duration-300">
+      {/* Media Content with Overlayed Header */}
+      <div
+        className="relative w-full bg-black"
+        onDoubleClick={handleDoubleTap}
       >
-        {/* Media Content with Overlayed Header */}
-        <div
-          className="relative w-full bg-black"
-          onDoubleClick={handleDoubleTap}
-        >
         {/* Header Overlay */}
         <div
           className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 py-2"
@@ -600,221 +545,59 @@ export function FeedPost({ post }: FeedPostProps) {
                 }`}
               />
 
-              {/* Star shooting animation - FULL SCREEN */}
+              {/* Star explosion animation */}
               <AnimatePresence>
                 {showStarAnimation && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[9999] pointer-events-none"
-                  >
-                    {/* Screen flash */}
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{
-                        opacity: [0, 0.3, 0],
-                      }}
-                      transition={{
-                        duration: 0.4,
-                        times: [0, 0.2, 1]
-                      }}
-                      className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500"
-                    />
-
-                    {/* Massive star explosion */}
-                    {[...Array(30)].map((_, i) => {
-                      const angle = (i * Math.PI * 2) / 30;
-                      const distance = 1500 + Math.random() * 800;
-                      const delay = i * 0.02;
-
-                      return (
-                        <motion.div
-                          key={i}
-                          initial={{
-                            scale: 0,
-                            x: 0,
-                            y: 0,
-                            opacity: 1,
-                            rotate: 0
-                          }}
-                          animate={{
-                            scale: [0, 2, 1.5, 0.5],
-                            x: Math.cos(angle) * distance,
-                            y: Math.sin(angle) * distance,
-                            opacity: [0, 1, 1, 0.8, 0],
-                            rotate: [0, 180 + i * 15, 360 + i * 30, 540 + i * 45],
-                          }}
-                          exit={{ opacity: 0 }}
-                          transition={{
-                            duration: 1.5,
-                            delay: delay,
-                            ease: [0.34, 1.56, 0.64, 1],
-                          }}
-                          className="absolute"
-                          style={{
-                            left: '50%',
-                            top: '50%',
-                            transform: 'translate(-50%, -50%)'
-                          }}
-                        >
-                          <motion.div
-                            animate={{
-                              filter: [
-                                "drop-shadow(0 0 10px rgba(168, 85, 247, 1))",
-                                "drop-shadow(0 0 30px rgba(236, 72, 153, 1))",
-                                "drop-shadow(0 0 20px rgba(168, 85, 247, 0.8))",
-                                "drop-shadow(0 0 10px rgba(168, 85, 247, 0.4))",
-                              ]
-                            }}
-                            transition={{
-                              duration: 0.5,
-                              repeat: 2,
-                            }}
-                          >
-                            <Star
-                              className={`${
-                                i % 4 === 0 ? 'h-12 w-12' :
-                                i % 4 === 1 ? 'h-10 w-10' :
-                                i % 4 === 2 ? 'h-8 w-8' : 'h-6 w-6'
-                              } ${
-                                i % 3 === 0 ? 'text-purple-400' :
-                                i % 3 === 1 ? 'text-pink-400' : 'text-purple-500'
-                              } fill-current`}
-                            />
-                          </motion.div>
-                        </motion.div>
-                      );
-                    })}
-
-                    {/* Central mega burst */}
-                    <motion.div
-                      initial={{ scale: 0, opacity: 1 }}
-                      animate={{
-                        scale: [0, 3, 5, 8],
-                        opacity: [1, 0.8, 0.5, 0]
-                      }}
-                      exit={{ opacity: 0 }}
-                      transition={{
-                        duration: 1,
-                        ease: "easeOut"
-                      }}
-                      className="absolute"
-                      style={{
-                        left: '50%',
-                        top: '50%',
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                    >
-                      <div className="w-40 h-40 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 opacity-60" />
-                    </motion.div>
-
-                    {/* Sparkle particles */}
-                    {[...Array(50)].map((_, i) => {
-                      const angle = Math.random() * Math.PI * 2;
-                      const distance = 400 + Math.random() * 1200;
-                      const delay = Math.random() * 0.3;
-
-                      return (
-                        <motion.div
-                          key={`sparkle-${i}`}
-                          initial={{
-                            scale: 0,
-                            x: 0,
-                            y: 0,
-                            opacity: 0
-                          }}
-                          animate={{
-                            scale: [0, 1, 0],
-                            x: Math.cos(angle) * distance,
-                            y: Math.sin(angle) * distance,
-                            opacity: [0, 1, 0],
-                          }}
-                          transition={{
-                            duration: 1 + Math.random() * 0.5,
-                            delay: delay,
-                            ease: "easeOut"
-                          }}
-                          className="absolute"
-                          style={{
-                            left: '50%',
-                            top: '50%',
-                          }}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${
-                            i % 2 === 0 ? 'bg-purple-400' : 'bg-pink-400'
-                          }`} />
-                        </motion.div>
-                      );
-                    })}
-                  </motion.div>
+                  <>
+                    {[...Array(8)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+                        animate={{
+                          scale: [0, 1.5, 0.5],
+                          x: Math.cos((i * Math.PI * 2) / 8) * 200,
+                          y: Math.sin((i * Math.PI * 2) / 8) * 200,
+                          opacity: [1, 1, 0],
+                        }}
+                        exit={{ opacity: 0 }}
+                        transition={{
+                          duration: 0.8,
+                          ease: "easeOut",
+                        }}
+                        className="absolute pointer-events-none"
+                        style={{ left: '50%', top: '50%' }}
+                      >
+                        <Star className="h-6 w-6 text-purple-500 fill-purple-500" />
+                      </motion.div>
+                    ))}
+                  </>
                 )}
               </AnimatePresence>
             </button>
 
             {/* Comment Button */}
-            <motion.button
+            <button
               onClick={handleCommentClick}
-              className="flex items-center justify-center text-white"
-              whileHover={{
-                scale: 1.15,
-                rotate: [0, -10, 10, 0],
-                transition: { duration: 0.3 }
-              }}
-              whileTap={{ scale: 0.9 }}
+              className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200"
             >
-              <motion.div
-                whileHover={{
-                  filter: "drop-shadow(0 0 8px rgba(168, 85, 247, 0.8))"
-                }}
-              >
-                <MessageCircle className="h-7 w-7" />
-              </motion.div>
-            </motion.button>
+              <MessageCircle className="h-7 w-7" />
+            </button>
 
             {/* Share Button */}
-            <motion.button
-              className="flex items-center justify-center text-white"
-              whileHover={{
-                scale: 1.15,
-                x: [0, 5, 0],
-                transition: { duration: 0.3 }
-              }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <motion.div
-                whileHover={{
-                  filter: "drop-shadow(0 0 8px rgba(168, 85, 247, 0.8))"
-                }}
-              >
-                <Send className="h-7 w-7" />
-              </motion.div>
-            </motion.button>
+            <button className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200">
+              <Send className="h-7 w-7" />
+            </button>
           </div>
 
           {/* Save Button */}
-          <motion.button
+          <button
             onClick={() => setSaved(!saved)}
-            className="flex items-center justify-center text-white"
-            whileHover={{
-              scale: 1.15,
-              y: [0, -5, 0],
-              transition: { duration: 0.3 }
-            }}
-            whileTap={{ scale: 0.9 }}
+            className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200"
           >
-            <motion.div
-              animate={saved ? {
-                rotate: [0, -10, 10, -10, 0],
-                scale: [1, 1.2, 1]
-              } : {}}
-              transition={{ duration: 0.5 }}
-            >
-              <Bookmark
-                className={`h-7 w-7 ${saved ? 'fill-purple-400 text-purple-400' : ''}`}
-              />
-            </motion.div>
-          </motion.button>
+            <Bookmark
+              className={`h-7 w-7 ${saved ? 'fill-purple-400' : ''}`}
+            />
+          </button>
         </div>
 
         {/* Star Count */}
@@ -955,7 +738,6 @@ export function FeedPost({ post }: FeedPostProps) {
           )}
         </div>
       </div>
-      </motion.article>
-    </motion.div>
+    </article>
   );
 }
