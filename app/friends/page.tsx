@@ -84,36 +84,8 @@ export default function CommunityPage() {
 
   return (
     <div className="min-h-screen bg-transparent pb-32">
-      {/* Header */}
-      <div className="sticky top-14 z-40 bg-[#0f0a15]/80 backdrop-blur-xl">
-        <div className="pt-3 pb-2 px-4">
-          {/* Tabs */}
-          <div className="flex justify-between border-b border-white/10">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`pb-3 text-xs font-semibold transition-all relative group ${
-                  activeTab === tab.id
-                    ? 'text-white'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <div className="flex flex-col items-center gap-1.5">
-                  {tab.icon && <tab.icon className={`h-5 w-5 transition-all ${activeTab === tab.id ? 'text-purple-400 scale-110' : 'text-gray-400 group-hover:text-gray-300 group-hover:scale-105'}`} />}
-                  <span className={`text-[10px] font-medium ${activeTab === tab.id ? 'font-bold' : ''}`}>{tab.label}</span>
-                </div>
-                {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Content - Notifications, Chats, or Groups */}
-      <div className="px-4 pt-3">
+      <div className="px-4 pt-3 pb-28">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
@@ -262,6 +234,27 @@ export default function CommunityPage() {
           <span>Create group</span>
         </Link>
       )}
+
+      {/* Bottom Tabs Navigation */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 bg-transparent border-t border-white/10">
+        <div className="grid grid-cols-5 h-12">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="flex flex-col items-center justify-start pt-1 relative group"
+            >
+              {tab.icon && <tab.icon className={`h-6 w-6 transition-all ${activeTab === tab.id ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/80'}`} />}
+              <span className={`text-[10px] mt-1 ${activeTab === tab.id ? 'text-purple-400' : 'text-white/60'}`}>
+                {tab.label}
+              </span>
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

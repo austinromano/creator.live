@@ -158,22 +158,21 @@ export function LiveStreamGrid() {
     <>
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
-        {/* Live Navbar - Sticky At Top */}
-        <div className="sticky top-0 z-40 flex justify-between items-center px-4 py-1.5 bg-[#0f0a15]/80 backdrop-blur-xl border-b border-white/5">
+        {/* Live Navbar - TikTok Style */}
+        <div className="sticky top-0 z-40 flex justify-around items-center px-2 py-3 bg-black">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`relative whitespace-nowrap text-sm font-bold pb-2 transition-all drop-shadow-[0_0_8px_rgba(0,0,0,1)] ${
+              className={`relative whitespace-nowrap text-[15px] font-normal pb-1 transition-colors ${
                 activeTab === tab
-                  ? 'bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-[gradient_6s_ease_infinite] drop-shadow-[0_0_12px_rgba(168,85,247,0.6)]'
-                  : 'text-white hover:text-purple-300'
+                  ? 'text-white'
+                  : 'text-gray-500'
               }`}
-              style={activeTab === tab ? { backgroundSize: '200% 200%' } : undefined}
             >
               {tab}
               {activeTab === tab && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500" />
               )}
             </button>
           ))}

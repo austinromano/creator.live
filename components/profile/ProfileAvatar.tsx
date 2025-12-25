@@ -95,10 +95,10 @@ export function ProfileAvatar({
 
   // Wrap avatar in Link when live, otherwise handle normally
   const avatarContent = (
-    <div className="relative h-24 w-24">
+    <div className="relative h-20 w-20">
       {/* Live stream video in avatar circle - always render when live */}
       {isLive && liveStream && (
-        <div className="absolute inset-0 h-24 w-24 rounded-full overflow-hidden border-4 border-red-500 z-10 bg-black">
+        <div className="absolute inset-0 h-20 w-20 rounded-full overflow-hidden border-3 border-red-500 z-10 bg-black">
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
@@ -113,11 +113,11 @@ export function ProfileAvatar({
       {/* Regular avatar (shows when not live) */}
       {!isLive && (
         <Avatar
-          className={`h-24 w-24 border-4 ${isOnline ? 'border-green-500' : 'border-[#0f0a15]'} relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
+          className={`h-20 w-20 border-3 ${isOnline ? 'border-green-500' : 'border-[#0f0a15]'} relative ${isOwnProfile ? 'cursor-pointer' : ''}`}
           onClick={isOwnProfile ? onEditProfile : undefined}
         >
           <AvatarImage src={avatarUrl} alt={name} />
-          <AvatarFallback className="bg-purple-600 text-white text-2xl">
+          <AvatarFallback className="bg-purple-600 text-white text-xl">
             {initials}
           </AvatarFallback>
         </Avatar>
@@ -125,8 +125,8 @@ export function ProfileAvatar({
 
       {/* Fallback avatar shown while stream connects */}
       {isLive && !isStreamConnected && (
-        <div className="absolute inset-0 h-24 w-24 rounded-full overflow-hidden border-4 border-red-500 z-5 flex items-center justify-center bg-purple-600">
-          <span className="text-white text-2xl font-bold">{initials}</span>
+        <div className="absolute inset-0 h-20 w-20 rounded-full overflow-hidden border-3 border-red-500 z-5 flex items-center justify-center bg-purple-600">
+          <span className="text-white text-xl font-bold">{initials}</span>
         </div>
       )}
 
@@ -153,7 +153,7 @@ export function ProfileAvatar({
   return (
     <div className="flex flex-col bg-transparent">
       {/* Content - TikTok centered layout */}
-      <div className="relative px-4 pb-4 bg-transparent overflow-hidden">
+      <div className="relative px-4 pb-2 bg-transparent overflow-hidden">
         {/* Avatar - centered */}
         <div className="flex flex-col items-center">
           {/* Avatar - wrapped in Link when live to go to stream */}
@@ -166,15 +166,15 @@ export function ProfileAvatar({
           )}
 
           {/* Name with verified badge - TikTok style */}
-          <div className="flex items-center gap-1.5 mt-2">
-            <h1 className="text-lg font-bold text-white">{name}</h1>
+          <div className="flex items-center gap-1 mt-1.5">
+            <h1 className="text-base font-bold text-white">{name}</h1>
             {isVerified && (
-              <CheckCircle className="h-4 w-4 text-[#20d5ec] fill-[#20d5ec]" />
+              <CheckCircle className="h-3.5 w-3.5 text-[#20d5ec] fill-[#20d5ec]" />
             )}
           </div>
 
           {/* Username - TikTok style */}
-          <p className="text-gray-400 text-sm -mt-0.5">@{username}</p>
+          <p className="text-gray-400 text-xs -mt-0.5">@{username}</p>
         </div>
       </div>
     </div>

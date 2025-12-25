@@ -24,27 +24,27 @@ export function ProfileStats({
   isSubscriber = false,
 }: ProfileStatsProps) {
   return (
-    <div className="py-4">
+    <div className="py-2">
       {/* Stats row - TikTok style: centered, compact, horizontal dividers */}
-      <div className="flex justify-center items-center gap-8">
-        <div className="flex flex-col items-center min-w-[70px]">
-          <span className="text-white font-bold text-lg">{formatNumber(following)}</span>
-          <span className="text-gray-500 text-xs">Following</span>
+      <div className="flex justify-center items-center gap-6">
+        <div className="flex flex-col items-center min-w-[60px]">
+          <span className="text-white font-bold text-base">{formatNumber(following)}</span>
+          <span className="text-gray-500 text-[10px]">Following</span>
         </div>
-        <div className="flex flex-col items-center min-w-[70px]">
-          <span className="text-white font-bold text-lg">{formatNumber(followers)}</span>
-          <span className="text-gray-500 text-xs">Followers</span>
+        <div className="flex flex-col items-center min-w-[60px]">
+          <span className="text-white font-bold text-base">{formatNumber(followers)}</span>
+          <span className="text-gray-500 text-[10px]">Followers</span>
         </div>
-        <div className="flex flex-col items-center min-w-[70px]">
-          <span className="text-white font-bold text-lg">{formatNumber(posts)}</span>
-          <span className="text-gray-500 text-xs">Posts</span>
+        <div className="flex flex-col items-center min-w-[60px]">
+          <span className="text-white font-bold text-base">{formatNumber(posts)}</span>
+          <span className="text-gray-500 text-[10px]">Posts</span>
         </div>
       </div>
 
       {/* Subscriber badge */}
       {isSubscriber && (
-        <div className="flex justify-center mt-3">
-          <span className="bg-purple-600/20 text-purple-400 text-xs font-semibold tracking-wide px-3 py-1 rounded-full border border-purple-500/30">
+        <div className="flex justify-center mt-2">
+          <span className="bg-purple-600/20 text-purple-400 text-[10px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full border border-purple-500/30">
             SUBSCRIBER
           </span>
         </div>

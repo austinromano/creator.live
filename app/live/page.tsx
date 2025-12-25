@@ -5,8 +5,8 @@ import { LiveStreamGrid } from '@/components/live/LiveStreamGrid';
 export default function LivePage() {
   return (
     <>
-      {/* Mobile - no container padding */}
-      <div className="lg:hidden">
+      {/* Mobile - no container padding, remove top padding from layout */}
+      <div className="lg:hidden -mt-14">
         <LiveStreamGrid />
       </div>
 
