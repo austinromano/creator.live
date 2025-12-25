@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Star, Volume2, VolumeX, Loader2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
-import { LiveCommentOverlay } from './LiveCommentOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface CommentData {
@@ -388,7 +387,7 @@ export function FeedPost({ post }: FeedPostProps) {
   };
 
   return (
-    <article ref={containerRef} className="border-b border-gray-800 pb-4 mb-3">
+    <article ref={containerRef} className="mb-6 rounded-xl overflow-hidden bg-black shadow-lg shadow-purple-900/10 border border-gray-800/50 hover:shadow-purple-900/20 transition-shadow duration-300">
       {/* Media Content with Overlayed Header */}
       <div
         className="relative w-full bg-black"
@@ -401,21 +400,21 @@ export function FeedPost({ post }: FeedPostProps) {
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)',
           }}
         >
-          <Link href={`/profile/${post.user.username}`} className="flex items-center gap-2">
-            <Avatar className="h-7 w-7 ring-[1.5px] ring-green-500">
+          <Link href={`/profile/${post.user.username}`} className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
+            <Avatar className="h-8 w-8 ring-2 ring-purple-500/50 hover:ring-purple-500 transition-all">
               <AvatarImage src={post.user.avatar || undefined} alt={post.user.username || ''} />
-              <AvatarFallback className="bg-gray-700 text-white text-xs">
+              <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-600 text-white text-xs font-bold">
                 {post.user.username?.[0]?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
-            <div className="flex items-center gap-1">
-              <span className="font-medium text-white text-sm">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-white text-base">
                 {post.user.username}
               </span>
               {post.user.isVerified && (
-                <BadgeCheck className="h-4 w-4 text-purple-500 fill-purple-500" />
+                <BadgeCheck className="h-4 w-4 text-purple-400 fill-purple-400" />
               )}
-              <span className="text-gray-400 text-sm">
+              <span className="text-gray-400 text-sm font-medium">
                 &middot; {formatTimeAgo(post.createdAt)}
               </span>
             </div>
@@ -527,9 +526,6 @@ export function FeedPost({ post }: FeedPostProps) {
             <span className="text-gray-500">No media</span>
           </div>
         )}
-
-        {/* TikTok-style Live Comment Overlay - Only shows when post is visible */}
-        <LiveCommentOverlay comments={previewComments} isVisible={isInView} />
       </div>
 
       {/* Action Buttons */}
@@ -582,32 +578,32 @@ export function FeedPost({ post }: FeedPostProps) {
             {/* Comment Button */}
             <button
               onClick={handleCommentClick}
-              className="flex items-center justify-center text-white hover:text-gray-300"
+              className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200"
             >
-              <MessageCircle className="h-6 w-6" />
+              <MessageCircle className="h-7 w-7" />
             </button>
 
             {/* Share Button */}
-            <button className="flex items-center justify-center text-white hover:text-gray-300">
-              <Send className="h-6 w-6" />
+            <button className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200">
+              <Send className="h-7 w-7" />
             </button>
           </div>
 
           {/* Save Button */}
           <button
             onClick={() => setSaved(!saved)}
-            className="flex items-center justify-center text-white hover:text-gray-300"
+            className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200"
           >
             <Bookmark
-              className={`h-6 w-6 ${saved ? 'fill-white' : ''}`}
+              className={`h-7 w-7 ${saved ? 'fill-purple-400' : ''}`}
             />
           </button>
         </div>
 
         {/* Star Count */}
         {sparkCount > 0 && (
-          <div className="mt-2">
-            <span className="font-semibold text-white text-sm">
+          <div className="mt-3">
+            <span className="font-bold text-transparent bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-base">
               {sparkCount.toLocaleString()} star{sparkCount !== 1 ? 's' : ''}
             </span>
           </div>
@@ -618,7 +614,7 @@ export function FeedPost({ post }: FeedPostProps) {
           <div className="mt-2">
             <button
               onClick={handleCommentClick}
-              className="font-semibold text-white text-sm hover:text-gray-300"
+              className="font-semibold text-gray-300 text-sm hover:text-transparent hover:bg-gradient-to-r hover:from-purple-400 hover:to-pink-400 hover:bg-clip-text transition-all duration-200"
             >
               View all {comments.length} comment{comments.length !== 1 ? 's' : ''}
             </button>

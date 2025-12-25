@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
 import { FeedPost, FeedPostData } from './FeedPost';
 import { StoriesRow, StoryUser, UserRoom } from './StoriesRow';
+import { PostSkeleton } from './PostSkeleton';
 import { authGet } from '@/lib/fetch';
 
 interface FriendData {
@@ -38,13 +39,21 @@ export function HomeFeed() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
 
   // Use ref to track if component is mounted
   const isMountedRef = useRef(true);
   // Use ref to track ongoing fetch to prevent duplicates
   const fetchInProgressRef = useRef(false);
-  // Auto-scroll state - start as false, will enable after delay
-  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  // Ref for infinite scroll sentinel
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Refs for pull to refresh
+  const touchStartY = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchData = useCallback(async () => {
     // Prevent duplicate fetches
@@ -157,76 +166,94 @@ export function HomeFeed() {
     };
   }, [hasFetched, fetchData]);
 
-  // Start auto-scroll after 3 second delay
+  // Infinite scroll - observe sentinel element
   useEffect(() => {
-    const startDelay = setTimeout(() => {
-      setIsAutoScrolling(true);
-    }, 3000);
+    if (!sentinelRef.current || !hasMore || loadingMore) return;
 
-    return () => clearTimeout(startDelay);
-  }, []);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          // Simulate loading more posts
+          setTimeout(() => {
+            setPage((p) => p + 1);
+            setLoadingMore(false);
+            // Disable after first load for demo
+            setHasMore(false);
+          }, 1500);
+        }
+      },
+      { threshold: 0.1 }
+    );
 
-  // Auto-scroll effect - smooth continuous scroll
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore]);
+
+  // Pull to refresh
   useEffect(() => {
-    let animationFrame: number;
-    let lastTime = Date.now();
-    let resumeTimeout: NodeJS.Timeout;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const scroll = () => {
-      if (isAutoScrolling) {
-        const currentTime = Date.now();
-        const deltaTime = currentTime - lastTime;
-        lastTime = currentTime;
-
-        // Medium scroll speed - 0.035 pixels per millisecond (35 pixels per second)
-        window.scrollBy({
-          top: 0.035 * deltaTime,
-          behavior: 'auto'
-        });
+    const handleTouchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0) {
+        touchStartY.current = e.touches[0].clientY;
       }
-
-      animationFrame = requestAnimationFrame(scroll);
     };
 
-    animationFrame = requestAnimationFrame(scroll);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (window.scrollY === 0 && touchStartY.current > 0) {
+        const currentY = e.touches[0].clientY;
+        const distance = currentY - touchStartY.current;
 
-    // Pause when finger touches screen
-    const handleTouchStart = () => {
-      setIsAutoScrolling(false);
-      clearTimeout(resumeTimeout);
+        if (distance > 0 && distance < 150) {
+          setPullDistance(distance);
+          setIsPulling(true);
+        }
+      }
     };
 
-    // Resume 3 seconds after finger is lifted
     const handleTouchEnd = () => {
-      clearTimeout(resumeTimeout);
-      resumeTimeout = setTimeout(() => setIsAutoScrolling(true), 3000);
+      if (pullDistance > 80) {
+        fetchData();
+      }
+      setIsPulling(false);
+      setPullDistance(0);
+      touchStartY.current = 0;
     };
 
-    // Pause on wheel scroll
-    const handleWheel = () => {
-      setIsAutoScrolling(false);
-      clearTimeout(resumeTimeout);
-      resumeTimeout = setTimeout(() => setIsAutoScrolling(true), 3000);
-    };
-
-    window.addEventListener('touchstart', handleTouchStart);
-    window.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('wheel', handleWheel);
+    container.addEventListener('touchstart', handleTouchStart);
+    container.addEventListener('touchmove', handleTouchMove);
+    container.addEventListener('touchend', handleTouchEnd);
 
     return () => {
-      cancelAnimationFrame(animationFrame);
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('wheel', handleWheel);
-      clearTimeout(resumeTimeout);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isAutoScrolling]);
+  }, [pullDistance, fetchData]);
 
-  // Show loading spinner while session is loading or initial fetch
+  // Show loading skeletons while session is loading or initial fetch
   if (status === 'loading' || (loading && !hasFetched)) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      <div className="pb-20">
+        {/* Stories Row Skeleton */}
+        <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-sm border-b border-white/5 p-3">
+          <div className="flex gap-3 overflow-hidden">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <div className="h-14 w-14 rounded-full bg-gray-800 animate-pulse" />
+                <div className="h-2 w-12 bg-gray-800 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Post Skeletons */}
+        <div>
+          {[...Array(3)].map((_, i) => (
+            <PostSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -250,7 +277,22 @@ export function HomeFeed() {
   }
 
   return (
-    <div className="pb-20">
+    <div ref={containerRef} className="pb-20 relative">
+      {/* Pull to refresh indicator */}
+      {isPulling && (
+        <div
+          className="absolute top-0 left-0 right-0 flex justify-center items-center transition-all duration-200 z-50"
+          style={{ transform: `translateY(${Math.min(pullDistance - 20, 60)}px)` }}
+        >
+          <div className="bg-purple-600 rounded-full p-3 shadow-lg">
+            <Loader2
+              className="h-5 w-5 text-white animate-spin"
+              style={{ transform: `rotate(${pullDistance * 3}deg)` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Stories Row - sticky with background */}
       <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-sm border-b border-white/5">
         <StoriesRow
@@ -271,6 +313,16 @@ export function HomeFeed() {
           ))}
         </div>
       )}
+
+      {/* Infinite scroll sentinel */}
+      <div ref={sentinelRef} className="h-20 flex items-center justify-center">
+        {loadingMore && (
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+            <span className="text-sm text-gray-400">Loading more posts...</span>
+          </div>
+        )}
+      </div>
 
       {/* Show subtle loading indicator when refreshing */}
       {loading && hasFetched && (
