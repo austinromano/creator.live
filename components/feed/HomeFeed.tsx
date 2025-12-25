@@ -293,17 +293,15 @@ export function HomeFeed() {
         </div>
       )}
 
-      {/* Stories Row - sticky with background */}
-      <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-sm border-b border-white/5">
-        <StoriesRow
-          users={friends}
-          rooms={rooms}
-          currentUserAvatar={currentUser?.avatar}
-          onAddStoryClick={() => {
-            window.location.href = '/createroom';
-          }}
-        />
-      </div>
+      {/* Stories Row */}
+      <StoriesRow
+        users={friends}
+        rooms={rooms}
+        currentUserAvatar={currentUser?.avatar}
+        onAddStoryClick={() => {
+          window.location.href = '/createroom';
+        }}
+      />
 
       {/* Feed Posts */}
       {posts.length > 0 && (
