@@ -314,9 +314,9 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#0f0a15]">
-      {/* Settings Icon - Top Left (only on own profile) */}
+      {/* Settings Icon - Top Right (only on own profile) */}
       {isOwnProfile && (
-        <div className="absolute top-4 left-4 z-50">
+        <div className="absolute top-4 right-4 z-50">
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="p-2 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
@@ -331,7 +331,7 @@ export default function ProfilePage() {
                 className="fixed inset-0 z-40"
                 onClick={() => setShowSettings(false)}
               />
-              <div className="absolute top-12 left-0 z-50 bg-[#1a1a1d] rounded-lg shadow-xl border border-gray-800 overflow-hidden min-w-[180px]">
+              <div className="absolute top-12 right-0 z-50 bg-[#1a1a1d] rounded-lg shadow-xl border border-gray-800 overflow-hidden min-w-[180px]">
                 <button
                   onClick={async () => {
                     setShowSettings(false);

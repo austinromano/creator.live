@@ -139,36 +139,26 @@ export default function CommunityPage() {
   return (
     <div className="min-h-screen bg-transparent pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-black/40 backdrop-blur-xl border-b border-white/5">
-        <div className="pt-4 pb-2 px-4">
-          {/* Stories/Online Friends Section */}
-          <div className="-mx-4">
-            <StoriesRow
-              users={friends}
-              rooms={rooms}
-              currentUserAvatar={currentUserAvatar}
-              onAddStoryClick={() => window.location.href = '/createroom'}
-            />
-          </div>
-
+      <div className="sticky top-14 z-40 bg-[#0f0a15]/80 backdrop-blur-xl">
+        <div className="pt-3 pb-2 px-4">
           {/* Tabs */}
-          <div className="flex justify-between border-b border-white/10 mt-4">
+          <div className="flex justify-between border-b border-white/10">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`pb-2 text-xs font-semibold transition-all relative ${
+                className={`pb-3 text-xs font-semibold transition-all relative group ${
                   activeTab === tab.id
                     ? 'text-white'
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <div className="flex flex-col items-center gap-1">
-                  {tab.icon && <tab.icon className={`h-5 w-5 ${activeTab === tab.id ? 'text-white' : 'text-gray-400'}`} />}
-                  <span className="text-[10px]">{tab.label}</span>
+                <div className="flex flex-col items-center gap-1.5">
+                  {tab.icon && <tab.icon className={`h-5 w-5 transition-all ${activeTab === tab.id ? 'text-purple-400 scale-110' : 'text-gray-400 group-hover:text-gray-300 group-hover:scale-105'}`} />}
+                  <span className={`text-[10px] font-medium ${activeTab === tab.id ? 'font-bold' : ''}`}>{tab.label}</span>
                 </div>
                 {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full" />
                 )}
               </button>
             ))}
@@ -187,51 +177,51 @@ export default function CommunityPage() {
           <NotificationsList />
         ) : activeTab === 'chats' ? (
           // Direct Messages (Coming Soon)
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 bg-gray-800/40 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 border border-white/5">
-              <MessageCircle className="h-9 w-9 text-gray-400" />
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-24 h-24 bg-gradient-to-br from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+              <MessageCircle className="h-10 w-10 text-purple-400" />
             </div>
-            <p className="text-white font-medium mb-2">No direct messages yet</p>
-            <p className="text-gray-500 text-sm">Start a conversation with someone</p>
+            <p className="text-white font-semibold mb-2 text-lg">No direct messages yet</p>
+            <p className="text-gray-400 text-sm max-w-xs">Start a conversation with someone from your network</p>
           </div>
         ) : activeTab === 'community' ? (
           // Community
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 bg-gray-800/40 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 border border-white/5">
-              <Users className="h-9 w-9 text-gray-400" />
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-24 h-24 bg-gradient-to-br from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+              <Users className="h-10 w-10 text-purple-400" />
             </div>
-            <p className="text-white font-medium mb-2">No communities yet</p>
-            <p className="text-gray-500 text-sm">Create a community to get started</p>
+            <p className="text-white font-semibold mb-2 text-lg">No communities yet</p>
+            <p className="text-gray-400 text-sm max-w-xs">Create a community to connect with others</p>
           </div>
         ) : activeTab === 'groups' ? (
           // Groups
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 bg-gray-800/40 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 border border-white/5">
-              <Users className="h-9 w-9 text-gray-400" />
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-24 h-24 bg-gradient-to-br from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+              <Users className="h-10 w-10 text-purple-400" />
             </div>
-            <p className="text-white font-medium mb-2">No groups yet</p>
-            <p className="text-gray-500 text-sm">Create a group to get started</p>
+            <p className="text-white font-semibold mb-2 text-lg">No groups yet</p>
+            <p className="text-gray-400 text-sm max-w-xs">Create a group to start chatting with friends</p>
           </div>
         ) : (
           // Rooms List
           filteredGroups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-20 h-20 bg-gray-800/40 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 border border-white/5">
-                <Users className="h-9 w-9 text-gray-400" />
+            <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 bg-gradient-to-br from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+                <Users className="h-10 w-10 text-purple-400" />
               </div>
-              <p className="text-white font-medium mb-2">No groups yet</p>
-              <p className="text-gray-500 text-sm">Create a group to start chatting</p>
+              <p className="text-white font-semibold mb-2 text-lg">No rooms yet</p>
+              <p className="text-gray-400 text-sm max-w-xs">Create a room to start chatting with friends</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {filteredGroups.map((group) => (
                 <Link
                   key={group.id}
                   href={`/room/${group.id}`}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gray-800/30 backdrop-blur-sm border border-white/5 hover:bg-gray-800/50 transition-colors"
+                  className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm border border-white/5 hover:border-purple-500/30 hover:bg-gray-800/60 transition-all duration-200 group"
                 >
                   {/* Group Icon */}
-                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-700 flex-shrink-0">
+                  <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-gray-700 flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
                     {group.icon ? (
                       <Image
                         src={group.icon}
@@ -240,8 +230,8 @@ export default function CommunityPage() {
                         className="object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-700">
-                        <Users className="h-5 w-5 text-white" />
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 via-purple-500 to-pink-600">
+                        <Users className="h-6 w-6 text-white" />
                       </div>
                     )}
                   </div>

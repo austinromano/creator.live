@@ -182,10 +182,12 @@ export function NotificationsList() {
 
   if (notifications.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-4">
-        <Bell className="h-16 w-16 text-gray-600 mb-4" />
-        <h2 className="text-xl font-bold text-white mb-2">No Notifications Yet</h2>
-        <p className="text-gray-400 text-center">
+      <div className="flex flex-col items-center justify-center py-20 px-4 animate-in fade-in duration-300">
+        <div className="w-24 h-24 bg-gradient-to-br from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+          <Bell className="h-12 w-12 text-purple-400" />
+        </div>
+        <h2 className="text-xl font-semibold text-white mb-2">No Notifications Yet</h2>
+        <p className="text-gray-400 text-center max-w-xs text-sm">
           When someone interacts with your content, you&apos;ll see it here
         </p>
       </div>
@@ -193,7 +195,7 @@ export function NotificationsList() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {notifications.map((notification) => (
         <Link
           key={notification.id}
@@ -206,22 +208,22 @@ export function NotificationsList() {
               ? `/post/${notification.post.id}`
               : `/profile/${notification.fromUser.username}`
           }
-          className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl backdrop-blur-sm border transition-colors ${
+          className={`flex items-start gap-2 px-2 py-2 rounded-2xl border transition-all duration-200 group ${
             !notification.isRead
-              ? 'bg-purple-900/15 border-purple-500/15 hover:bg-purple-900/25'
-              : 'bg-gray-800/30 border-white/5 hover:bg-gray-800/50'
+              ? 'bg-gradient-to-br from-purple-900/25 via-purple-800/15 to-pink-900/20 border-purple-500/25 hover:border-purple-400/35 hover:bg-purple-900/35'
+              : 'bg-gradient-to-br from-gray-800/30 via-gray-900/25 to-purple-900/10 border-white/5 hover:border-purple-500/15 hover:bg-gray-800/40'
           }`}
         >
           {/* Avatar with notification type icon */}
-          <div className="relative flex-shrink-0">
-            <Avatar className="h-12 w-12">
+          <div className="relative flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+            <Avatar className="h-13 w-13 border-2 border-white/10">
               <AvatarImage src={notification.fromUser.avatar || undefined} />
-              <AvatarFallback className="bg-gray-700 text-white">
+              <AvatarFallback className="bg-gradient-to-br from-purple-600 to-purple-700 text-white font-semibold">
                 {notification.fromUser.username?.[0]?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
             {/* Notification type badge */}
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gray-900 rounded-full flex items-center justify-center ring-2 ring-[#0f0a15]">
+            <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-gradient-to-br from-gray-900 to-black rounded-full flex items-center justify-center ring-2 ring-[#0f0a15] shadow-lg">
               {getNotificationIcon(notification.type)}
             </div>
           </div>

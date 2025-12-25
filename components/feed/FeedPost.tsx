@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Star, Volume2, VolumeX, Loader2, X } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Sparkles, Volume2, VolumeX, Loader2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -526,12 +526,12 @@ export function FeedPost({ post }: FeedPostProps) {
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Like Button - Star */}
+            {/* Like Button - Sparkles */}
             <button
               onClick={handleSpark}
               className="flex items-center justify-center transition-transform active:scale-125 relative"
             >
-              <Star
+              <Sparkles
                 className={`h-6 w-6 transition-colors ${
                   sparked
                     ? 'text-purple-500 fill-purple-500'

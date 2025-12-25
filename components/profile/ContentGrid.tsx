@@ -159,8 +159,6 @@ export function ContentGrid({ items, onItemClick, isOwnProfile = false, onAddCli
   return (
     <div className="px-2 pb-24">
       <div className="grid grid-cols-3 gap-1">
-        {/* Add button always first for own profile */}
-        {isOwnProfile && <AddPostButton onClick={onAddClick} />}
         {items.map((item) => (
           <ContentGridItemComponent
             key={item.id}

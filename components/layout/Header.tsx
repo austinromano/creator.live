@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { UserMenu } from './UserMenu';
 import { Sparkles, LogIn, Star, Bell } from 'lucide-react';
@@ -20,6 +21,7 @@ interface Friend {
 }
 
 export function Header() {
+  const pathname = usePathname();
   const { data: session, status } = useSession();
   const { setShowAuthModal } = useAuthStore();
   const isAuthenticated = !!session?.user;
@@ -113,7 +115,12 @@ export function Header() {
   }, [isAuthenticated]);
 
   // Show header on all devices - fixed position with enhanced frosted glass effect
-  const headerClassName = "fixed top-0 z-50 w-full bg-[#0f0a15]/30 backdrop-blur-xl";
+  const headerClassName = "fixed top-0 z-[60] w-full bg-[#0f0a15]/30 backdrop-blur-xl";
+
+  // Hide header on profile and live pages
+  if (pathname.startsWith('/profile/') || pathname.startsWith('/live/') || pathname === '/live') {
+    return null;
+  }
 
   return (
     <header className={headerClassName}>
@@ -161,13 +168,13 @@ export function Header() {
                         </div>
                       )}
                       {friend.isLive && (
-                        <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#0f0a15]" />
+                        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full ring-1 ring-black" />
                       )}
                       {!friend.isLive && friend.isOnline && (
-                        <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f0a15]" />
+                        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-1 ring-black" />
                       )}
                       {!friend.isLive && !friend.isOnline && (
-                        <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-gray-400 rounded-full border-2 border-[#0f0a15]" />
+                        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-gray-400 rounded-full ring-1 ring-black" />
                       )}
                     </div>
                   </Link>
