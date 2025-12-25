@@ -72,12 +72,12 @@ export default function RootLayout({
                 <Header />
                 {/* Mobile with swipe navigation */}
                 <MobileSwipeNavigator>
-                  <main className="min-h-screen bg-transparent pb-20 lg:hidden">
+                  <main className="min-h-screen bg-transparent pb-20 pt-14 lg:hidden">
                     {children}
                   </main>
                 </MobileSwipeNavigator>
                 {/* Desktop without swipe */}
-                <main className="min-h-screen bg-transparent hidden lg:block">
+                <main className="min-h-screen bg-transparent hidden lg:block pt-14">
                   {children}
                 </main>
                 <MobileBottomNav />

@@ -74,11 +74,8 @@ export function MobileBottomNav() {
                 className="flex flex-col items-center justify-start pt-1"
               >
                 <div className="relative">
-                  {/* Breathing glow effect */}
-                  <div className="absolute -inset-1 bg-purple-500 rounded-xl blur-md animate-[pulse_2s_ease-in-out_infinite] opacity-30" />
-                  <div className="absolute -inset-0.5 bg-purple-400 rounded-xl blur-sm animate-[pulse_2s_ease-in-out_infinite_0.5s] opacity-20" />
                   <div
-                    className="relative w-10 h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30 animate-[gradient_6s_ease_infinite]"
+                    className="relative w-10 h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg animate-[gradient_6s_ease_infinite]"
                     style={{ backgroundSize: '200% 200%' }}
                   >
                     <Icon className="h-5 w-5 text-white" />

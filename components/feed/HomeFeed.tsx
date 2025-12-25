@@ -233,29 +233,9 @@ export function HomeFeed() {
     };
   }, [pullDistance, fetchData]);
 
-  // Show loading skeletons while session is loading or initial fetch
+  // Don't show loading skeletons - just wait for content
   if (status === 'loading' || (loading && !hasFetched)) {
-    return (
-      <div className="pb-20">
-        {/* Stories Row Skeleton */}
-        <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-sm border-b border-white/5 p-3">
-          <div className="flex gap-3 overflow-hidden">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex flex-col items-center gap-1">
-                <div className="h-14 w-14 rounded-full bg-gray-800 animate-pulse" />
-                <div className="h-2 w-12 bg-gray-800 rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Post Skeletons */}
-        <div>
-          {[...Array(3)].map((_, i) => (
-            <PostSkeleton key={i} />
-          ))}
-        </div>
-      </div>
-    );
+    return <div className="pb-20"></div>;
   }
 
   // Show error with retry button

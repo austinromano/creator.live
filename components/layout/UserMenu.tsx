@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -61,68 +62,19 @@ export function UserMenu() {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="focus:outline-none">
-        <div className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-          <Avatar className="h-8 w-8 border-2 border-purple-500">
-            <AvatarImage src={avatarSrc} alt={username} />
-            <AvatarFallback className="bg-purple-600 text-white text-sm">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <span className="hidden md:block text-sm font-medium text-white">
-            {username}
-          </span>
-        </div>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="start" className="w-56 bg-gray-900 border-gray-800">
-        <DropdownMenuLabel className="text-gray-400">My Account</DropdownMenuLabel>
-
-        <DropdownMenuSeparator className="bg-gray-800" />
-
-        <Link href={`/profile/${userName || user.name || 'user'}`}>
-          <DropdownMenuItem className="cursor-pointer text-gray-300 hover:text-white hover:bg-gray-800">
-            <User className="mr-2 h-4 w-4" />
-            <span>My Profile</span>
-          </DropdownMenuItem>
-        </Link>
-
-        <Link href="/golive">
-          <DropdownMenuItem className="cursor-pointer text-gray-300 hover:text-white hover:bg-gray-800">
-            <Radio className="mr-2 h-4 w-4" />
-            <span>Go Live</span>
-          </DropdownMenuItem>
-        </Link>
-
-        <DropdownMenuSeparator className="bg-gray-800" />
-
-        <Link href="/settings">
-          <DropdownMenuItem className="cursor-pointer text-gray-300 hover:text-white hover:bg-gray-800">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
-          </DropdownMenuItem>
-        </Link>
-
-        <DropdownMenuSeparator className="bg-gray-800" />
-
-        <DropdownMenuItem
-          onClick={handleLogout}
-          className="cursor-pointer text-red-400 hover:text-red-300 hover:bg-gray-800"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Logout</span>
-        </DropdownMenuItem>
-
-        {user.provider && (
-          <>
-            <DropdownMenuSeparator className="bg-gray-800" />
-            <div className="px-2 py-1.5 text-xs text-gray-500">
-              Connected via {user.provider === 'phantom' ? 'Phantom' : 'Google'}
-            </div>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Link href="/">
+      <div className="flex items-center space-x-2 hover:opacity-90 transition-opacity">
+        <Image
+          src="/osho-icon.png"
+          alt="OSHO"
+          width={40}
+          height={40}
+          className="h-10 w-10 object-contain"
+        />
+        <span className="hidden md:block text-sm font-medium text-white">
+          {username}
+        </span>
+      </div>
+    </Link>
   );
 }
