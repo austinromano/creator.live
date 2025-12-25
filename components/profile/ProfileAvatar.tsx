@@ -151,7 +151,7 @@ export function ProfileAvatar({
   );
 
   return (
-    <div className="flex flex-col bg-transparent">
+    <div className="flex flex-col bg-transparent -mt-8">
       {/* Content - TikTok centered layout */}
       <div className="relative px-4 pb-2 bg-transparent overflow-hidden">
         {/* Avatar - centered */}

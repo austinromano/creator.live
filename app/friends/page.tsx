@@ -195,7 +195,7 @@ export default function CommunityPage() {
       {activeTab === 'notifications' && (
         <Link
           href="/addfriend"
-          className="fixed bottom-40 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-48 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Add Friend</span>
@@ -206,7 +206,7 @@ export default function CommunityPage() {
       {activeTab === 'rooms' && (
         <Link
           href="/creategroup"
-          className="fixed bottom-40 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-48 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create room</span>
@@ -217,7 +217,7 @@ export default function CommunityPage() {
       {activeTab === 'community' && (
         <Link
           href="/createcommunity"
-          className="fixed bottom-40 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-48 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create community</span>
@@ -228,15 +228,15 @@ export default function CommunityPage() {
       {activeTab === 'groups' && (
         <Link
           href="/creategroup"
-          className="fixed bottom-40 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          className="fixed bottom-48 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
         >
           <Plus className="h-5 w-5" />
           <span>Create group</span>
         </Link>
       )}
 
-      {/* Bottom Tabs Navigation */}
-      <div className="fixed bottom-20 left-0 right-0 z-40 bg-transparent border-t border-white/10">
+      {/* Friends Tab Bar */}
+      <div className="fixed bottom-28 left-0 right-0 z-40 bg-transparent border-t border-white/10">
         <div className="grid grid-cols-5 h-12">
           {tabs.map((tab) => (
             <button
@@ -244,8 +244,8 @@ export default function CommunityPage() {
               onClick={() => setActiveTab(tab.id)}
               className="flex flex-col items-center justify-start pt-1 relative group"
             >
-              {tab.icon && <tab.icon className={`h-6 w-6 transition-all ${activeTab === tab.id ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/80'}`} />}
-              <span className={`text-[10px] mt-1 ${activeTab === tab.id ? 'text-purple-400' : 'text-white/60'}`}>
+              {tab.icon && <tab.icon className={`h-6 w-6 transition-all ${activeTab === tab.id ? 'text-white' : 'text-gray-500'}`} />}
+              <span className={`text-[10px] mt-1 ${activeTab === tab.id ? 'text-white' : 'text-gray-500'}`}>
                 {tab.label}
               </span>
               {activeTab === tab.id && (
