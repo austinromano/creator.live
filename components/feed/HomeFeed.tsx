@@ -278,24 +278,10 @@ export function HomeFeed() {
 
   return (
     <div ref={containerRef} className="pb-20 relative">
-      {/* Pull to refresh indicator */}
-      {isPulling && (
-        <div
-          className="absolute top-0 left-0 right-0 flex justify-center items-center transition-all duration-200 z-50"
-          style={{ transform: `translateY(${Math.min(pullDistance - 20, 60)}px)` }}
-        >
-          <div className="bg-purple-600 rounded-full p-3 shadow-lg">
-            <Loader2
-              className="h-5 w-5 text-white animate-spin"
-              style={{ transform: `rotate(${pullDistance * 3}deg)` }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Feed Posts */}
       {posts.length > 0 && (
-        <div className="px-4 py-6">
+        <div className="px-2 py-3">
           {posts.map((post) => (
             <FeedPost key={post.id} post={post} />
           ))}
@@ -303,21 +289,7 @@ export function HomeFeed() {
       )}
 
       {/* Infinite scroll sentinel */}
-      <div ref={sentinelRef} className="h-20 flex items-center justify-center">
-        {loadingMore && (
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
-            <span className="text-sm text-gray-400">Loading more posts...</span>
-          </div>
-        )}
-      </div>
-
-      {/* Show subtle loading indicator when refreshing */}
-      {loading && hasFetched && (
-        <div className="flex justify-center py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-purple-500/50" />
-        </div>
-      )}
+      <div ref={sentinelRef} className="h-20"></div>
     </div>
   );
 }

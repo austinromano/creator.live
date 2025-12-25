@@ -400,27 +400,27 @@ export function FeedPost({ post }: FeedPostProps) {
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)',
           }}
         >
-          <Link href={`/profile/${post.user.username}`} className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
-            <Avatar className="h-8 w-8 ring-2 ring-purple-500/50 hover:ring-purple-500 transition-all">
+          <Link href={`/profile/${post.user.username}`} className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+            <Avatar className="h-6 w-6 ring-2 ring-purple-500/50 hover:ring-purple-500 transition-all">
               <AvatarImage src={post.user.avatar || undefined} alt={post.user.username || ''} />
               <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-600 text-white text-xs font-bold">
                 {post.user.username?.[0]?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
             <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-white text-base">
+              <span className="font-semibold text-white text-sm">
                 {post.user.username}
               </span>
               {post.user.isVerified && (
-                <BadgeCheck className="h-4 w-4 text-purple-400 fill-purple-400" />
+                <BadgeCheck className="h-3 w-3 text-purple-400 fill-purple-400" />
               )}
-              <span className="text-gray-400 text-sm font-medium">
+              <span className="text-gray-400 text-xs font-medium">
                 &middot; {formatTimeAgo(post.createdAt)}
               </span>
             </div>
           </Link>
           <button className="text-white p-1">
-            <MoreHorizontal className="h-5 w-5" />
+            <MoreHorizontal className="h-4 w-4" />
           </button>
         </div>
         {contentUrl && !imageError ? (
@@ -440,12 +440,6 @@ export function FeedPost({ post }: FeedPostProps) {
                   sizes="(max-width: 768px) 100vw, 600px"
                   loading="lazy"
                 />
-              )}
-              {/* Loading indicator when no thumbnail */}
-              {!post.thumbnailUrl && !videoLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                </div>
               )}
               {/* Video - only preload metadata, full video loads when in view */}
               <video
@@ -538,7 +532,7 @@ export function FeedPost({ post }: FeedPostProps) {
               className="flex items-center justify-center transition-transform active:scale-125 relative"
             >
               <Star
-                className={`h-7 w-7 transition-colors ${
+                className={`h-6 w-6 transition-colors ${
                   sparked
                     ? 'text-purple-500 fill-purple-500'
                     : 'text-white hover:text-gray-300'
@@ -580,12 +574,12 @@ export function FeedPost({ post }: FeedPostProps) {
               onClick={handleCommentClick}
               className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200"
             >
-              <MessageCircle className="h-7 w-7" />
+              <MessageCircle className="h-6 w-6" />
             </button>
 
             {/* Share Button */}
             <button className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200">
-              <Send className="h-7 w-7" />
+              <Send className="h-6 w-6" />
             </button>
           </div>
 
@@ -595,7 +589,7 @@ export function FeedPost({ post }: FeedPostProps) {
             className="flex items-center justify-center text-white hover:text-purple-400 hover:scale-110 transition-all duration-200"
           >
             <Bookmark
-              className={`h-7 w-7 ${saved ? 'fill-purple-400' : ''}`}
+              className={`h-6 w-6 ${saved ? 'fill-purple-400' : ''}`}
             />
           </button>
         </div>
@@ -637,11 +631,7 @@ export function FeedPost({ post }: FeedPostProps) {
         {showAllComments && (
           <div className="mt-3 border-t border-gray-800 pt-3">
             {/* Comments List */}
-            {loadingComments ? (
-              <div className="flex justify-center py-2">
-                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-              </div>
-            ) : sortedComments.length > 0 ? (
+            {sortedComments.length > 0 ? (
               <div className="space-y-3 max-h-48 overflow-y-auto">
                 {sortedComments.map((comment) => (
                   <div key={comment.id} className="flex gap-2 group">
@@ -690,11 +680,7 @@ export function FeedPost({ post }: FeedPostProps) {
                           disabled={deletingCommentId === comment.id}
                           className="text-gray-500 hover:text-red-500 p-1"
                         >
-                          {deletingCommentId === comment.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <X className="h-4 w-4" />
-                          )}
+                          <X className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -729,7 +715,7 @@ export function FeedPost({ post }: FeedPostProps) {
                   disabled={postingComment}
                   className="text-purple-500 font-semibold text-sm disabled:opacity-50"
                 >
-                  {postingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Post'}
+                  Post
                 </button>
               )}
             </>
