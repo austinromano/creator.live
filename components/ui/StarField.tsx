@@ -10,6 +10,8 @@ interface Star {
   brightness: number;
   twinkleDuration: number;
   twinkleDelay: number;
+  color: string;
+  layer: 'far' | 'mid' | 'near';
 }
 
 interface ShootingStar {
@@ -21,14 +23,37 @@ interface ShootingStar {
   length: number;
 }
 
+// Realistic star colors based on temperature (Kelvin)
+const starColors = [
+  { color: 'rgb(155, 176, 255)', weight: 0.05 },  // Blue (hot O/B class)
+  { color: 'rgb(170, 191, 255)', weight: 0.08 },  // Blue-white (A class)
+  { color: 'rgb(202, 215, 255)', weight: 0.12 },  // White (F class)
+  { color: 'rgb(248, 247, 255)', weight: 0.20 },  // Yellow-white (G class - like Sun)
+  { color: 'rgb(255, 244, 232)', weight: 0.25 },  // Yellow (G/K class)
+  { color: 'rgb(255, 222, 180)', weight: 0.18 },  // Orange (K class)
+  { color: 'rgb(255, 189, 145)', weight: 0.12 },  // Orange-red (M class)
+];
+
+const getRandomStarColor = (rand: number): string => {
+  let cumulative = 0;
+  for (const { color, weight } of starColors) {
+    cumulative += weight;
+    if (rand < cumulative) return color;
+  }
+  return starColors[3].color;
+};
+
 // Deterministic pseudo-random
 const seededRandom = (seed: number) => {
   const x = Math.sin(seed * 9999) * 10000;
   return x - Math.floor(x);
 };
 
-const generateSimpleStars = (count: number, seed: number): Star[] => {
+const generateRealisticStars = (count: number, layer: 'far' | 'mid' | 'near', seed: number): Star[] => {
   const stars: Star[] = [];
+
+  const sizeRange = layer === 'far' ? [0.5, 1] : layer === 'mid' ? [0.8, 1.8] : [1.2, 3];
+  const brightnessRange = layer === 'far' ? [0.3, 0.6] : layer === 'mid' ? [0.5, 0.8] : [0.7, 1];
 
   for (let i = 0; i < count; i++) {
     const r1 = seededRandom(seed + i);
@@ -37,41 +62,51 @@ const generateSimpleStars = (count: number, seed: number): Star[] => {
     const r4 = seededRandom(seed + i * 4);
     const r5 = seededRandom(seed + i * 5);
     const r6 = seededRandom(seed + i * 6);
+    const r7 = seededRandom(seed + i * 7);
+
+    // Cluster stars more towards top
+    const yBias = r2 * r2;
 
     stars.push({
       id: seed * 10000 + i,
       x: r1 * 100,
-      y: r2 * 100,
-      size: 1 + r3 * 1.5, // 1-2.5px
-      brightness: 0.6 + r4 * 0.4, // 0.6-1
-      twinkleDuration: 3 + r5 * 4, // 3-7 seconds
-      twinkleDelay: r6 * 6,
+      y: yBias * 85, // Keep in top 85%
+      size: sizeRange[0] + r3 * (sizeRange[1] - sizeRange[0]),
+      brightness: brightnessRange[0] + r4 * (brightnessRange[1] - brightnessRange[0]),
+      twinkleDuration: 2 + r5 * 6, // 2-8 seconds
+      twinkleDelay: r6 * 5,
+      color: getRandomStarColor(r7),
+      layer,
     });
   }
 
   return stars;
 };
 
-// Simple, subtle star
-const SimpleStar = React.memo(({ star }: { star: Star }) => {
+// Individual star with realistic twinkle
+const RealisticStar = React.memo(({ star }: { star: Star }) => {
+  const glowIntensity = star.layer === 'near' ? 0.6 : star.layer === 'mid' ? 0.4 : 0.2;
+
   return (
     <motion.div
-      className="absolute rounded-full bg-white"
+      className="absolute rounded-full"
       style={{
         left: `${star.x}%`,
         top: `${star.y}%`,
         width: star.size,
         height: star.size,
-        boxShadow: `0 0 ${star.size * 2}px ${star.size * 0.5}px rgba(255, 255, 255, 0.6)`,
+        backgroundColor: star.color,
+        boxShadow: `0 0 ${star.size * 2}px ${star.size}px ${star.color.replace('rgb', 'rgba').replace(')', `, ${glowIntensity})`)}`,
       }}
       animate={{
         opacity: [
           star.brightness,
-          star.brightness * 0.4,
-          star.brightness * 0.8,
+          star.brightness * 0.6,
+          star.brightness * 0.9,
           star.brightness * 0.5,
           star.brightness,
         ],
+        scale: [1, 0.9, 1.05, 0.95, 1],
       }}
       transition={{
         duration: star.twinkleDuration,
@@ -82,9 +117,9 @@ const SimpleStar = React.memo(({ star }: { star: Star }) => {
     />
   );
 });
-SimpleStar.displayName = 'SimpleStar';
+RealisticStar.displayName = 'RealisticStar';
 
-// Shooting star
+// Shooting star with realistic trail
 const ShootingStarEffect = ({ star, onComplete }: { star: ShootingStar; onComplete: () => void }) => {
   return (
     <motion.div
@@ -94,11 +129,11 @@ const ShootingStarEffect = ({ star, onComplete }: { star: ShootingStar; onComple
         top: star.startY,
         width: star.length,
         height: 2,
-        background: `linear-gradient(to right, transparent, rgba(255,255,255,0.3), rgba(255,255,255,0.9), white)`,
+        background: `linear-gradient(to right, transparent, rgba(255,255,255,0.1), rgba(255,255,255,0.8), white)`,
         borderRadius: '50%',
         transformOrigin: 'right center',
         transform: `rotate(${star.angle}deg)`,
-        boxShadow: '0 0 10px 2px rgba(255,255,255,0.5)',
+        boxShadow: '0 0 10px 2px rgba(255,255,255,0.5), 0 0 20px 4px rgba(180,200,255,0.3)',
       }}
       initial={{
         x: 0,
@@ -122,133 +157,40 @@ const ShootingStarEffect = ({ star, onComplete }: { star: ShootingStar; onComple
   );
 };
 
-// Flowing clouds with horizontal drift like real clouds
-const FlowingClouds = () => (
+// Atmospheric glow layer
+const AtmosphericGlow = () => (
   <>
-    {/* Large purple cloud - drifts right */}
-    <motion.div
-      className="absolute top-0 left-0 w-[70vw] h-[50vh]"
+    {/* Deep space gradient */}
+    <div
+      className="absolute inset-0"
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0.15) 35%, transparent 70%)',
-        filter: 'blur(80px)',
-      }}
-      animate={{
-        x: [-100, 150],
-        y: [0, -15, 0],
-        scale: [1, 1.05, 1],
-        opacity: [0.5, 0.7, 0.5],
-      }}
-      transition={{
-        x: { duration: 80, repeat: Infinity, ease: 'linear' },
-        y: { duration: 20, repeat: Infinity, ease: 'easeInOut' },
-        scale: { duration: 25, repeat: Infinity, ease: 'easeInOut' },
-        opacity: { duration: 30, repeat: Infinity, ease: 'easeInOut' },
+        background: 'radial-gradient(ellipse 120% 80% at 50% 0%, rgba(15,10,30,0) 0%, rgba(10,5,20,0.3) 50%, rgba(5,2,15,0.6) 100%)',
       }}
     />
-
-    {/* Pink-purple cloud - drifts left */}
+    {/* Subtle nebula hints */}
     <motion.div
-      className="absolute top-[20%] right-[5%] w-[65vw] h-[55vh]"
+      className="absolute top-0 left-[20%] w-[40vw] h-[30vh] opacity-20"
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(168, 85, 247, 0.35) 0%, rgba(217, 70, 239, 0.2) 40%, transparent 70%)',
-        filter: 'blur(90px)',
+        background: 'radial-gradient(ellipse at center, rgba(100,50,150,0.15) 0%, transparent 70%)',
+        filter: 'blur(40px)',
       }}
       animate={{
-        x: [100, -150],
-        y: [0, 10, 0],
-        scale: [1, 1.08, 1],
-        opacity: [0.6, 0.8, 0.6],
+        opacity: [0.15, 0.25, 0.18, 0.22, 0.15],
+        scale: [1, 1.05, 0.98, 1.02, 1],
       }}
-      transition={{
-        x: { duration: 90, repeat: Infinity, ease: 'linear' },
-        y: { duration: 22, repeat: Infinity, ease: 'easeInOut' },
-        scale: { duration: 28, repeat: Infinity, ease: 'easeInOut' },
-        opacity: { duration: 32, repeat: Infinity, ease: 'easeInOut' },
-      }}
+      transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
     />
-
-    {/* Large flowing cloud - drifts right slowly */}
     <motion.div
-      className="absolute top-[35%] left-[15%] w-[75vw] h-[60vh]"
+      className="absolute top-[5%] right-[15%] w-[35vw] h-[25vh] opacity-15"
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(192, 132, 252, 0.25) 0%, rgba(168, 85, 247, 0.15) 45%, transparent 75%)',
-        filter: 'blur(100px)',
+        background: 'radial-gradient(ellipse at center, rgba(50,80,150,0.12) 0%, transparent 70%)',
+        filter: 'blur(50px)',
       }}
       animate={{
-        x: [-120, 120],
-        y: [0, -20, 0],
-        scale: [1, 1.1, 1],
-        opacity: [0.55, 0.75, 0.55],
+        opacity: [0.12, 0.18, 0.14, 0.2, 0.12],
+        scale: [1, 0.97, 1.03, 0.99, 1],
       }}
-      transition={{
-        x: { duration: 100, repeat: Infinity, ease: 'linear' },
-        y: { duration: 25, repeat: Infinity, ease: 'easeInOut' },
-        scale: { duration: 30, repeat: Infinity, ease: 'easeInOut' },
-        opacity: { duration: 35, repeat: Infinity, ease: 'easeInOut' },
-      }}
-    />
-
-    {/* Pink cloud - drifts left */}
-    <motion.div
-      className="absolute top-[50%] right-[20%] w-[60vw] h-[50vh]"
-      style={{
-        background: 'radial-gradient(ellipse at center, rgba(236, 72, 153, 0.3) 0%, rgba(217, 70, 239, 0.18) 40%, transparent 70%)',
-        filter: 'blur(85px)',
-      }}
-      animate={{
-        x: [80, -140],
-        y: [0, 12, 0],
-        scale: [1, 1.06, 1],
-        opacity: [0.65, 0.85, 0.65],
-      }}
-      transition={{
-        x: { duration: 75, repeat: Infinity, ease: 'linear' },
-        y: { duration: 18, repeat: Infinity, ease: 'easeInOut' },
-        scale: { duration: 22, repeat: Infinity, ease: 'easeInOut' },
-        opacity: { duration: 28, repeat: Infinity, ease: 'easeInOut' },
-      }}
-    />
-
-    {/* Orange-pink cloud - drifts right */}
-    <motion.div
-      className="absolute bottom-[5%] left-[10%] w-[70vw] h-[45vh]"
-      style={{
-        background: 'radial-gradient(ellipse at center, rgba(251, 146, 60, 0.25) 0%, rgba(249, 115, 22, 0.15) 40%, transparent 70%)',
-        filter: 'blur(95px)',
-      }}
-      animate={{
-        x: [-90, 160],
-        y: [0, -8, 0],
-        scale: [1, 1.04, 1],
-        opacity: [0.6, 0.8, 0.6],
-      }}
-      transition={{
-        x: { duration: 85, repeat: Infinity, ease: 'linear' },
-        y: { duration: 20, repeat: Infinity, ease: 'easeInOut' },
-        scale: { duration: 26, repeat: Infinity, ease: 'easeInOut' },
-        opacity: { duration: 30, repeat: Infinity, ease: 'easeInOut' },
-      }}
-    />
-
-    {/* Coral-pink accent - drifts left */}
-    <motion.div
-      className="absolute top-[60%] right-0 w-[55vw] h-[48vh]"
-      style={{
-        background: 'radial-gradient(ellipse at center, rgba(244, 114, 182, 0.28) 0%, rgba(236, 72, 153, 0.16) 45%, transparent 72%)',
-        filter: 'blur(88px)',
-      }}
-      animate={{
-        x: [70, -130],
-        y: [0, 15, 0],
-        scale: [1, 1.07, 1],
-        opacity: [0.58, 0.78, 0.58],
-      }}
-      transition={{
-        x: { duration: 70, repeat: Infinity, ease: 'linear' },
-        y: { duration: 19, repeat: Infinity, ease: 'easeInOut' },
-        scale: { duration: 24, repeat: Infinity, ease: 'easeInOut' },
-        opacity: { duration: 27, repeat: Infinity, ease: 'easeInOut' },
-      }}
+      transition={{ duration: 35, repeat: Infinity, ease: 'easeInOut' }}
     />
   </>
 );
@@ -261,16 +203,18 @@ export function StarField() {
     setIsClient(true);
   }, []);
 
-  // Minimal stars for clean look
-  const stars = useMemo(() => isClient ? generateSimpleStars(60, 1) : [], [isClient]);
+  // Generate layered stars only on client to avoid hydration mismatch
+  const farStars = useMemo(() => isClient ? generateRealisticStars(200, 'far', 1) : [], [isClient]);
+  const midStars = useMemo(() => isClient ? generateRealisticStars(100, 'mid', 2) : [], [isClient]);
+  const nearStars = useMemo(() => isClient ? generateRealisticStars(30, 'near', 3) : [], [isClient]);
 
   const spawnShootingStar = useCallback(() => {
     const newStar: ShootingStar = {
       id: Date.now() + Math.random(),
       startX: Math.random() * (typeof window !== 'undefined' ? window.innerWidth * 0.7 : 800),
       startY: Math.random() * (typeof window !== 'undefined' ? window.innerHeight * 0.4 : 300),
-      angle: 30 + Math.random() * 20,
-      speed: 1 + Math.random() * 0.5,
+      angle: 25 + Math.random() * 25, // 25-50 degrees
+      speed: 0.8 + Math.random() * 0.4,
       length: 80 + Math.random() * 60,
     };
     setShootingStars(prev => [...prev, newStar]);
@@ -280,15 +224,17 @@ export function StarField() {
     setShootingStars(prev => prev.filter(s => s.id !== id));
   }, []);
 
+  // Shooting star spawner
   useEffect(() => {
     if (!isClient) return;
 
+    // Spawn one quickly after load
     const initialTimeout = setTimeout(() => {
       spawnShootingStar();
-    }, 4000);
+    }, 3000);
 
     const scheduleNext = () => {
-      const delay = 10000 + Math.random() * 15000; // 10-25 seconds
+      const delay = 8000 + Math.random() * 12000; // 8-20 seconds
       return setTimeout(() => {
         spawnShootingStar();
         scheduleNext();
@@ -302,35 +248,29 @@ export function StarField() {
     };
   }, [isClient, spawnShootingStar]);
 
+  // Don't render anything on server to avoid hydration mismatch
   if (!isClient) {
     return <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" />;
   }
 
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-      {/* Vibrant gradient background - purple to pink to orange like sky.money */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `linear-gradient(180deg,
-            rgb(88, 28, 135) 0%,
-            rgb(109, 40, 217) 15%,
-            rgb(147, 51, 234) 30%,
-            rgb(168, 85, 247) 45%,
-            rgb(217, 70, 239) 60%,
-            rgb(236, 72, 153) 75%,
-            rgb(251, 146, 60) 90%,
-            rgb(249, 115, 22) 100%
-          )`,
-        }}
-      />
+      {/* Atmospheric effects */}
+      <AtmosphericGlow />
 
-      {/* Flowing clouds */}
-      <FlowingClouds />
-
-      {/* Subtle stars */}
+      {/* Far stars - smallest, dimmest, most numerous */}
       <div className="absolute inset-0">
-        {stars.map(star => <SimpleStar key={star.id} star={star} />)}
+        {farStars.map(star => <RealisticStar key={star.id} star={star} />)}
+      </div>
+
+      {/* Mid stars */}
+      <div className="absolute inset-0">
+        {midStars.map(star => <RealisticStar key={star.id} star={star} />)}
+      </div>
+
+      {/* Near stars - largest, brightest, fewest */}
+      <div className="absolute inset-0">
+        {nearStars.map(star => <RealisticStar key={star.id} star={star} />)}
       </div>
 
       {/* Shooting stars */}
@@ -344,11 +284,11 @@ export function StarField() {
         ))}
       </AnimatePresence>
 
-      {/* Subtle overlay for depth */}
+      {/* Horizon glow */}
       <div
-        className="absolute inset-0"
+        className="absolute bottom-0 left-0 right-0 h-[30vh]"
         style={{
-          background: 'radial-gradient(ellipse 80% 60% at 50% 40%, transparent 0%, rgba(0,0,0,0.1) 100%)',
+          background: 'linear-gradient(to top, rgba(20,10,35,0.4) 0%, transparent 100%)',
         }}
       />
     </div>
