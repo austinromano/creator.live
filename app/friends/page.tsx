@@ -3,10 +3,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
-import { Plus, Search, MessageCircle, Users, Bell, Home } from 'lucide-react';
+import { Plus, MessageCircle, Users, Bell, Home } from 'lucide-react';
 import { NotificationsList } from '@/components/notifications/NotificationsList';
-import { StoriesRow, type UserRoom } from '@/components/feed/StoriesRow';
-import { useRouter } from 'next/navigation';
 
 interface Group {
   id: string;
@@ -22,23 +20,10 @@ interface Group {
   unreadCount?: number;
 }
 
-interface FriendData {
-  id: string;
-  username: string;
-  displayName: string | null;
-  avatar: string | null;
-  isLive: boolean;
-  isOnline: boolean;
-}
-
 export default function CommunityPage() {
   const { data: session, status } = useSession();
   const [groups, setGroups] = useState<Group[]>([]);
-  const [friends, setFriends] = useState<any[]>([]);
-  const [rooms, setRooms] = useState<UserRoom[]>([]);
-  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('notifications');
 
   useEffect(() => {
@@ -55,49 +40,12 @@ export default function CommunityPage() {
       }
 
       try {
-        // Fetch all data in parallel
-        const [groupsRes, friendsRes, userRes, roomsRes] = await Promise.all([
-          fetch('/api/rooms', { credentials: 'include' }),
-          fetch('/api/user/friends', { credentials: 'include' }),
-          fetch('/api/user/me', { credentials: 'include' }),
-          fetch('/api/rooms', { credentials: 'include' }),
-        ]);
+        // Fetch rooms data
+        const groupsRes = await fetch('/api/rooms', { credentials: 'include' });
 
         if (groupsRes.ok) {
           const groupsData = await groupsRes.json();
           setGroups(groupsData.rooms || []);
-        }
-
-        if (friendsRes.ok) {
-          const friendsData = await friendsRes.json();
-          const storyUsers = (friendsData.friends || []).map((f: FriendData) => ({
-            id: f.id,
-            username: f.username,
-            displayName: f.displayName,
-            avatar: f.avatar,
-            isLive: f.isLive,
-            isOnline: f.isOnline,
-            hasStory: false,
-          }));
-          setFriends(storyUsers);
-        }
-
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          if (userData.user) {
-            setCurrentUserAvatar(userData.user.avatar);
-          }
-        }
-
-        if (roomsRes.ok) {
-          const roomsData = await roomsRes.json();
-          const userRooms = (roomsData.rooms || []).map((r: any) => ({
-            id: r.id,
-            name: r.name,
-            icon: r.icon,
-            template: r.template,
-          }));
-          setRooms(userRooms);
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -109,9 +57,7 @@ export default function CommunityPage() {
     fetchData();
   }, [session, status]);
 
-  const filteredGroups = groups.filter(group =>
-    group.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredGroups = groups;
 
   const formatTime = (dateString?: string) => {
     if (!dateString) return '';

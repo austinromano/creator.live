@@ -561,7 +561,7 @@ export function FeedPost({ post }: FeedPostProps) {
                         className="absolute pointer-events-none"
                         style={{ left: '50%', top: '50%' }}
                       >
-                        <Star className="h-6 w-6 text-purple-500 fill-purple-500" />
+                        <Sparkles className="h-6 w-6 text-purple-500 fill-purple-500" />
                       </motion.div>
                     ))}
                   </>
@@ -666,7 +666,7 @@ export function FeedPost({ post }: FeedPostProps) {
                         onClick={() => handleStarComment(comment.id)}
                         className="p-1"
                       >
-                        <Star
+                        <Sparkles
                           className={`h-4 w-4 transition-colors ${
                             comment.starred
                               ? 'text-purple-500 fill-purple-500'
