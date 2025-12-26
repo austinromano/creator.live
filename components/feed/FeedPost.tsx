@@ -387,7 +387,7 @@ export function FeedPost({ post }: FeedPostProps) {
   };
 
   return (
-    <article ref={containerRef} className="mb-6 rounded-xl overflow-hidden bg-black shadow-lg shadow-purple-900/10 border border-gray-800/50 hover:shadow-purple-900/20 transition-shadow duration-300">
+    <article ref={containerRef} className="mb-6 rounded-xl overflow-hidden bg-black shadow-xl shadow-purple-500/10 border border-gray-700 hover:border-gray-600 hover:shadow-purple-500/15 transition-all duration-300">
       {/* Media Content with Overlayed Header */}
       <div
         className="relative w-full bg-black"

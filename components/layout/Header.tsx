@@ -27,6 +27,7 @@ export function Header() {
   const isAuthenticated = !!session?.user;
   const [unreadCount, setUnreadCount] = useState(0);
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Use refs to prevent duplicate intervals and track component mount
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -114,8 +115,20 @@ export function Header() {
     return () => clearInterval(friendsInterval);
   }, [isAuthenticated]);
 
-  // Show header on all devices - fixed position with enhanced frosted glass effect
-  const headerClassName = "fixed top-0 z-[60] w-full bg-black/30 backdrop-blur-xl";
+  // Scroll detection for transparent header
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Show header on all devices - fixed position with transition between solid and transparent
+  const headerClassName = `fixed top-0 z-[60] w-full transition-all duration-300 ${
+    isScrolled ? 'bg-black/30 backdrop-blur-xl' : 'bg-transparent'
+  }`;
 
   // Hide header on profile and live pages
   if (pathname.startsWith('/profile/') || pathname.startsWith('/live/') || pathname === '/live') {
