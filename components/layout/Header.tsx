@@ -130,8 +130,8 @@ export function Header() {
     isScrolled ? 'bg-black/30 backdrop-blur-xl' : 'bg-transparent'
   }`;
 
-  // Hide header on profile and live pages
-  if (pathname.startsWith('/profile/') || pathname.startsWith('/live/') || pathname === '/live') {
+  // Hide header on profile, live, and camera pages
+  if (pathname.startsWith('/profile/') || pathname.startsWith('/live/') || pathname === '/live' || pathname === '/camera') {
     return null;
   }
 
