@@ -115,13 +115,13 @@ export default function CameraPage() {
   useEffect(() => {
     const startCamera = async () => {
       try {
-        // Don't restart camera if already live - LiveKit is using it
-        if (isLive) return;
-
-        // Stop any existing stream
-        if (streamRef.current) {
+        // Stop any existing stream only if not live
+        if (streamRef.current && !isLive) {
           streamRef.current.getTracks().forEach(track => track.stop());
         }
+
+        // Don't restart camera if already live - LiveKit is using it
+        if (isLive) return;
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode },
@@ -143,13 +143,15 @@ export default function CameraPage() {
       startCamera();
     }
 
+    // Cleanup only runs on unmount or when dependencies change
+    // We don't want to cleanup when just going live
     return () => {
-      // Don't stop camera if we're live - LiveKit needs it
+      // Only cleanup on actual unmount, not when isLive changes
       if (!isLive && streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [status, facingMode, capturedImage, isLive, recordedVideoUrl]);
+  }, [status, facingMode, capturedImage, recordedVideoUrl]); // Removed isLive from dependencies!
 
   // Cleanup LiveKit connection on unmount
   useEffect(() => {
