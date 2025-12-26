@@ -115,6 +115,9 @@ export default function CameraPage() {
   useEffect(() => {
     const startCamera = async () => {
       try {
+        // Don't restart camera if already live - LiveKit is using it
+        if (isLive) return;
+
         // Stop any existing stream
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
@@ -136,12 +139,13 @@ export default function CameraPage() {
       }
     };
 
-    if (status === 'authenticated' && !capturedImage && !isLive && !recordedVideoUrl) {
+    if (status === 'authenticated' && !capturedImage && !recordedVideoUrl) {
       startCamera();
     }
 
     return () => {
-      if (streamRef.current) {
+      // Don't stop camera if we're live - LiveKit needs it
+      if (!isLive && streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
