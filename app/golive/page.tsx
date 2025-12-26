@@ -79,21 +79,6 @@ function GoLiveContent() {
   const [isLive, setIsLive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
 
-  // VIDEO/PHOTO/LIVE mode for mobile camera
-  type CameraMode = 'VIDEO' | 'PHOTO' | 'LIVE';
-  const [cameraMode, setCameraMode] = useState<CameraMode>('PHOTO');
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [capturedVideo, setCapturedVideo] = useState<Blob | null>(null);
-  const [capturedVideoUrl, setCapturedVideoUrl] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = React.useRef<Blob[]>([]);
-  const recordingTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-  const [caption, setCaption] = useState('');
-  const [isPosting, setIsPosting] = useState(false);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-
   // Live stream clipping state
   const [isClipping, setIsClipping] = useState(false);
   const [clipTime, setClipTime] = useState(0);
@@ -642,245 +627,41 @@ function GoLiveContent() {
   // Track if we're still in loading state
   const isPageLoading = status === 'loading' || userLoading || !session?.user || !userData;
 
-  // Photo capture for POST mode
-  const capturePhoto = () => {
-    if (!previewVideoRef.current || !canvasRef.current) return;
-
-    const video = previewVideoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-
-    if (!context) return;
-
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // Flip horizontally for front camera mirror effect
-    context.translate(canvas.width, 0);
-    context.scale(-1, 1);
-
-    // Draw the video frame
-    context.drawImage(video, 0, 0);
-
-    // Get the image data
-    const imageData = canvas.toDataURL('image/jpeg', 0.9);
-    setCapturedImage(imageData);
-  };
-
-  const retakePhoto = () => {
-    setCapturedImage(null);
-    setCaption('');
-  };
-
-  const postPhoto = async () => {
-    if (!capturedImage) return;
-
-    setIsPosting(true);
-
-    try {
-      // Convert base64 to blob
-      const response = await fetch(capturedImage);
-      const blob = await response.blob();
-
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', blob, 'photo.jpg');
-      formData.append('type', 'free');
-      if (caption.trim()) {
-        formData.append('title', caption.trim());
-      }
-
-      // Upload the post
-      const uploadResponse = await fetch('/api/posts/create', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (uploadResponse.ok) {
-        // Success - redirect to home feed
-        router.push('/');
-      } else {
-        const data = await uploadResponse.json();
-        alert(data.error || 'Failed to create post');
-      }
-    } catch (error) {
-      console.error('Error posting photo:', error);
-      alert('Failed to create post');
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  // Video recording functions
-  const startRecording = () => {
-    if (!previewStreamRef.current) return;
-
-    recordedChunksRef.current = [];
-    setRecordingTime(0);
-
-    // Get supported MIME type
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : MediaRecorder.isTypeSupported('video/webm')
-      ? 'video/webm'
-      : 'video/mp4';
-
-    const mediaRecorder = new MediaRecorder(previewStreamRef.current, {
-      mimeType,
-      videoBitsPerSecond: 2500000, // 2.5 Mbps
-    });
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunksRef.current.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-      setCapturedVideo(blob);
-      setCapturedVideoUrl(URL.createObjectURL(blob));
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-    };
-
-    mediaRecorderRef.current = mediaRecorder;
-    mediaRecorder.start(1000); // Collect data every second
-    setIsRecording(true);
-
-    // Start recording timer
-    recordingTimerRef.current = setInterval(() => {
-      setRecordingTime((prev) => prev + 1);
-    }, 1000);
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-    }
-  };
-
-  const retakeVideo = () => {
-    if (capturedVideoUrl) {
-      URL.revokeObjectURL(capturedVideoUrl);
-    }
-    setCapturedVideo(null);
-    setCapturedVideoUrl(null);
-    setCaption('');
-    setRecordingTime(0);
-  };
-
-  const postVideo = async () => {
-    if (!capturedVideo || !capturedVideoUrl) return;
-
-    setIsPosting(true);
-
-    try {
-      // Generate thumbnail from the video (may be null if it fails)
-      const thumbnail = await generateThumbnail(capturedVideoUrl);
-
-      // Create form data - keep original video dimensions
-      const formData = new FormData();
-      formData.append('file', capturedVideo, 'video.webm');
-      if (thumbnail) {
-        formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
-      }
-      formData.append('type', 'free');
-      if (caption.trim()) {
-        formData.append('title', caption.trim());
-      }
-
-      // Upload the post
-      const uploadResponse = await fetch('/api/posts/create', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (uploadResponse.ok) {
-        // Success - redirect to home feed
-        router.push('/');
-      } else {
-        const data = await uploadResponse.json();
-        alert(data.error || 'Failed to create post');
-      }
-    } catch (error) {
-      console.error('Error posting video:', error);
-      alert('Failed to create post');
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  const formatRecordingTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Generate thumbnail from video
-  const generateThumbnail = (videoUrl: string): Promise<Blob | null> => {
+  // Generate thumbnail from video URL (used for desktop clipping)
+  const generateThumbnail = async (videoUrl: string): Promise<Blob | null> => {
     return new Promise((resolve) => {
       const video = document.createElement('video');
-      video.src = videoUrl;
-      video.muted = true;
-      video.playsInline = true;
       video.crossOrigin = 'anonymous';
-
-      const captureFrame = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth || 1280;
-          canvas.height = video.videoHeight || 720;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(null);
-            return;
-          }
-          ctx.drawImage(video, 0, 0);
-          canvas.toBlob(
-            (blob) => {
-              resolve(blob);
-            },
-            'image/jpeg',
-            0.8
-          );
-        } catch (e) {
-          console.error('Error capturing thumbnail frame:', e);
-          resolve(null);
-        }
-      };
+      video.src = videoUrl;
+      video.currentTime = 0.5; // Capture at 0.5 seconds
 
       video.onloadeddata = () => {
-        // Seek to 0.1 seconds then capture
-        video.currentTime = 0.1;
-      };
-
-      video.onseeked = () => {
-        captureFrame();
-      };
-
-      video.onerror = () => {
-        console.error('Failed to load video for thumbnail');
-        resolve(null); // Return null instead of rejecting
-      };
-
-      // Timeout fallback - if video doesn't load in 5 seconds, skip thumbnail
-      setTimeout(() => {
-        if (video.readyState >= 2) {
-          captureFrame();
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            resolve(blob);
+          }, 'image/jpeg', 0.8);
         } else {
           resolve(null);
         }
-      }, 5000);
+      };
 
-      video.load();
+      video.onerror = () => {
+        console.error('Failed to generate thumbnail');
+        resolve(null);
+      };
     });
+  };
+
+  // Format recording time for display (used for desktop clipping)
+  const formatRecordingTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Ref to store cloned stream for recording
@@ -2893,260 +2674,6 @@ function GoLiveContent() {
             muted
             className="absolute inset-0 w-full h-full object-cover"
           />
-        )}
-
-        {/* Hidden canvas for photo capture */}
-        <canvas ref={canvasRef} className="hidden" />
-
-        {/* Offline State - Camera preview with POST/LIVE modes */}
-        {!isLive && (
-          <>
-            {/* Captured image overlay (for PHOTO mode) */}
-            {capturedImage && (
-              <img
-                src={capturedImage}
-                alt="Captured"
-                className="absolute inset-0 w-full h-full object-cover z-10"
-              />
-            )}
-
-            {/* Captured video overlay (for VIDEO mode) */}
-            {capturedVideoUrl && (
-              <video
-                src={capturedVideoUrl}
-                autoPlay
-                loop
-                playsInline
-                muted
-                className="absolute inset-0 w-full h-full object-cover z-10"
-                style={{ transform: 'scaleX(-1)' }}
-              />
-            )}
-
-            {/* Semi-transparent overlay for LIVE mode */}
-            {cameraMode === 'LIVE' && !capturedImage && !capturedVideoUrl && (
-              <div className="absolute inset-0 bg-black/40" />
-            )}
-
-            {/* Top bar with close button */}
-            <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 pt-safe">
-              <Link href="/" className="p-2">
-                <X className="h-7 w-7 text-white" />
-              </Link>
-              <div className="flex items-center gap-4">
-                {!capturedImage && !capturedVideoUrl && (
-                  <button className="p-2">
-                    <Settings className="h-6 w-6 text-white" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* LIVE Mode - Category selector in center */}
-            {cameraMode === 'LIVE' && !capturedImage && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                <div className="text-3xl font-bold text-white tracking-wider mb-2">OFFLINE</div>
-                <p className="text-gray-300 text-base mb-6">Select a category</p>
-
-                {/* Category Selection */}
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => setStreamCategory('IRL')}
-                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
-                      streamCategory === 'IRL'
-                        ? 'bg-purple-600 ring-2 ring-purple-400'
-                        : 'bg-gray-800/80'
-                    }`}
-                  >
-                    <Camera className="w-7 h-7 text-white mb-1" />
-                    <span className="text-white text-xs font-medium">IRL</span>
-                  </button>
-                  <button
-                    onClick={() => setStreamCategory('Gaming')}
-                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
-                      streamCategory === 'Gaming'
-                        ? 'bg-purple-600 ring-2 ring-purple-400'
-                        : 'bg-gray-800/80'
-                    }`}
-                  >
-                    <Gamepad2 className="w-7 h-7 text-white mb-1" />
-                    <span className="text-white text-xs font-medium">Gaming</span>
-                  </button>
-                  <button
-                    onClick={() => setStreamCategory('Music')}
-                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all ${
-                      streamCategory === 'Music'
-                        ? 'bg-purple-600 ring-2 ring-purple-400'
-                        : 'bg-gray-800/80'
-                    }`}
-                  >
-                    <Music className="w-7 h-7 text-white mb-1" />
-                    <span className="text-white text-xs font-medium">Music</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Bottom controls */}
-            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black via-black/80 to-transparent">
-              {capturedImage ? (
-                /* Photo Post Preview Controls */
-                <div className="p-4 pb-12 space-y-4">
-                  {/* Caption Input */}
-                  <input
-                    type="text"
-                    placeholder="Write a caption..."
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 rounded-xl border border-white/20 focus:outline-none focus:border-purple-500"
-                  />
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-between gap-4">
-                    <button
-                      onClick={retakePhoto}
-                      className="flex-1 py-3 text-white font-semibold rounded-xl bg-white/20"
-                    >
-                      Retake
-                    </button>
-                    <button
-                      onClick={postPhoto}
-                      disabled={isPosting}
-                      className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
-                    >
-                      {isPosting ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <>
-                          <Zap className="h-5 w-5" />
-                          Post
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : capturedVideoUrl ? (
-                /* Video Post Preview Controls */
-                <div className="p-4 pb-12 space-y-4">
-                  {/* Caption Input */}
-                  <input
-                    type="text"
-                    placeholder="Write a caption..."
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 rounded-xl border border-white/20 focus:outline-none focus:border-purple-500"
-                  />
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-between gap-4">
-                    <button
-                      onClick={retakeVideo}
-                      className="flex-1 py-3 text-white font-semibold rounded-xl bg-white/20"
-                    >
-                      Retake
-                    </button>
-                    <button
-                      onClick={postVideo}
-                      disabled={isPosting}
-                      className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
-                    >
-                      {isPosting ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <>
-                          <Zap className="h-5 w-5" />
-                          Post
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Camera Controls */
-                <div className="p-4 pb-12">
-                  {/* Recording time indicator */}
-                  {isRecording && (
-                    <div className="flex items-center justify-center mb-4">
-                      <div className="flex items-center gap-2 bg-red-500/80 px-3 py-1 rounded-full">
-                        <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                        <span className="text-white font-semibold text-sm">{formatRecordingTime(recordingTime)}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Button - changes based on mode */}
-                  <div className="flex items-center justify-center mb-6">
-                    {cameraMode === 'VIDEO' ? (
-                      /* Record Button for VIDEO */
-                      <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all ${
-                          isRecording
-                            ? 'border-red-500 bg-red-500/20'
-                            : 'border-red-500 bg-transparent'
-                        }`}
-                      >
-                        {isRecording ? (
-                          <div className="w-8 h-8 rounded-sm bg-red-500" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full bg-red-500" />
-                        )}
-                      </button>
-                    ) : cameraMode === 'PHOTO' ? (
-                      /* Capture Button for PHOTO */
-                      <button
-                        onClick={capturePhoto}
-                        className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-white" />
-                      </button>
-                    ) : (
-                      /* Go Live Button for LIVE - only enabled when category is selected */
-                      <button
-                        onClick={handleGoLive}
-                        disabled={!streamCategory}
-                        className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all ${
-                          streamCategory
-                            ? 'border-red-500 bg-red-500/20'
-                            : 'border-gray-500 bg-gray-500/20 opacity-50'
-                        }`}
-                      >
-                        <Radio className={`w-10 h-10 ${streamCategory ? 'text-red-500' : 'text-gray-500'}`} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Mode Tabs */}
-                  <div className="flex items-center justify-center gap-4">
-                    <button
-                      onClick={() => setCameraMode('VIDEO')}
-                      className={`px-4 py-2 text-base font-semibold transition-colors ${
-                        cameraMode === 'VIDEO' ? 'text-white' : 'text-gray-500'
-                      }`}
-                    >
-                      VIDEO
-                    </button>
-                    <button
-                      onClick={() => setCameraMode('PHOTO')}
-                      className={`px-4 py-2 text-base font-semibold transition-colors ${
-                        cameraMode === 'PHOTO' ? 'text-white' : 'text-gray-500'
-                      }`}
-                    >
-                      PHOTO
-                    </button>
-                    <button
-                      onClick={() => setCameraMode('LIVE')}
-                      className={`px-4 py-2 text-base font-semibold transition-colors ${
-                        cameraMode === 'LIVE' ? 'text-white' : 'text-gray-500'
-                      }`}
-                    >
-                      LIVE
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
         )}
 
         {/* Gradient overlays for better text readability */}
