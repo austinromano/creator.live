@@ -99,8 +99,8 @@ export default function CommunityPage() {
             <div className="w-24 h-24 bg-gradient-to-br from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 shadow-lg shadow-purple-500/10">
               <MessageCircle className="h-10 w-10 text-purple-400" />
             </div>
-            <p className="text-white font-semibold mb-2 text-lg">No direct messages yet</p>
-            <p className="text-gray-400 text-sm max-w-xs">Start a conversation with someone from your network</p>
+            <p className="text-white font-semibold mb-2 text-lg">No chats yet</p>
+            <p className="text-gray-400 text-sm max-w-xs">Send private messages and connect one-on-one</p>
           </div>
         ) : activeTab === 'community' ? (
           // Community
@@ -109,7 +109,7 @@ export default function CommunityPage() {
               <Users className="h-10 w-10 text-purple-400" />
             </div>
             <p className="text-white font-semibold mb-2 text-lg">No communities yet</p>
-            <p className="text-gray-400 text-sm max-w-xs">Create a community to connect with others</p>
+            <p className="text-gray-400 text-sm max-w-xs">Build a public space for people with shared interests to connect, share, and discuss</p>
           </div>
         ) : activeTab === 'groups' ? (
           // Groups
@@ -118,7 +118,7 @@ export default function CommunityPage() {
               <Users className="h-10 w-10 text-purple-400" />
             </div>
             <p className="text-white font-semibold mb-2 text-lg">No groups yet</p>
-            <p className="text-gray-400 text-sm max-w-xs">Create a group to start chatting with friends</p>
+            <p className="text-gray-400 text-sm max-w-xs">Create invite-only groups for study sessions, friend circles, or any shared purpose</p>
           </div>
         ) : (
           // Rooms List
@@ -128,7 +128,7 @@ export default function CommunityPage() {
                 <Users className="h-10 w-10 text-purple-400" />
               </div>
               <p className="text-white font-semibold mb-2 text-lg">No rooms yet</p>
-              <p className="text-gray-400 text-sm max-w-xs">Create a room to start chatting with friends</p>
+              <p className="text-gray-400 text-sm max-w-xs">Create your private space to hang out, video chat, stream together, and vibe with friends</p>
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -199,6 +199,17 @@ export default function CommunityPage() {
         >
           <Plus className="h-5 w-5" />
           <span>Add Friend</span>
+        </Link>
+      )}
+
+      {/* Floating Create Chat Button - Only show on Chats tab */}
+      {activeTab === 'chats' && (
+        <Link
+          href="/createchat"
+          className="fixed bottom-48 right-4 z-50 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+        >
+          <Plus className="h-5 w-5" />
+          <span>Create chat</span>
         </Link>
       )}
 
