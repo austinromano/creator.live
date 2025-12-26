@@ -164,7 +164,7 @@ const AtmosphericGlow = () => (
     <div
       className="absolute inset-0"
       style={{
-        background: 'radial-gradient(ellipse 120% 80% at 50% 0%, rgba(15,10,30,0) 0%, rgba(10,5,20,0.3) 50%, rgba(5,2,15,0.6) 100%)',
+        background: 'radial-gradient(ellipse 120% 80% at 50% 0%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.6) 100%)',
       }}
     />
     {/* Subtle nebula hints */}
@@ -288,7 +288,7 @@ export function StarField() {
       <div
         className="absolute bottom-0 left-0 right-0 h-[30vh]"
         style={{
-          background: 'linear-gradient(to top, rgba(20,10,35,0.4) 0%, transparent 100%)',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%)',
         }}
       />
     </div>

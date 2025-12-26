@@ -115,7 +115,7 @@ export function Header() {
   }, [isAuthenticated]);
 
   // Show header on all devices - fixed position with enhanced frosted glass effect
-  const headerClassName = "fixed top-0 z-[60] w-full bg-[#0f0a15]/30 backdrop-blur-xl";
+  const headerClassName = "fixed top-0 z-[60] w-full bg-black/30 backdrop-blur-xl";
 
   // Hide header on profile and live pages
   if (pathname.startsWith('/profile/') || pathname.startsWith('/live/') || pathname === '/live') {

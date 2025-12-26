@@ -159,7 +159,7 @@ export function LiveStreamGrid() {
       {/* ========== MOBILE VIEW (< lg) ========== */}
       <section className="lg:hidden">
         {/* Live Navbar - TikTok Style */}
-        <div className="sticky top-0 z-40 flex justify-around items-center px-2 py-3 bg-black">
+        <div className="sticky top-0 z-40 flex justify-around items-center px-2 py-3 bg-transparent">
           {MOBILE_TABS.map((tab) => (
             <button
               key={tab}

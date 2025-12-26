@@ -61,7 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased bg-[#0f0a15] text-white min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased bg-black text-white min-h-screen`}
       >
         <ClientBackgrounds />
         <SessionProvider>

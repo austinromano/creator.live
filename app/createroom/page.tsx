@@ -161,7 +161,7 @@ export default function CreateRoomPage() {
   // Selection Step
   if (step === 'select') {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-[#1a1225] rounded-xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="relative p-6 pb-4 text-center">
@@ -241,7 +241,7 @@ export default function CreateRoomPage() {
 
   // Customize Step
   return (
-    <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-[#1a1225] rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="relative p-6 pb-4 text-center">
@@ -305,7 +305,7 @@ export default function CreateRoomPage() {
               onChange={(e) => setRoomName(e.target.value)}
               placeholder="Enter room name"
               disabled={isCreating}
-              className="w-full px-4 py-3 bg-[#0f0a15] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50"
+              className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50"
             />
           </div>
 

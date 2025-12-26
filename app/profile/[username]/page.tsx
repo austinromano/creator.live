@@ -284,7 +284,7 @@ export default function ProfilePage() {
   // Show loading while profile is loading
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
           <p className="text-gray-400">Loading profile...</p>
@@ -295,7 +295,7 @@ export default function ProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-400 text-xl mb-4">{error || 'Profile not found'}</p>
           <button
@@ -313,7 +313,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0a15]">
+    <div className="min-h-screen bg-black">
       {/* Settings Icon - Top Right (only on own profile) */}
       {isOwnProfile && (
         <div className="absolute top-4 right-4 z-50">

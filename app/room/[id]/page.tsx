@@ -302,7 +302,7 @@ function InviteModal({
               placeholder="Search by username..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-[#0f0a15] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+              className="w-full pl-10 pr-4 py-3 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
               autoFocus
             />
           </div>
@@ -995,7 +995,7 @@ export default function PrivateRoomPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500" />
       </div>
     );
@@ -1003,7 +1003,7 @@ export default function PrivateRoomPage() {
 
   if (error || !roomData) {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
         <p className="text-red-400 mb-4">{error || 'Room not found'}</p>
         <Link href="/" className="text-purple-400 hover:underline">
           Go back home
@@ -1031,7 +1031,7 @@ export default function PrivateRoomPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0a15] flex flex-col">
+    <div className="min-h-screen bg-black flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <div className="flex items-center gap-3">
@@ -1102,7 +1102,7 @@ export default function PrivateRoomPage() {
       </div>
 
       {/* Controls Bar */}
-      <div className="flex items-center justify-center gap-4 p-4 pb-8 border-t border-gray-800 bg-[#0f0a15]">
+      <div className="flex items-center justify-center gap-4 p-4 pb-8 border-t border-gray-800 bg-black">
         <button
           onClick={toggleMute}
           className={`p-4 rounded-full transition-colors ${

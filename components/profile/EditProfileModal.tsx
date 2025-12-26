@@ -185,7 +185,7 @@ export function EditProfileModal({
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0f0a15] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full px-3 py-2 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
               placeholder="Your display name"
             />
           </div>
@@ -199,7 +199,7 @@ export function EditProfileModal({
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 bg-[#0f0a15] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+              className="w-full px-3 py-2 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
               placeholder="Tell people about yourself"
             />
           </div>
@@ -240,7 +240,7 @@ export function EditProfileModal({
                 min="4.99"
                 max="49.99"
                 step="0.01"
-                className="w-full px-3 py-2 bg-[#0f0a15] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className="w-full px-3 py-2 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
                 placeholder="4.99"
               />
               <p className="text-xs text-gray-500 mt-1">$4.99 - $49.99/month</p>

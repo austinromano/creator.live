@@ -164,7 +164,7 @@ export function Homepage() {
   // Show loading while checking session
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-[#0f0a15] flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
       </div>
     );
@@ -305,7 +305,7 @@ export function Homepage() {
               <span className="w-full border-t border-gray-700" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[#0f0a15] px-2 text-gray-400">
+              <span className="bg-black px-2 text-gray-400">
                 Or continue with
               </span>
             </div>
